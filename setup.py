@@ -18,16 +18,11 @@ class opendeep_install(install):
         if mode == 'install':
             return install.run(self)
 
-here = path.abspath(path.dirname(__file__))
-# Get the long description from the relevant file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
-
 setup(
     name='opendeep',
     version='0.0.5a',
     description='A modular deep learning library built on Theano.',
-    long_description=long_description,
+    long_description=open('README.rst', 'rb').read().decode('utf8'),
     keywords='opendeep theano modular deep learning neural',
 
     url='https://github.com/vitruvianscience/opendeep',
