@@ -16,9 +16,11 @@ Motivation
 I have found existing libraries to be either too confusing or not easily extensible enough to perform novel research and also quickly set up existing algorithms at scale. 
 This need for transparency and modularity is the main motivating factor for creating the OpenDeep library, where I hope novel research and industry use can both 
 be easily implemented.
+
 - **Ease of use**. Many libraries require a lot of familiarity with deep learning or their specific package structures. OpenDeep's goal is to be 
 the best-documented deep learning library and have smart enough default code that someone without a background can start training models. This motivation 
 will lead to a series of easy to understand tutorials for the different modules in the library.
+
 - **State of the art**. A side effect of modularity and ease of use, OpenDeep aims to maintain state-of-the-art performance as new algorithms and papers 
 get published. As a research library, citing and accrediting those authors and code used is very important to the library.
 
@@ -28,11 +30,15 @@ Installation
 Because OpenDeep is still in alpha, you have to install via setup.py.
 
 First, install the dependencies.
+
 - Theano: Theano and its dependencies are required to use OpenDeep. You need the bleeding-edge version as specified here: `Theano bleeding-edge <http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions>`_
  I also recommend downloading CUDA to work on an Nvidia GPU, because using the GPU is orders of magnitude faster. You can find instructions for installing Theano on an 
 Amazon Web Services GPU machine here: `Installing Theano on AWS for Deep Learning <http://markus.com/install-theano-on-aws/>`_ Another thing to keep in mind is using a good BLAS linked with Numpy, as that is normally a bottleneck.
+
 - PIL: image functionality
+
 - PyYAML (optional): used for YAML parsing
+
 - CuDNN (optional): for a fairly fast convolutional net support from Nvidia, download the cuDNN library here: `cuDNN <https://developer.nvidia.com/cuDNN>`_ You will want to move the files to 
 Theano's directory like the instructions say here: `Theano cuDNN integration <http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html>`_
 
