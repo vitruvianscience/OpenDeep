@@ -32,7 +32,7 @@ Because OpenDeep is still in alpha, you have to install via setup.py.
 First, install the dependencies.
 
 - Theano: Theano and its dependencies are required to use OpenDeep. You need the bleeding-edge version as specified here: `Theano bleeding-edge <http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions>`_
- I also recommend downloading CUDA to work on an Nvidia GPU, because using the GPU is orders of magnitude faster. You can find instructions for installing Theano on an 
+I also recommend downloading CUDA to work on an Nvidia GPU, because using the GPU is orders of magnitude faster. You can find instructions for installing Theano on an 
 Amazon Web Services GPU machine here: `Installing Theano on AWS for Deep Learning <http://markus.com/install-theano-on-aws/>`_ Another thing to keep in mind is using a good BLAS linked with Numpy, as that is normally a bottleneck.
 
 - PIL: image functionality
@@ -40,10 +40,9 @@ Amazon Web Services GPU machine here: `Installing Theano on AWS for Deep Learnin
 - PyYAML (optional): used for YAML parsing
 
 - CuDNN (optional): for a fairly fast convolutional net support from Nvidia, download the cuDNN library here: `cuDNN <https://developer.nvidia.com/cuDNN>`_ You will want to move the files to 
-Theano's directory like the instructions say here: `Theano cuDNN integration <http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html>`_
+Theano's directory like the instructions say here: `Theano cuDNN integration <http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html>`_.
 
-Finally, to install OpenDeep, download the github repository and navigate to the top level directory. Then run:
-    python setup.py develop
+Finally, to install OpenDeep, download the github repository and navigate to the top level directory. Then run: python setup.py develop
     
 Using develop instead of the normal install allows you to update the repository files and have the whole package update!
 
