@@ -65,8 +65,3 @@ Contact and Contribute
 ----------------------
 We would love all help to make this the best library possible! Feel free to fork the repository and 
 join the google group here: `opendeep-dev <https://groups.google.com/forum/#!forum/opendeep-dev/>`_
-
-
-Yay you made it! Here, have some cake.
-
-.. image:: readme_images/cake.jpg
