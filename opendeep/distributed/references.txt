@@ -1,0 +1,15 @@
+'One weird trick for parallelizing convolutional neural networks'
+Alex Krizhevsky
+http://arxiv.org/abs/1404.5997
+(used in 'Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification' http://arxiv.org/pdf/1502.01852v1.pdf)
+
+'Large scale distributed deep networks' (iterative reduce)
+Jeffrey Dean, Greg S. Corrado, Rajat Monga, Kai Chen, Matthieu Devin, Quoc V. Le, Mark Z. Mao, Marc'Aurelio Ranzato, Andrew Senior, Paul Tucker, Ke Yang, Andrew Y. Ng
+http://papers.nips.cc/paper/4687-large-scale-distributed-deep-networks.pdf or http://www.cs.toronto.edu/~ranzato/publications/DistBeliefNIPS2012_withAppendix.pdf
+
+Distributed Neural Networks with GPUs in the AWS Cloud
+http://techblog.netflix.com/2014/02/distributed-neural-networks-with-gpus.html
+
+'GPU Asynchronous Stochastic Gradient Descent to Speed Up Neural Network Training'
+Thomas Paine, Hailin Jin, Jianchao Yang, Zhe Lin, Thomas Huang
+http://arxiv.org/abs/1312.6186
