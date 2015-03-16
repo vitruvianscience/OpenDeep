@@ -41,6 +41,7 @@ class DAE(GSN):
     # Default values to use for some DAE parameters
     _defaults = {# gsn parameters
                 "walkbacks": 1,
+                "input_size": None,  # number of input units - please specify for your dataset!
                 "hidden_size": 1500,
                 "visible_activation": 'sigmoid',
                 "hidden_activation": 'tanh',
@@ -127,21 +128,8 @@ def main():
     # Save some reconstruction output images
     import opendeep.data.dataset as datasets
     n_examples = 100
-    xs_test = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
-    noisy_xs_test = dae.f_noise(mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST))
-    reconstructed = dae.predict(noisy_xs_test)
-    # Concatenate stuff
-    stacked = numpy.vstack(
-        [numpy.vstack([xs_test[i * 10: (i + 1) * 10],
-                       noisy_xs_test[i * 10: (i + 1) * 10],
-                       reconstructed[i * 10: (i + 1) * 10]])
-         for i in range(10)])
-    number_reconstruction = PIL.Image.fromarray(
-        tile_raster_images(stacked, (dae.image_height, dae.image_width), (10, 30))
-    )
-
-    number_reconstruction.save(dae.outdir + 'reconstruction.png')
-    log.info("saved output image!")
+    test_xs = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
+    dae.create_reconstruction_image(test_xs)
 
 
 if __name__ == '__main__':

@@ -42,6 +42,7 @@ from theano.compat.python2x import OrderedDict
 import PIL
 # internal references
 from opendeep import cast32, function, sharedX
+import opendeep.data.dataset as datasets
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.data.iterators.sequential import SequentialIterator
 import opendeep.log.logger as logger
@@ -628,6 +629,30 @@ class GSN(Model):
     #     rand_img_samples.save(rfname)
     #     log.debug('Took ' + make_time_units_string(time.time() - to_sample) +
     #               ' to sample '+str(n_samples*2)+' numbers')
+
+    def create_reconstruction_image(self, input_data):
+        if self.is_image:
+            n_examples = len(input_data)
+            xs_test = input_data
+            noisy_xs_test = self.f_noise(input_data)
+            reconstructed = self.predict(noisy_xs_test)
+            # Concatenate stuff
+            width, height = closest_to_square_factors(n_examples)
+            stacked = numpy.vstack(
+                [numpy.vstack([xs_test[i * width: (i + 1) * width],
+                               noisy_xs_test[i * width: (i + 1) * width],
+                               reconstructed[i * width: (i + 1) * width]])
+                 for i in range(height)])
+            number_reconstruction = PIL.Image.fromarray(
+                tile_raster_images(stacked, (self.image_height, self.image_width), (height, 3*width))
+            )
+
+            save_path = os.path.join(self.outdir, 'reconstruction.png')
+            save_path = os.path.realpath(save_path)
+            number_reconstruction.save(save_path)
+            log.info("saved output image to %s", save_path)
+        else:
+            log.warning("Asked to create reconstruction image for something that isn't an image. Ignoring...")
 
 
     def pack_hiddens(self, hiddens_list):
