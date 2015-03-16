@@ -112,10 +112,6 @@ in just a few lines of code::
     dae.create_reconstruction_image(test_xs)
 
 
-To run an example, go to the denoising autoencoder class DAE in opendeep.models.single_layer.autoencoder. There is a main() method in that file which will 
-set up the logging environment, load the MNIST handwritten digit dataset, and train a denoising autoencoder on the data. You can do a KeyboardInterrupt (normally ctrl+c in terminal) whenever you 
-want to stop training early, and an image of the autoencoder's output will appear in outputs/dae/reconstruction.png. 
-
 Congrats, you just:
 
 - set up a dataset (MNIST)
