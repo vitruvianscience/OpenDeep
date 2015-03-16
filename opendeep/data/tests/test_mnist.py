@@ -6,7 +6,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import unittest
@@ -27,7 +27,7 @@ class TestMNIST(unittest.TestCase):
         # get a logger for this session
         self.log = logging.getLogger(__name__)
         # get the mnist dataset
-        self.mnist = MNIST()
+        self.mnist = MNIST(binary=False)
         # instantiate the sequential iterator
         self.sequentialIterator = SequentialIterator(self.mnist, dataset.TRAIN, 255, 255)
         # instantiate the random iterator
@@ -57,7 +57,9 @@ class TestMNIST(unittest.TestCase):
         assert i==235
 
     def tearDown(self):
-        pass
+        del self.mnist
+        del self.sequentialIterator
+        del self.randomIterator
 
 
 if __name__ == '__main__':

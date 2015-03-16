@@ -1,8 +1,8 @@
 """
 .. module:: noise
 
-This module provides the important noise functions - mostly used for regularization purposes to prevent the deep nets from
-overfitting.
+This module provides the important noise functions - mostly used for regularization purposes to prevent the
+deep nets from overfitting.
 
 Based on code from Li Yao (University of Montreal)
 https://github.com/yaoli/GSN
@@ -12,7 +12,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging

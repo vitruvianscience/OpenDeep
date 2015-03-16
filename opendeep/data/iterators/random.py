@@ -1,12 +1,14 @@
 '''
-A random dataset iterator
+.. module:: random
+
+A random dataset iterator - pull each example from the dataset in a random order.
 '''
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging

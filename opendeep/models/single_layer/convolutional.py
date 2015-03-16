@@ -12,7 +12,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Lasagne", "Weiguang Ding", "Ruoyan Wang", "Fei Mao", "Graham Taylor", "Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -37,18 +37,23 @@ try:
     from theano.sandbox.cuda import dnn
 except ImportError, e:
     has_cudnn = False
-    log.warning("Could not import CuDNN from theano. For fast convolutions, please install it like so: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html")
+    log.warning("Could not import CuDNN from theano. For fast convolutions, "
+                "please install it like so: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html")
 
 # Some convolution operations only work on the GPU, so do a check here:
 if not theano.config.device.startswith('gpu'):
-    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. Please enable the GPU in Theano via these instructions: http://deeplearning.net/software/theano/tutorial/using_gpu.html")
+    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. "
+                "Please enable the GPU in Theano via these instructions: "
+                "http://deeplearning.net/software/theano/tutorial/using_gpu.html")
 
 # To use the fastest convolutions possible, need to set the Theano flag as described here:
 # http://benanne.github.io/2014/12/09/theano-metaopt.html
 # make it THEANO_FLAGS=optimizer_including=conv_meta
 # OR you could set the .theanorc file with [global]optimizer_including=conv_meta
 if theano.config.optimizer_including != "conv_meta":
-    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! To have Theano cherry-pick the best convolution implementation, please set optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
+    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! "
+                "To have Theano cherry-pick the best convolution implementation, please set "
+                "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
                 % str(theano.config.optimizer_including))
 
 
@@ -67,9 +72,9 @@ class Conv1D(Model):
         "activation": rectifier,
         "convolution": conv1d_mc0
     }
-    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, stride=None, weights_init=None,
-                 weights_interval=None, weights_mean=None, weights_std=None, bias_init=None, border_mode=None,
-                 activation=None, convolution=None, config=None, defaults=defaults):
+    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, stride=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None, bias_init=None,
+                 border_mode=None, activation=None, convolution=None, config=None, defaults=defaults):
         super(Conv1D, self).__init__(config=config, defaults=defaults)
         # configs can now be accessed through self.args
 
@@ -78,13 +83,17 @@ class Conv1D(Model):
         ##################
         # grab info from the inputs_hook, or from parameters
         # expect input to be in the form (B, C, I) (batch, channel, input data)
-        if inputs_hook:  # inputs_hook is a tuple of (Shape, Input)
-            assert len(inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"  # make sure inputs_hook is a tuple
+        #  inputs_hook is a tuple of (Shape, Input)
+        if inputs_hook:
+            # make sure inputs_hook is a tuple
+            assert len(inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
             input_shape = inputs_hook[0] or input_shape or self.args.get('input_shape')
             self.input = inputs_hook[1]
         else:
-            input_shape = input_shape or self.args.get('input_shape')  # either grab from the parameter directly or self.args config
-            self.input = T.ftensor3('X')  # make the input a symbolic matrix
+            # either grab from the parameter directly or self.args config
+            input_shape = input_shape or self.args.get('input_shape')
+            # make the input a symbolic matrix
+            self.input = T.ftensor3('X')
 
         # activation function!
         activation_name = activation or self.args.get('activation')
@@ -92,7 +101,7 @@ class Conv1D(Model):
             activation_func = get_activation_function(activation_name)
         else:
             activation_func = activation_name
-            assert callable(activation_name), "Activation function specified either needs to be a string name or callable!"
+            assert callable(activation_name), "Activation function either needs to be a string name or callable!"
 
         # filter shape should be in the form (num_filters, num_channels, filter_length)
         filter_shape = filter_shape or self.args.get('filter_shape')
@@ -111,8 +120,9 @@ class Conv1D(Model):
         # Params - make sure to deal with params_hook! #
         ################################################
         if params_hook:
+            # make sure the params_hook has W and b
             assert len(params_hook) == 2, "Expected 2 params (W and b) for Conv1D, found {0!s}!".format(
-                len(params_hook))  # make sure the params_hook has W and b
+                len(params_hook))
             W, b = params_hook
         else:
             # if we are initializing weights from a gaussian
@@ -123,9 +133,11 @@ class Conv1D(Model):
                 W = get_weights_uniform(shape=filter_shape, interval=weights_interval, name="W")
             # otherwise not implemented
             else:
-                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
+                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                          str(self.args.get('weights_init')))
                 raise NotImplementedError(
-                    "Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
+                    "Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                    str(self.args.get('weights_init')))
 
             b = get_bias(shape=(num_filters,), name="b", init_values=bias_init)
 
@@ -181,11 +193,12 @@ class Conv2D(Model):
         'weights_std': 0.005,  # standard deviation for gaussian weights init
         'bias_init': 0.0,  # how to initialize the bias parameter
         "activation": rectifier,
-        "convolution": T.nnet.conv2d  # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+        # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+        "convolution": T.nnet.conv2d
     }
-    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, strides=None, weights_init=None,
-                 weights_interval=None, weights_mean=None, weights_std=None, bias_init=None, border_mode=None,
-                 activation=None, convolution=None, config=None, defaults=defaults):
+    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, strides=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None, bias_init=None,
+                 border_mode=None, activation=None, convolution=None, config=None, defaults=defaults):
         super(Conv2D, self).__init__(config=config, defaults=defaults)
         # configs can now be accessed through self.args
 
@@ -194,13 +207,17 @@ class Conv2D(Model):
         ##################
         # grab info from the inputs_hook, or from parameters
         # expect input to be in the form (B, C, 0, 1) (batch, channel, rows, cols)
-        if inputs_hook:  # inputs_hook is a tuple of (Shape, Input)
-            assert len(inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"  # make sure inputs_hook is a tuple
+        # inputs_hook is a tuple of (Shape, Input)
+        if inputs_hook:
+            # make sure inputs_hook is a tuple
+            assert len(inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
             input_shape = inputs_hook[0] or input_shape or self.args.get('input_shape')
             self.input = inputs_hook[1]
         else:
-            input_shape = input_shape or self.args.get('input_shape')  # either grab from the parameter directly or self.args config
-            self.input = T.ftensor4('X')  # make the input a symbolic matrix
+            # either grab from the parameter directly or self.args config
+            input_shape = input_shape or self.args.get('input_shape')
+            # make the input a symbolic matrix
+            self.input = T.ftensor4('X')
 
         # activation function!
         activation_name = activation or self.args.get('activation')
@@ -208,7 +225,7 @@ class Conv2D(Model):
             activation_func = get_activation_function(activation_name)
         else:
             activation_func = activation_name
-            assert callable(activation_name), "Activation function specified either needs to be a string name or callable!"
+            assert callable(activation_name), "Activation function either needs to be a string name or callable!"
 
         # filter shape should be in the form (num_filters, num_channels, filter_size[0], filter_size[1])
         filter_shape = filter_shape or self.args.get('filter_shape')
@@ -227,8 +244,9 @@ class Conv2D(Model):
         # Params - make sure to deal with params_hook! #
         ################################################
         if params_hook:
+            # make sure the params_hook has W and b
             assert len(params_hook) == 2, "Expected 2 params (W and b) for Conv2D, found {0!s}!".format(
-                len(params_hook))  # make sure the params_hook has W and b
+                len(params_hook))
             W, b = params_hook
         else:
             # if we are initializing weights from a gaussian
@@ -239,9 +257,11 @@ class Conv2D(Model):
                 W = get_weights_uniform(shape=filter_shape, interval=weights_interval, name="W")
             # otherwise not implemented
             else:
-                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
+                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                          str(self.args.get('weights_init')))
                 raise NotImplementedError(
-                    "Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
+                    "Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                    str(self.args.get('weights_init')))
 
             b = get_bias(shape=(num_filters, ), name="b", init_values=bias_init)
 
@@ -296,7 +316,8 @@ class Conv3D(Model):
         'weights_std': 0.005,  # standard deviation for gaussian weights init
         'bias_init': 0.0,  # how to initialize the bias parameter
         "activation": rectifier,
-        "convolution": T.nnet.conv3D  # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+        # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+        "convolution": T.nnet.conv3D
     }
 
     def __init__(self):
@@ -330,15 +351,16 @@ class ConvPoolLayer(Model):
         'convolution': T.nnet.conv2d,
         'activation': 'rectifier'
     }
-    def __init__(self, inputs_hook, input_shape=None, filter_shape=None, convstride=None, padsize=None, group=None, poolsize=None, poolstride=None,
-                 bias_init=None, local_response_normalization=None, convolution=None, activation=None, params_hook=None,
-                 config=None, defaults=defaults):
+    def __init__(self, inputs_hook, input_shape=None, filter_shape=None, convstride=None, padsize=None, group=None,
+                 poolsize=None, poolstride=None, bias_init=None, local_response_normalization=None,
+                 convolution=None, activation=None, params_hook=None, config=None, defaults=defaults):
         # init Model to combine the defaults and config dictionaries.
         super(ConvPoolLayer, self).__init__(config, defaults)
         # all configuration parameters are now in self.args
 
         # deal with the inputs coming from inputs_hook - necessary for now to give an input hook
-        if inputs_hook:  # inputs_hook is a tuple of (Shape, Input)
+        # inputs_hook is a tuple of (Shape, Input)
+        if inputs_hook:
             assert len(inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
             self.input_shape = inputs_hook[0] or input_shape or self.args.get('input_shape')
             self.input = inputs_hook[1]
@@ -355,7 +377,7 @@ class ConvPoolLayer(Model):
             self.activation_func = get_activation_function(activation_name)
         else:
             self.activation_func = activation_name
-            assert callable(activation_name), "Activation function specified either needs to be a string name or callable!"
+            assert callable(activation_name), "Activation function either needs to be a string name or callable!"
         self.convolution = convolution or self.args.get('convolution')
         self.filter_shape = filter_shape or self.args.get('filter_shape')
         self.convstride = convstride or self.args.get('convstride')
@@ -385,8 +407,9 @@ class ConvPoolLayer(Model):
         ################################################
         if self.group == 1:
             if params_hook:
+                # make sure the params_hook has W and b
                 assert len(params_hook) == 2, "Expected 2 params (W and b) for ConvPoolLayer, found {0!s}!".format(
-                    len(params_hook))  # make sure the params_hook has W and b
+                    len(params_hook))
                 self.W, self.b = params_hook
             else:
                 self.W = get_weights_gaussian(shape=self.filter_shape, mean=0, std=0.01, name="W")

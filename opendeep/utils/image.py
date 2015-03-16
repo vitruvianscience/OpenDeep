@@ -1,7 +1,7 @@
 """ 
-.. module:: image_tiler
+.. module:: image
 
-This file contains different utility functions that are not connected
+This module contains different utility functions that are not connected
 in anyway to the networks presented in the tutorials, but rather help in
 processing the outputs into a more understandable way.
 
@@ -16,7 +16,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Li Yao"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # third party libraries
 import numpy

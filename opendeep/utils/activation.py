@@ -1,14 +1,15 @@
 """
-.. module:: activation_functions
+.. module:: activation
 
-These functions provide the nonlinearities used as activation functions for the visible, hidden, or output units in a deep net.
+These functions provide the nonlinearities used as activation functions for the visible, hidden,
+or output units in a deep net.
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -31,8 +32,8 @@ def sigmoid(x):
     :rtype: same as x
 
     :note:
-        You might want to try T.nnet.ultra_fast_sigmoid() or T.nnet.hard_sigmoid() for faster versions. Speed comparison for
-        100M float64 elements on a Core2 Duo @ 3.16 GHz:
+        You might want to try T.nnet.ultra_fast_sigmoid() or T.nnet.hard_sigmoid() for faster versions.
+        Speed comparison for 100M float64 elements on a Core2 Duo @ 3.16 GHz:
             hard_sigmoid: 1.0s
             ultra_fast_sigmoid: 1.3s
             sigmoid (with amdlibm): 2.3s
@@ -86,7 +87,8 @@ def rectifier(x):
         See https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
     """
     # return T.maximum(cast32(0), x)
-    #### below fix is taken from Lasagne framework: https://github.com/benanne/Lasagne/blob/master/lasagne/nonlinearities.py
+    # below fix is taken from Lasagne framework:
+    # https://github.com/benanne/Lasagne/blob/master/lasagne/nonlinearities.py
     # The following is faster than lambda x: T.maximum(0, x)
     # Thanks to @SnippyHolloW for pointing this out.
     # See: https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
@@ -106,8 +108,8 @@ def tanh(x):
 
 def linear(x):
     """
-    Returns the linear function of x, which is just x. This method effectively does nothing, but counts as a name for readability
-    elsewhere when constructing layers.
+    Returns the linear function of x, which is just x. This method effectively does nothing, but counts as a name for
+    readability elsewhere when constructing layers.
 
     :param x: input
     :type x: Object
@@ -116,8 +118,9 @@ def linear(x):
     """
     return x
 
-######################## keep activation functions above this line, and add them to the dictionary below #####################
-# this is a dictionary containing a string keyword mapping to the activation function - used for get_activation_function(name)
+############# keep activation functions above this line, and add them to the dictionary below #############
+# this is a dictionary containing a string keyword mapping to the activation function -
+# used for get_activation_function(name)
 _activations = {'sigmoid': sigmoid,
                 'softmax': softmax,
                 'softplus': softplus,
@@ -127,8 +130,8 @@ _activations = {'sigmoid': sigmoid,
 
 def get_activation_function(name):
     """
-    This helper method returns the appropriate activation function given a string name. It looks up the appropriate function from the
-    internal _activations dictionary.
+    This helper method returns the appropriate activation function given a string name. It looks up the appropriate
+    function from the internal _activations dictionary.
 
     :param name: String representation of the function you want (normally grabbed from a config file)
     :type name: String
@@ -145,6 +148,8 @@ def get_activation_function(name):
     # if it couldn't find the function (key didn't exist), raise a NotImplementedError
     if func is None:
         log.critical("Did not recognize activation %s! Please use one of: ", str(name), str(_activations.keys()))
-        raise NotImplementedError("Did not recognize activation {0!s}! Please use one of: {1!s}".format(name, _activations.keys()))
+        raise NotImplementedError(
+            "Did not recognize activation {0!s}! Please use one of: {1!s}".format(name, _activations.keys())
+        )
     # return the found function
     return func

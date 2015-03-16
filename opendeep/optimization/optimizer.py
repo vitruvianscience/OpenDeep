@@ -1,5 +1,7 @@
 '''
-Basic interface for an optimizer
+.. module:: optimizer
+
+Basic interface for an optimizer - a training algorithm for models.
 
 Some information from Andrej Karpath:
 'In my own experience, Adagrad/Adadelta are "safer" because they don't depend so strongly on setting of learning rates
@@ -20,7 +22,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -42,5 +44,11 @@ class Optimizer(object):
 
 
     def train(self):
-        log.critical("You need to implement a 'train' function to train the model on the dataset with respect to parameters! Optimizer is %s", str(type(self)))
-        raise NotImplementedError()
+        log.critical(
+            "You need to implement a 'train' function to train the model on the dataset with respect to "
+            "parameters! Optimizer is %s", str(type(self))
+        )
+        raise NotImplementedError(
+            "You need to implement a 'train' function to train the model on the dataset with respect to "
+            "parameters! Optimizer is %s", str(type(self))
+        )

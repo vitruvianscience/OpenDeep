@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Weiguang Ding", "Ruoyan Wang", "Fei Mao", "Graham Taylor", "Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -33,14 +33,18 @@ log = logging.getLogger(__name__)
 
 # Some convolution operations only work on the GPU, so do a check here:
 if not theano.config.device.startswith('gpu'):
-    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. Please enable the GPU in Theano via these instructions: http://deeplearning.net/software/theano/tutorial/using_gpu.html")
+    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. "
+                "Please enable the GPU in Theano via these instructions: "
+                "http://deeplearning.net/software/theano/tutorial/using_gpu.html")
 
 # To use the fastest convolutions possible, need to set the Theano flag as described here:
 # http://benanne.github.io/2014/12/09/theano-metaopt.html
 # make it THEANO_FLAGS=optimizer_including=conv_meta,metaopt.verbose=1
 # OR you could set the .theanorc file with [global]optimizer_including=conv_meta [metaopt]verbose=1
 if theano.config.optimizer_including != "conv_meta":
-    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! To have Theano cherry-pick the best convolution implementation, please set optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
+    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! "
+                "To have Theano cherry-pick the best convolution implementation, please set "
+                "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
                 % str(theano.config.optimizer_including))
 
 class AlexNet(Model):
@@ -197,8 +201,13 @@ class AlexNet(Model):
         dropout_layer6 = dropout(fc_layer6.get_outputs(), corruption_level=0.5)
 
         log.debug("fully connected layer 2 (model layer 7)...")
-        fc_layer7       = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()), output_size=4096, config=fc_config)
-        fc_layer7_train = BasicLayer(inputs_hook=(4096, dropout_layer6), output_size=4096, params_hook=fc_layer7.get_params(), config=fc_config)
+        fc_layer7       = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()),
+                                     output_size=4096,
+                                     config=fc_config)
+        fc_layer7_train = BasicLayer(inputs_hook=(4096, dropout_layer6),
+                                     output_size=4096,
+                                     params_hook=fc_layer7.get_params(),
+                                     config=fc_config)
         # Add this layer's parameters!
         self.params += fc_layer7_train.get_params()
 
@@ -213,8 +222,12 @@ class AlexNet(Model):
             'bias_init': 0.0
         }
         log.debug("softmax classification layer (model layer 8)...")
-        softmax_layer8       = SoftmaxLayer(inputs_hook=(4096, fc_layer7.get_outputs()), output_size=1000, config=softmax_config)
-        softmax_layer8_train = SoftmaxLayer(inputs_hook=(4096, dropout_layer7), output_size=1000, params_hook=softmax_layer8.get_params(),
+        softmax_layer8       = SoftmaxLayer(inputs_hook=(4096, fc_layer7.get_outputs()),
+                                            output_size=1000,
+                                            config=softmax_config)
+        softmax_layer8_train = SoftmaxLayer(inputs_hook=(4096, dropout_layer7),
+                                            output_size=1000,
+                                            params_hook=softmax_layer8.get_params(),
                                             config=softmax_config)
         # Add this layer's parameters!
         self.params += softmax_layer8.get_params()
@@ -238,7 +251,8 @@ class AlexNet(Model):
         log.debug("Compiling functions!")
         t = time.time()
         log.debug("f_predict...")
-        self.f_predict = function(inputs=[self.x], outputs=softmax_layer8.get_argmax_prediction())  # use the actual argmax from the classification
+        # use the actual argmax from the classification
+        self.f_predict = function(inputs=[self.x], outputs=softmax_layer8.get_argmax_prediction())
         log.debug("f_monitors")
         self.f_monitors = function(inputs=[self.x, self.y], outputs=self.monitors.values())
         log.debug("compilation took %s" % make_time_units_string(time.time() - t))
@@ -259,11 +273,11 @@ class AlexNet(Model):
 
     def get_outputs(self):
         """
-        This method will return the model's output variable expression from the computational graph. This should be what is given for the
-        outputs= part of the 'f_predict' function from self.predict().
+        This method will return the model's output variable expression from the computational graph.
+        This should be what is given for the outputs= part of the 'f_predict' function from self.predict().
 
-        This will be used for creating hooks to link models together, where these outputs can be strung as the inputs or hiddens to another
-        model :)
+        This will be used for creating hooks to link models together, where these outputs can be strung as the inputs
+        or hiddens to another model :)
         ------------------
 
         :return: theano expression of the outputs from this model's computation
@@ -289,7 +303,8 @@ class AlexNet(Model):
         """
         if not hasattr(self, 'f_predict'):
             log.error(
-                "Missing self.f_predict - make sure you ran self.build_computation_graph()! This should have run during initialization....")
+                "Missing self.f_predict - make sure you ran self.build_computation_graph()! "
+                "This should have run during initialization....")
             raise NotImplementedError()
         return self.f_predict(*input)
 
@@ -308,8 +323,8 @@ class AlexNet(Model):
     def get_monitors(self):
         """
         This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
-        about during training. For every monitor returned by this method, the function will be run on the train/validation/test
-        dataset and its value will be reported.
+        about during training. For every monitor returned by this method, the function will be run on the
+        train/validation/test dataset and its value will be reported.
 
         Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
         exist!
@@ -320,14 +335,16 @@ class AlexNet(Model):
         """
         if not hasattr(self, 'f_monitors'):
             log.error(
-                "Missing self.f_monitors - make sure you ran self.build_computation_graph()! This should have run during initialization....")
+                "Missing self.f_monitors - make sure you ran self.build_computation_graph()! "
+                "This should have run during initialization....")
             raise NotImplementedError()
         names = ', '.join(self.monitors.keys())
         return {names: self.f_monitors}
 
     def get_params(self):
         """
-        This returns the list of theano shared variables that will be trained by the Optimizer. These parameters are used in the gradient.
+        This returns the list of theano shared variables that will be trained by the Optimizer.
+        These parameters are used in the gradient.
         ------------------
 
         :return: flattened list of theano shared variables to be trained

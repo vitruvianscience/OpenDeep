@@ -9,7 +9,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard imports
 import os
@@ -27,7 +27,26 @@ ZIP       = 1
 GZ        = 2
 PKL       = 3
 TAR       = 4
-UNKNOWN   = 5
+NPY       = 5
+UNKNOWN   = 6
+
+def get_filetype_string(filetype):
+    if filetype is DIRECTORY:
+        return 'DIRECTORY'
+    elif filetype is ZIP:
+        return 'ZIP'
+    elif filetype is GZ:
+        return 'GZ'
+    elif filetype is PKL:
+        return 'PKL'
+    elif filetype is TAR:
+        return 'TAR'
+    elif filetype is NPY:
+        return 'NPY'
+    elif filetype is UNKNOWN:
+        return 'UNKNOWN'
+    else:
+        return str(filetype)
 
 
 def mkdir_p(path):
@@ -93,7 +112,8 @@ def download_file(url, destination):
 
 def get_file_type(file_path):
     """
-    Given a filename, try to determine the type of file from the extension into one of the categories defined as global variables above.
+    Given a filename, try to determine the type of file from the extension into one of the categories defined as
+    global variables above.
     Currently, can be .zip, .gz, .tar, .pkl, .p, or .pickle.
 
     :param file_path: the filesystem path to the file in question
@@ -119,6 +139,8 @@ def get_file_type(file_path):
                 return TAR
             elif extension == '.pkl' or extension == '.p' or extension =='.pickle':
                 return PKL
+            elif extension == '.npy':
+                return NPY
             else:
                 log.warning('Didn\'t recognize file extension %s for file %s', extension, file_path)
                 return UNKNOWN

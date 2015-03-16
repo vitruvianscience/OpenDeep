@@ -1,12 +1,14 @@
 '''
-A sequential dataset iterator
+.. module:: sequential
+
+A sequential dataset iterator - pull each example from the dataset in the order it is stored.
 '''
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -24,7 +26,8 @@ class SequentialIterator(Iterator):
     '''
     def __init__(self, dataset, subset=datasets.TRAIN, batch_size=1, minimum_batch_size=1, rng=None):
         _t = time.time()
-        log.debug('Initializing a %s sequential iterator over %s', str(type(dataset)), datasets.get_subset_strings(subset))
+        log.debug('Initializing a %s sequential iterator over %s',
+                  str(type(dataset)), datasets.get_subset_strings(subset))
         super(self.__class__, self).__init__(dataset, subset, batch_size, minimum_batch_size, rng)
         log.debug('iterator took %s to make' % make_time_units_string(time.time()-_t))
 

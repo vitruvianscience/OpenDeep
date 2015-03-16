@@ -1,12 +1,15 @@
 '''
-Generic stochastic gradient descent optimization with momentum and annealing
+.. module:: stochastic_gradient_descent
+
+Generic stochastic gradient descent optimization with momentum (Nesterov acceleration) and annealing.
+This also serves as the base class for other learning rate update algorithms, such as ADADELTA or RMSProp.
 '''
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -139,12 +142,16 @@ class SGD(Optimizer):
             log.debug("Model is supervised: 2 inputs to f_learn.")
             self.unsupervised = False
         else:
-            log.error("Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised.",
-                      str(type(self.model)),
-                      str(num_inputs))
-            raise AssertionError("Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised."%
-                                  str(type(self.model)),
-                                  str(num_inputs))
+            log.error(
+                "Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised.",
+                str(type(self.model)),
+                str(num_inputs)
+            )
+            raise AssertionError(
+                "Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised." %
+                str(type(self.model)),
+                str(num_inputs)
+            )
 
         # grab the function(s) to use to monitor different model values during training
         self.monitors = self.model.get_monitors()
@@ -192,7 +199,8 @@ class SGD(Optimizer):
 
 
     def train(self, continue_training=False):
-        log.info("-----------TRAINING %s FOR %s EPOCHS (continue_training=%s)-----------", str(type(self.model)), str(self.n_epoch), str(continue_training))
+        log.info("-----------TRAINING %s FOR %s EPOCHS (continue_training=%s)-----------",
+                 str(type(self.model)), str(self.n_epoch), str(continue_training))
         log.debug("Train dataset size is: %s", self.dataset.getDataShape(datasets.TRAIN))
         if self.dataset.hasSubset(datasets.VALID):
             log.debug("Valid dataset size is: %s", self.dataset.getDataShape(datasets.VALID))
@@ -230,7 +238,8 @@ class SGD(Optimizer):
         log.debug("Saving model parameters...")
         self.model.save_params('trained_epoch_'+str(self.epoch_counter)+'.pkl')
 
-        log.info("------------TOTAL %s TRAIN TIME TOOK %s---------", str(type(self.model)), make_time_units_string(time.time()-start_time))
+        log.info("------------TOTAL %s TRAIN TIME TOOK %s---------",
+                 str(type(self.model)), make_time_units_string(time.time()-start_time))
 
 
     def _perform_one_epoch(self):
@@ -258,7 +267,9 @@ class SGD(Optimizer):
             #valid
             if self.dataset.hasSubset(datasets.VALID):
                 valid_monitors = {key: [] for key in self.monitors.keys()}
-                for x, y in self.iterator(self.dataset, datasets.VALID, self.batch_size, self.minimum_batch_size, self.rng):
+                for x, y in self.iterator(
+                        self.dataset, datasets.VALID, self.batch_size, self.minimum_batch_size, self.rng
+                ):
                     if self.unsupervised:
                         for key in self.monitors.keys():
                             monitor_function = self.monitors[key]
@@ -267,12 +278,15 @@ class SGD(Optimizer):
                         for key in self.monitors.keys():
                             monitor_function = self.monitors[key]
                             valid_monitors[key].append(monitor_function(x, y))
-                log.info('Valid monitors: %s', str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
+                log.info('Valid monitors: %s',
+                         str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
 
             #test
             if self.dataset.hasSubset(datasets.TEST):
                 test_monitors = {key: [] for key in self.monitors.keys()}
-                for x, y in self.iterator(self.dataset, datasets.TEST, self.batch_size, self.minimum_batch_size, self.rng):
+                for x, y in self.iterator(
+                        self.dataset, datasets.TEST, self.batch_size, self.minimum_batch_size, self.rng
+                ):
                     if self.unsupervised:
                         for key in self.monitors.keys():
                             monitor_function = self.monitors[key]
@@ -300,9 +314,10 @@ class SGD(Optimizer):
             timing = time.time() - t
             self.times.append(timing)
 
-            log.info('time: '+make_time_units_string(timing))
+            log.info('time: ' + make_time_units_string(timing))
 
-            log.info('remaining time: '+make_time_units_string((self.n_epoch - self.epoch_counter) * numpy.mean(self.times)))
+            log.info('remaining time: ' +
+                     make_time_units_string((self.n_epoch - self.epoch_counter) * numpy.mean(self.times)))
 
             if (self.epoch_counter % self.save_frequency) == 0:
                 #save params

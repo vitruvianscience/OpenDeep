@@ -1,4 +1,6 @@
 '''
+.. module:: mnist
+
 Object for the MNIST handwritten digit dataset
 '''
 __authors__ = "Markus Beissinger"
@@ -6,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -23,7 +25,8 @@ log = logging.getLogger(__name__)
 
 class MNIST(FileDataset):
     '''
-    Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into train, valid, and test sets.
+    Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
+    train, valid, and test sets.
     '''
     def __init__(self, binary=False, dataset_dir='../../datasets'):
         # instantiate the Dataset class to install the dataset from the url
@@ -38,9 +41,13 @@ class MNIST(FileDataset):
         # self.file_type tells how to load the dataset
         # load the dataset into memory
         if self.file_type is file_ops.GZ:
-            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(gzip.open(self.dataset_location, 'rb'))
+            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(
+                gzip.open(self.dataset_location, 'rb')
+            )
         else:
-            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(open(self.dataset_location, 'r'))
+            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(
+                open(self.dataset_location, 'r')
+            )
 
         # make optional binary
         if binary:
@@ -64,7 +71,8 @@ class MNIST(FileDataset):
         log.debug('Loading MNIST into theano shared variables')
         (self.train_X, self.train_Y,
          self.valid_X, self.valid_Y,
-         self.test_X, self.test_Y) = make_shared_variables((train_X, train_Y, valid_X, valid_Y, test_X, test_Y), borrow=True)
+         self.test_X, self.test_Y) = make_shared_variables((train_X, train_Y, valid_X, valid_Y, test_X, test_Y),
+                                                           borrow=True)
 
 
     def getDataByIndices(self, indices, subset):
@@ -104,3 +112,36 @@ class MNIST(FileDataset):
             return self.test_Y.get_value(borrow=True)[indices]
         else:
             return None
+
+    def hasSubset(self, subset):
+        '''
+        :param subset: integer
+        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
+        :return: boolean
+        Whether or not this dataset has the given subset split
+        '''
+        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
+            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+            return False
+        # it has them all.
+        return True
+
+    def getDataShape(self, subset):
+        '''
+        :return: tuple
+        Return the shape of this dataset's subset in a NxD tuple where N=#examples and D=dimensionality
+        '''
+        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
+            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+            return None
+        if subset is datasets.TRAIN:
+            return self._train_shape
+        elif subset is datasets.VALID:
+            return self._valid_shape
+        elif subset is datasets.TEST:
+            return self._test_shape
+        else:
+            log.critical('No getDataShape method implemented for %s for subset %s!',
+                         str(type(self)),
+                         datasets.get_subset_strings(subset))
+            raise NotImplementedError()

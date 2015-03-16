@@ -3,14 +3,15 @@
 
 Generic structure for a dataset, and common sub-classes to deal with files/urls or arrays from numpy/scipy (in memory).
 """
-# TODO: add large dataset support with database connections, numpy.memmap, h5py, pytables (and in the future grabbing from pipelines like spark)
+# TODO: add large dataset support with database connections, numpy.memmap, h5py, pytables
+# TODO: (and in the future grabbing from pipelines like spark)
 
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -40,7 +41,8 @@ def get_subset_strings(subset):
     else:
         return str(subset)
 
-# TODO: I don't think this is very efficient implementation, especially with the iterators. However, it is flexible. Need to look into it further to optimize.
+# TODO: I don't think this is very efficient implementation, especially with the iterators.
+# However, it is flexible. Need to look into it further to optimize.
 class Dataset(object):
     '''
     Default interface for a dataset object - a bunch of sources for an iterator to grab data from
@@ -85,12 +87,15 @@ class Dataset(object):
         '''
         if subset not in [TRAIN, VALID, TEST]:
             log.error('Subset %s not recognized!', get_subset_strings(subset))
+            return False
         if subset is TRAIN:
             return True
-        elif subset is VALID and hasattr(self, '_valid_shape'):
-            return True
-        elif subset is TEST and hasattr(self, '_test_shape'):
-            return True
+        elif subset is VALID:
+            log.error("Don't know if valid exists!")
+            raise NotImplementedError("Don't know if valid exists!")
+        elif subset is TEST:
+            log.error("Don't know if test exists!")
+            raise NotImplementedError("Don't know if test exists!")
         else:
             return False
 
@@ -102,14 +107,20 @@ class Dataset(object):
         '''
         if subset not in [TRAIN, VALID, TEST]:
             log.error('Subset %s not recognized!', get_subset_strings(subset))
-        if subset is TRAIN and hasattr(self, '_train_shape'):
-            return self._train_shape
-        elif subset is VALID and hasattr(self, '_valid_shape'):
-            return self._valid_shape
-        elif subset is TEST and hasattr(self, '_test_shape'):
-            return self._test_shape
+            return None
+        if subset is TRAIN:
+            log.error("No training shape implemented")
+            raise NotImplementedError("No training shape implemented")
+        elif subset is VALID:
+            log.error("No valid shape implemented")
+            raise NotImplementedError("No valid shape implemented")
+        elif subset is TEST:
+            log.error("No test shape implemented")
+            raise NotImplementedError("No test shape implemented")
         else:
-            log.critical('No getDataShape method implemented for %s for subset %s!', str(type(self)), get_subset_strings(subset))
+            log.critical('No getDataShape method implemented for %s for subset %s!',
+                         str(type(self)),
+                         get_subset_strings(subset))
             raise NotImplementedError()
 
 
@@ -152,7 +163,7 @@ class FileDataset(Dataset):
         self.source      = source
         self.dataset_dir = dataset_dir
 
-        # install the dataset from source! (makes sure the file is there and returns the type so you know how to read it)
+        # install the dataset from source! (makes sure file is there and returns the type so you know how to read it)
         self.dataset_location, self.file_type = self.install()
 
     # helper methods for installing dataset files
@@ -160,9 +171,9 @@ class FileDataset(Dataset):
         '''
         Method to both download and extract the dataset from the internet (if there) or verify connection settings
         '''
-        file_type=None
-        if self.filename is not None and self.source is not None:
-            log.info('Installing dataset %s', str(self.source))
+        file_type = None
+        if self.filename is not None:
+            log.info('Installing dataset %s', str(self.filename))
             # construct the actual path to the dataset
             prevdir = os.getcwd()
             os.chdir(os.path.split(os.path.realpath(__file__))[0])
@@ -203,11 +214,17 @@ class FileDataset(Dataset):
                             log.debug('Found file %s', dataset_location)
                             break
 
-            # if the file wasn't found, download it.
+            # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
             download_success = True
-            if file_type is None:
-                download_success = download_file(self.source, dataset_location)
-                file_type = get_file_type(dataset_location)
+            if self.source is not None:
+                if file_type is None:
+                    download_success = download_file(self.source, dataset_location)
+                    file_type = get_file_type(dataset_location)
+            else:
+                log.error("Filename %s couldn't be found, and no URL source to download was provided.",
+                          str(self.filename))
+                raise RuntimeError("Filename %s couldn't be found, and no URL source to download was provided." %
+                                   str(self.filename))
 
             # if the file type is a zip, unzip it.
             unzip_success = True
@@ -239,7 +256,8 @@ class FileDataset(Dataset):
         if self.dataset_location is not None and os.path.exists(self.dataset_location):
             # If we are trying to remove something not from the dataset directory, give a warning
             if not self.dataset_location.startswith(self.dataset_dir):
-                log.critical("ATTEMPTING TO REMOVE A FILE NOT FROM THE DATASET DIRECTORY. LOCATION IS %s AND THE DATASET DIRECTORY IS %s",
+                log.critical("ATTEMPTING TO REMOVE A FILE NOT FROM THE DATASET DIRECTORY. "
+                             "LOCATION IS %s AND THE DATASET DIRECTORY IS %s",
                              self.dataset_location,
                              self.dataset_dir)
             shutil.rmtree(self.dataset_location)

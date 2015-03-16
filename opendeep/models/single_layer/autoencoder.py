@@ -15,7 +15,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -65,7 +65,11 @@ class DAE(GSN):
         defaults['layers'] = 1
         if config:
             config['layers'] = 1
-        super(DAE, self).__init__(config=config, defaults=defaults, inputs_hook=inputs_hook, hiddens_hook=hiddens_hook, dataset=dataset)
+        super(DAE, self).__init__(config=config,
+                                  defaults=defaults,
+                                  inputs_hook=inputs_hook,
+                                  hiddens_hook=hiddens_hook,
+                                  dataset=dataset)
 
 class ContractiveAutoencoder(Model):
     '''
@@ -128,9 +132,13 @@ def main():
     reconstructed = dae.predict(noisy_xs_test)
     # Concatenate stuff
     stacked = numpy.vstack(
-        [numpy.vstack([xs_test[i * 10: (i + 1) * 10], noisy_xs_test[i * 10: (i + 1) * 10], reconstructed[i * 10: (i + 1) * 10]]) for i
-         in range(10)])
-    number_reconstruction = PIL.Image.fromarray(tile_raster_images(stacked, (dae.image_height, dae.image_width), (10, 30)))
+        [numpy.vstack([xs_test[i * 10: (i + 1) * 10],
+                       noisy_xs_test[i * 10: (i + 1) * 10],
+                       reconstructed[i * 10: (i + 1) * 10]])
+         for i in range(10)])
+    number_reconstruction = PIL.Image.fromarray(
+        tile_raster_images(stacked, (dae.image_height, dae.image_width), (10, 30))
+    )
 
     number_reconstruction.save(dae.outdir + 'reconstruction.png')
     log.info("saved output image!")

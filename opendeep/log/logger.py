@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import os
@@ -66,7 +66,8 @@ def config_root_logger():
                             except:
                                 logging.basicConfig(level=logging.DEBUG)
                                 logger = get_root_logger()
-                                logger.exception('Exception in creating the directory for a logging handler! Path was {0!s}'.format(os.path.realpath(dirs)))
+                                logger.exception('Exception in creating the directory for a logging handler! '
+                                                 'Path was {0!s}'.format(os.path.realpath(dirs)))
                                 logger.warning('Anyway, loading the basicConfig for the logger instead.')
                                 init = False
 
@@ -84,7 +85,8 @@ def config_root_logger():
     else:
         logging.basicConfig(level=logging.DEBUG)
         logger = get_root_logger()
-        logger.warning("Could not find configuration file for logger! Was looking for {0!s}. Using basicConfig instead...".format(os.path.realpath(path)))
+        logger.warning("Could not find configuration file for logger! Was looking for {0!s}. "
+                       "Using basicConfig instead...".format(os.path.realpath(path)))
 
     # change the directory to the calling file's working directory
     os.chdir(prevdir)

@@ -1,5 +1,5 @@
 """
-.. module:: config_tools
+.. module:: config
 
 Methods used for parsing various configurations (dictionaries, json, yaml, etc.)
 """
@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -27,8 +27,8 @@ log = logging.getLogger(__name__)
 
 def create_dictionary_like(input):
     """
-    This takes in either an object or filename and parses it into a dictionary. Mostly useful for parsing JSON or YAML config files,
-    and returning the dictionary representation.
+    This takes in either an object or filename and parses it into a dictionary. Mostly useful for parsing JSON or YAML
+    config files, and returning the dictionary representation.
 
     :param input: Dictionary-like object (implements collections.Mapping), JSON filename, or YAML filename.
     :type input: collections.Mapping or String
@@ -36,8 +36,8 @@ def create_dictionary_like(input):
     :return: the parsed dictionary-like object, or None if it could not be parsed.
     :rtype: collections.Mapping or None
 
-    :note: YAML is parsed by the pyyaml library, which would be an optional dependency. Install with 'pip install pyyaml' if you want
-    YAML-parsing capabilities.
+    :note: YAML is parsed by the pyyaml library, which would be an optional dependency.
+    Install with 'pip install pyyaml' if you want YAML-parsing capabilities.
     """
     if input is None:
         log.warning('Config was None.')
@@ -68,8 +68,8 @@ def create_dictionary_like(input):
 
 def combine_config_and_defaults(config=None, defaults=None):
     """
-    This method takes two configuration dictionaries (or JSON/YAML filenames), and combines them. One will serve as the 'defaults'
-    for the configuration, while the other will override any defaults when combined.
+    This method takes two configuration dictionaries (or JSON/YAML filenames), and combines them.
+    One will serve as the 'defaults' for the configuration, while the other will override any defaults when combined.
 
     :param config: dictionary-like object or filepath to a JSON or YAML configuration file
     :type config: collections.Mapping or String

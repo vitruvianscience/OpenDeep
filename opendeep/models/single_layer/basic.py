@@ -9,7 +9,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -34,8 +34,9 @@ class BasicLayer(Model):
         'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
         'bias_init': 0.0,  # how to initialize the bias parameter
     }
-    def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None, input_size=None, output_size=None, activation=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
+    def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
+                 input_size=None, output_size=None, activation=None, weights_init=None,
+                 weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
         # init Model to combine the defaults and config dictionaries.
         super(BasicLayer, self).__init__(config, defaults)
         # all configuration parameters are now in self.args
@@ -49,9 +50,12 @@ class BasicLayer(Model):
             input_size = inputs_hook[0] or input_size
             self.input = inputs_hook[1]
         else:
-            input_size = input_size or self.args.get('input_size')  # either grab from the parameter directly or self.args config
-            self.input = T.fmatrix('X')  # make the input a symbolic matrix
-        output_size = output_size or self.args.get('output_size') or input_size  # either grab from the parameter directly, self.args config, or copy n_in
+            # either grab from the parameter directly or self.args config
+            input_size = input_size or self.args.get('input_size')
+            # make the input a symbolic matrix
+            self.input = T.fmatrix('X')
+        # either grab from the parameter directly, self.args config, or copy n_in
+        output_size = output_size or self.args.get('output_size') or input_size
 
         # other specifications
         weights_init = weights_init or self.args.get('weights_init')
@@ -74,7 +78,8 @@ class BasicLayer(Model):
         # parameters - make sure to deal with params_hook! #
         ####################################################
         if params_hook:
-            assert len(params_hook) == 2, "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(len(params_hook))  # make sure the params_hook has W and b
+            assert len(params_hook) == 2, "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(
+                len(params_hook))  # make sure the params_hook has W and b
             W, b = params_hook
         else:
             # if we are initializing weights from a gaussian
@@ -85,8 +90,10 @@ class BasicLayer(Model):
                 W = get_weights_uniform(shape=(input_size, output_size), interval=interval, name="W")
             # otherwise not implemented
             else:
-                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
-                raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian or uniform" % str(self.args.get('weights_init')))
+                log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                          str(self.args.get('weights_init')))
+                raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
+                                          str(self.args.get('weights_init')))
 
             b = get_bias(shape=output_size, name="b", init_values=bias_init)
 
@@ -99,7 +106,8 @@ class BasicLayer(Model):
         # Here is the meat of the computation transforming input -> output
         self.output = activation_func(T.dot(self.input, W) + b)
 
-        log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s" % str((input_size, output_size)), str(activation_name))
+        log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s" %
+                  str((input_size, output_size)), str(activation_name))
 
     def get_inputs(self):
         return [self.input]
@@ -113,8 +121,8 @@ class BasicLayer(Model):
 
 class SoftmaxLayer(BasicLayer):
     """
-    The softmax layer is meant as a last-step prediction layer using the softmax activation function - this class exists to provide
-    easy access to methods for errors and log-likelihood for a given truth label y.
+    The softmax layer is meant as a last-step prediction layer using the softmax activation function -
+    this class exists to provide easy access to methods for errors and log-likelihood for a given truth label y.
 
     It is a special subclass of the FullyConnectedLayer, with the activation function forced to be 'softmax'
     """
@@ -140,7 +148,8 @@ class SoftmaxLayer(BasicLayer):
 
     def errors(self, y):
         if y.ndim != self.y_pred.ndim:
-            log.error("y should have the same shape as self.y_pred! found y %s and y_pred %s", str(y.ndim), str(self.y_pred.ndim))
+            log.error("y should have the same shape as self.y_pred! found y %s and y_pred %s",
+                      str(y.ndim), str(self.y_pred.ndim))
             raise TypeError('y should have the same shape as self.y_pred',
                             ('y', y.type, 'y_pred', self.y_pred.type))
 

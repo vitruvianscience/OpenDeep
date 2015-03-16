@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger", "Li Yao"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -21,7 +21,8 @@ log = logging.getLogger(__name__)
 
 def L1(parameters):
     """
-    L1 loss, also known as square or lasso, is good for giving sparse estimates. Normally in practice, L2 is generally a better bet.
+    L1 loss, also known as square or lasso, is good for giving sparse estimates.
+    Normally in practice, L2 is generally a better bet.
 
     :param parameters: parameters to apply the regularization
     :type parameters: theano variables

@@ -12,7 +12,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # third-party libraries
 import theano
@@ -90,4 +90,4 @@ def make_shared_variables(variable_list, borrow=True):
     Takes a list of variables to make into theano shared variables of type floatX.
     """
     # Borrow is true by default
-    return (sharedX(variable, borrow=borrow) if variable is not None else None for variable in variable_list)
+    return [sharedX(variable, borrow=borrow) if variable is not None else None for variable in variable_list]

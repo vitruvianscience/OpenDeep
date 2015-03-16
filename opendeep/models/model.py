@@ -1,7 +1,9 @@
 """
 .. module:: model
 
-This module defines the generic Model class - which represents everything from a single layer to a full-blown deep network.
+This module defines the generic Model class -
+which represents everything from a single layer to a full-blown deep network.
+
 Models are the reusable, modular building blocks for the deep networks.
 """
 
@@ -10,7 +12,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -25,25 +27,28 @@ log = logging.getLogger(__name__)
 
 class Model(object):
     """
-    The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths (which can be a
-    combination of multiple models linked through input_hooks and hidden_hooks).
+    The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
+    (which can be a combination of multiple models linked through input_hooks and hidden_hooks).
 
-    Think of a Model like Legos - you can attach single pieces together as well as multi-piece units together. The main vision
-    of OpenDeep is to provide a lightweight, highly modular structure that makes creating and experimenting with new models
-    as easy as possible. Much of current deep learning progress has come from combining multiple deep models together for complex
-    tasks - such as the image captioning system with convolutional networks + recurrent networks.
+    Think of a Model like Legos - you can attach single pieces together as well as multi-piece units together.
+    The main vision of OpenDeep is to provide a lightweight, highly modular structure that makes creating and
+    experimenting with new models as easy as possible. Much of current deep learning progress has come from
+    combining multiple deep models together for complex tasks - such as the image captioning system with
+    convolutional networks + recurrent networks.
 
-    When creating Theano functions inside of models, use the opendeep.function wrapper instead of the basic theano.function -
-    this changes unused inputs from an error to a warning. Most likely, unused inputs shouldn't be a breaking error.
+    When creating Theano functions inside of models, use the opendeep.function wrapper instead of the basic
+    theano.function - this changes unused inputs from an error to a warning. Most likely, unused inputs
+    shouldn't be a breaking error.
     """
 
     def __init__(self, config=None, defaults=None, inputs_hook=None, hiddens_hook=None, params_hook=None):
         """
-        This creates the model's combined configuration params from config and defaults into a self.args dictionary-like
-        object (meaning it implements collections.Mapping and you can use self.args.get('parameter') to access something).
+        This creates the model's combined configuration params from config and defaults into a self.args
+        dictionary-like object (meaning it implements collections.Mapping and you can use self.args.get('parameter')
+        to access something).
 
-        Further, your model implementations should accept optional inputs_hook and hiddens_hook (if applicable) to set your
-        inputs and hidden representation in a modular fashion, allowing models to link together.
+        Further, your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
+        to set your inputs and hidden representation in a modular fashion, allowing models to link together.
         inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
         hiddens_hook is a tuple of (shape, variable) that should replace the default model hidden representation
         (which means you need to adapt creating your computation graph to not care about the inputs and to instead
@@ -67,8 +72,8 @@ class Model(object):
 
         :param hiddens_hook: Routing information for the model to accept its hidden representation from elsewhere.
         This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
-        output layer gives the RNN-GSN model, a deep recurrent model.) For now, you need to include the shape information
-        (normally the dimensionality of the hiddens i.e. n_hidden).
+        output layer gives the RNN-GSN model, a deep recurrent model.) For now, you need to include the shape
+        information (normally the dimensionality of the hiddens i.e. n_hidden).
         :type hiddens_hook: Tuple of (shape, variable)
 
         :param params_hook: A list of model parameters (shared theano variables) that you should use when constructing
@@ -107,10 +112,11 @@ class Model(object):
 
     def get_hiddens(self):
         """
-        This method will return the model's hidden representation expression (if applicable) from the computational graph.
+        This method will return the model's hidden representation expression (if applicable)
+        from the computational graph.
 
-        This will also be used for creating hooks to link models together, where these hidden variables can be strung as the inputs or
-        hiddens to another model :)
+        This will also be used for creating hooks to link models together, where these hidden variables can be strung
+        as the inputs or hiddens to another model :)
         ------------------
 
         :return: theano expression of the hidden representation from this model's computation
@@ -122,11 +128,11 @@ class Model(object):
 
     def get_outputs(self):
         """
-        This method will return the model's output variable expression from the computational graph. This should be what is given for the
-        outputs= part of the 'f_predict' function from self.predict().
+        This method will return the model's output variable expression from the computational graph.
+        This should be what is given for the outputs= part of the 'f_predict' function from self.predict().
 
-        This will be used for creating hooks to link models together, where these outputs can be strung as the inputs or hiddens to another
-        model :)
+        This will be used for creating hooks to link models together,
+        where these outputs can be strung as the inputs or hiddens to another model :)
 
         Example: gsn = GSN()
                  softmax = SoftmaxLayer(inputs_hook=gsn.get_outputs())
@@ -182,16 +188,19 @@ class Model(object):
     def get_updates(self):
         """
         This should return any theano updates from the model (used for things like random number generators).
-        Most often comes from theano's 'scan' op. Check out its documentation at http://deeplearning.net/software/theano/library/scan.html.
+        Most often comes from theano's 'scan' op. Check out its documentation at
+        http://deeplearning.net/software/theano/library/scan.html.
+
         This is used with the optimizer to create the training function - the 'updates=' part of the theano function.
         ------------------
 
-        :return: updates from the theano computation for the model to be used during Optimizer.train() (but not including
-        training parameter updates - those are calculated by the Optimizer) These are expressions for new SharedVariable
-        values.
+        :return: updates from the theano computation for the model to be used during Optimizer.train()
+        (but not including training parameter updates - those are calculated by the Optimizer)
+        These are expressions for new SharedVariable values.
         :rtype: (iterable over pairs (shared_variable, new_expression). List, tuple, or dict.)
         """
-        # TODO: should we do the parameter decays from get_decay_params() in the model updates? Right now I'm not because it seems less modular
+        # TODO: should we do the parameter decays from get_decay_params() in the model updates?
+        # TODO: Right now I'm not because it seems less modular
         # by default, assume the model doesn't have updates - it's your job to return them in this method.
         return None
 
@@ -199,8 +208,8 @@ class Model(object):
     def get_monitors(self):
         """
         This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
-        about during training. For every monitor returned by this method, the function will be run on the train/validation/test
-        dataset and its value will be reported.
+        about during training. For every monitor returned by this method, the function will be run on the
+        train/validation/test dataset and its value will be reported.
 
         Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
         exist!
@@ -232,8 +241,8 @@ class Model(object):
 
     def get_lr_scalers(self):
         """
-        This method lets you scale the overall learning rate in the Optimizer to individual parameters. Returns a dictionary mapping
-        model_parameter: learning_rate_scaling_factor. Default is no scaling.
+        This method lets you scale the overall learning rate in the Optimizer to individual parameters.
+        Returns a dictionary mapping model_parameter: learning_rate_scaling_factor. Default is no scaling.
         ------------------
 
         :return: dictionary mapping the model parameters to their learning rate scaling factor
@@ -248,7 +257,8 @@ class Model(object):
     #######################################
     def get_params(self):
         """
-        This returns the list of theano shared variables that will be trained by the Optimizer. These parameters are used in the gradient.
+        This returns the list of theano shared variables that will be trained by the Optimizer.
+        These parameters are used in the gradient.
         ------------------
 
         :return: flattened list of theano shared variables to be trained
@@ -261,8 +271,8 @@ class Model(object):
     def get_param_values(self, borrow=True):
         """
         This returns a list of the parameter values for the model.
-        This method is useful when you want to save the model parameters, or are doing distributed programming and want to train parallel
-        models.
+        This method is useful when you want to save the model parameters, or are doing distributed programming
+        and want to train parallel models.
         ------------------
 
         :param borrow: theano 'borrow' parameter for get_value() method on shared variables
@@ -278,7 +288,8 @@ class Model(object):
             log.exception("%s cannot get parameters, is missing get_params() method!", str(type(self)))
             raise
         except AttributeError as e:
-            log.exception("%s cannot get parameters, there was an AttributeError %s when going through the get_params()",
+            log.exception("%s cannot get parameters, there was an AttributeError %s "
+                          "when going through the get_params()",
                           str(type(self)), str(e))
             raise
 
@@ -288,8 +299,11 @@ class Model(object):
     def set_param_values(self, param_values, borrow=True):
         """
         This sets the model parameters from the list of values given.
-        This method is useful when you are loading model parameters, or are doing distributed programming and want to train parallel models.
-        The order of param_values matters! It must be the same as the order of parameters returned from self.get_params()!
+        This method is useful when you are loading model parameters, or are doing distributed programming and
+        want to train parallel models.
+
+        The order of param_values matters! It must be the same as the order of parameters returned from
+        self.get_params()!
         ------------------
 
         :param param_values: list of theano/numpy arrays of values for the model parameters
@@ -305,7 +319,8 @@ class Model(object):
 
         # make sure the input list of values is the same length as the params for the model.
         if len(param_values) != len(params):
-            log.error("%s length of input params to set_param_values() different from length of self.get_params(). Input was %s, expected %s",
+            log.error("%s length of input params to set_param_values() different from length of self.get_params(). "
+                      "Input was %s, expected %s",
                       str(type(self)), str(len(param_values)), str(len(self.get_params())))
             return False
 

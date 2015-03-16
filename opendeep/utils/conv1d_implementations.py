@@ -10,7 +10,7 @@ __authors__ = "Sander Dieleman"
 __credits__ = ["Sander Dieleman", "Daniel Nouri", "Colin Raffel"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -26,12 +26,16 @@ log = logging.getLogger(__name__)
 # make it THEANO_FLAGS=optimizer_including=conv_meta
 # OR you could set the .theanorc file with [global]optimizer_including=conv_meta
 if theano.config.optimizer_including != "conv_meta":
-    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! To have Theano cherry-pick the best convolution implementation, please set optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
+    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! "
+                "To have Theano cherry-pick the best convolution implementation, please set "
+                "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
                 % str(theano.config.optimizer_including))
 
 # 1D convolutions
-# These convolutions assume the input is shaped like (B, C, I), which is (Batch, Channel, Input data). Most likely, your channel will be 1.
-# For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and D=dimensionality (chars, words, etc.)
+# These convolutions assume the input is shaped like (B, C, I), which is (Batch, Channel, Input data).
+# Most likely, your channel will be 1.
+# For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
+# D=dimensionality (chars, words, etc.)
 
 def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
               border_mode='valid', subsample=(1,)):

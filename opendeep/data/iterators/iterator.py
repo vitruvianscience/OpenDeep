@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -30,7 +30,8 @@ class Iterator(object):
     def __init__(self, dataset=None, subset=None, batch_size=1, minimum_batch_size=1, rng=None):
         # make sure the subset is recognized
         if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
-            log.error('Dataset subset %s not recognized, try TRAIN, VALID, or TEST', datasets.get_subset_strings(subset))
+            log.error('Dataset subset %s not recognized, try TRAIN, VALID, or TEST',
+                      datasets.get_subset_strings(subset))
         self.dataset = dataset
         self.subset = subset
         self.batch_size = batch_size

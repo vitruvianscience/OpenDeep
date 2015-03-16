@@ -1,5 +1,5 @@
 """
-.. module:: decay_functions
+.. module:: decay
 
 Functions used for decaying Theano parameters as shared variables.
 """
@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -68,8 +68,8 @@ class DecayFunction(object):
 
     def simulate(self, initial, reduction_factor, epoch):
         """
-        This will take an initial value for a hypothetical variable, the reduction factor appropriate to the subclass's decay function,
-        and the number of decays (epoch) you want to see the simulated result after.
+        This will take an initial value for a hypothetical variable, the reduction factor appropriate to the
+        subclass's decay function, and the number of decays (epoch) you want to see the simulated result after.
 
         :param initial: initial value for the variable
         :type initial: Float
@@ -158,8 +158,8 @@ _functions = {
 
 def get_decay_function(name, parameter, initial, reduction_factor):
     """
-        This helper method returns the appropriate decay function given a string name. It looks up the appropriate function from the
-        internal _functions dictionary.
+        This helper method returns the appropriate decay function given a string name.
+        It looks up the appropriate function from the internal _functions dictionary.
 
         :param name: String representation of the decay function you want (normally grabbed from a config file)
         :type name: String
@@ -170,7 +170,8 @@ def get_decay_function(name, parameter, initial, reduction_factor):
         :param initial: String representation of the decay function you want (normally grabbed from a config file)
         :type initial: String
 
-        :param reduction_factor: String representation of the decay function you want (normally grabbed from a config file)
+        :param reduction_factor: String representation of the decay function you want
+        (normally grabbed from a config file)
         :type reduction_factor: String
 
         :return: The appropriate cost function, or raise NotImplementedError if it isn't found.
@@ -185,6 +186,8 @@ def get_decay_function(name, parameter, initial, reduction_factor):
     # if it couldn't find the function (key didn't exist), raise a NotImplementedError
     if func is None:
         log.critical("Did not recognize decay function %s! Please use one of: ", str(name), str(_functions.keys()))
-        raise NotImplementedError("Did not recognize decay function {0!s}! Please use one of: {1!s}".format(name, _functions.keys()))
+        raise NotImplementedError(
+            "Did not recognize decay function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
+        )
     # return the found function
     return func(parameter, initial, reduction_factor)

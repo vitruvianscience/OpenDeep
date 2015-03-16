@@ -8,7 +8,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -60,7 +60,8 @@ def raise_to_list(input):
     
 def stack_and_shared(_input):
     """
-    This will take a list of input variables, turn them into theano shared variables, and return them stacked in a single tensor.
+    This will take a list of input variables, turn them into theano shared variables, and return them stacked
+    in a single tensor.
 
     :param _input: list of input variables
     :type _input: list, object, or none
@@ -108,8 +109,8 @@ def concatenate_list(input, axis=0):
     
 def closest_to_square_factors(n):
     """
-    This function finds the integer factors that are closest to the square root of a number. (Useful for finding the closest
-    width/height of an image you want to make square)
+    This function finds the integer factors that are closest to the square root of a number.
+    (Useful for finding the closest width/height of an image you want to make square)
 
     :param n: The number to find its closest-to-square root factors.
     :type n: Integer
@@ -158,7 +159,8 @@ def set_shared_values(variables, values, borrow=False):
     :param borrow: the borrow argument for theano shared variable's set_value() method
     :type borrow: Boolean
 
-    :raises: ValueError if the list of variables and the list of values are different lengths, AttributeError if no .set_value() function
+    :raises: ValueError if the list of variables and the list of values are different lengths,
+    AttributeError if no .set_value() function
     """
     # use the safe_zip wrapper to ensure the variables and values lists are of the same length
     for variable, value in safe_zip(variables, values):

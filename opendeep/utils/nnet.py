@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -33,9 +33,12 @@ _uniform_interval = {
     # shape[0] = rows
     # shape[1] = cols
     # numpy.prod(shape[2:]) = receptive field from Glorot et al.
-    'sigmoid': lambda shape: 4 * numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:]))),  # use this only when the activation function is sigmoid
-    'default': lambda shape: 1 / numpy.sqrt(shape[0]),  # this is the default provided in other codebases
-    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))  # this is the default for the GSN code from Li Yao
+    # use this only when the activation function is sigmoid
+    'sigmoid': lambda shape: 4 * numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:]))),
+    # this is the default provided in other codebases
+    'default': lambda shape: 1 / numpy.sqrt(shape[0]),
+    # this is the default for the GSN code from Li Yao
+    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
 }
 default_interval = 'montreal'
 
@@ -44,7 +47,8 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
     This initializes a shared variable with a given shape for weights drawn from a Uniform distribution with
     low = -interval and high = interval.
 
-    Interval can either be a number to use, or a string key to one of the predefined formulas in the _uniform_interval dictionary.
+    Interval can either be a number to use, or a string key to one of the predefined formulas in the
+    _uniform_interval dictionary.
 
     :param shape: a tuple giving the shape information for this weight matrix
     :type shape: Tuple
@@ -67,8 +71,8 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
 
     if rng is None:
         rng = numpy.random
-    # If the interval parameter is a string, grab the appropriate formula from the function dictionary, and apply the appropriate
-    # shape numbers to it.
+    # If the interval parameter is a string, grab the appropriate formula from the function dictionary,
+    # and apply the appropriate shape numbers to it.
     if isinstance(interval, basestring):
         interval_func = _uniform_interval.get(interval)
         if interval_func is None:
@@ -77,17 +81,20 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
             raise NotImplementedError('Could not find uniform interval formula %s, try one of %s instead.' %
                                       str(interval), str(_uniform_interval.keys()))
         else:
-            log.debug("Creating weights with shape %s from Uniform distribution with formula name: %s", str(shape), str(interval))
+            log.debug("Creating weights with shape %s from Uniform distribution with formula name: %s",
+                      str(shape), str(interval))
             interval = interval_func(shape)
     else:
-        log.debug("Creating weights with shape %s from Uniform distribution with given interval +- %s", str(shape), str(interval))
+        log.debug("Creating weights with shape %s from Uniform distribution with given interval +- %s",
+                  str(shape), str(interval))
     # build the uniform weights tensor
     val = cast_floatX(rng.uniform(low=-interval, high=interval, size=shape))
     return theano.shared(value=val, name=name)
 
 def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
     """
-    This initializes a shared variable with the given shape for weights drawn from a Gaussian distribution with mean and std.
+    This initializes a shared variable with the given shape for weights drawn from a
+    Gaussian distribution with mean and std.
 
     :param shape: a tuple giving the shape information for this weight matrix
     :type shape: Tuple
@@ -126,7 +133,8 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
 
 def get_bias(shape, name="b", init_values=None):
     """
-    This creates a theano shared variable for the bias parameter - normally initialized to zeros, but you can specify other values
+    This creates a theano shared variable for the bias parameter - normally initialized to zeros,
+    but you can specify other values
 
     :param shape: the shape to use for the bias vector/matrix
     :type shape: Tuple
@@ -151,7 +159,8 @@ def get_bias(shape, name="b", init_values=None):
 
 def mirror_images(input, image_shape, cropsize, rand, flag_rand):
     """
-    This takes an input batch of images (normally the input to a convolutional net), and augments them by mirroring and concatenating.
+    This takes an input batch of images (normally the input to a convolutional net),
+    and augments them by mirroring and concatenating.
 
     :param input: the input 4D tensor of images
     :type input: Tensor4D
@@ -199,8 +208,8 @@ def mirror_images(input, image_shape, cropsize, rand, flag_rand):
 
 def bc01_to_c01b(input):
     """
-    This helper method uses dimshuffle on a 4D input tensor assumed to be bc01 format (batch, channels, rows, cols) and outputs it
-    in c01b format (channels, rows, cols, batch). This operation is used for convolutions.
+    This helper method uses dimshuffle on a 4D input tensor assumed to be bc01 format (batch, channels, rows, cols)
+    and outputs it in c01b format (channels, rows, cols, batch). This operation is used for convolutions.
 
     :param input: a 4D input tensor assumed to be in bc01 ordering
     :type input: 4D tensor
@@ -215,8 +224,8 @@ def bc01_to_c01b(input):
 
 def c01b_to_bc01(input):
     """
-    This helper method uses dimshuffle on a 4D input tensor assumed to be c01b format (channels, rows, cols, batch) and outputs it
-    in bc01 format (batch, channels, rows, cols). This operation is used for convolutions.
+    This helper method uses dimshuffle on a 4D input tensor assumed to be c01b format (channels, rows, cols, batch)
+    and outputs it in bc01 format (batch, channels, rows, cols). This operation is used for convolutions.
 
     :param input: a 4D input tensor assumed to be in c01b ordering
     :type input: 4D tensor

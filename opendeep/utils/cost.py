@@ -1,15 +1,15 @@
 """
-.. module:: cost_functions
+.. module:: cost
 
-These functions are used as the objectives (costs) to minimize during training of deep networks. You should be careful to use
-the appropriate cost function for the type of input and output of the network.
+These functions are used as the objectives (costs) to minimize during training of deep networks.
+You should be careful to use the appropriate cost function for the type of input and output of the network.
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
-__email__ = "dev@opendeep.org"
+__email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
@@ -21,7 +21,8 @@ log = logging.getLogger(__name__)
 
 def binary_crossentropy(output, target):
     """
-    Computes the mean binary cross-entropy between a target and an output, across all dimensions (both the feature and example dimensions).
+    Computes the mean binary cross-entropy between a target and an output, across all dimensions
+    (both the feature and example dimensions).
 
     :param output: symbolic Tensor (or compatible) that is your output from the network
     :type output: Tensor
@@ -47,15 +48,17 @@ def categorical_crossentropy(output_dist, target_dist):
     This is the mean multinomial negative log-loss.
     From Theano:
     Return the mean cross-entropy between an approximating distribution and a true distribution, across all dimensions.
-    The cross entropy between two probability distributions measures the average number of bits needed to identify an event from a set
-    of possibilities, if a coding scheme is used based on a given probability distribution q, rather than the "true" distribution p.
-    Mathematically, this function computes H(p,q) = - \sum_x p(x) \log(q(x)), where p=target_distribution and q=coding_distribution.
+    The cross entropy between two probability distributions measures the average number of bits needed to identify an
+    event from a set of possibilities, if a coding scheme is used based on a given probability distribution q, rather
+    than the "true" distribution p.
+    Mathematically, this function computes H(p,q) = - \sum_x p(x) \log(q(x)), where p=target_distribution and
+    q=coding_distribution.
 
     :param output: symbolic 2D tensor (or compatible) where each row represents a distribution
     :type output: Tensor
 
-    :param target: symbolic 2D tensor *or* symbolic vector of ints. In the case of an integer vector argument, each element represents
-    the position of the '1' in a 1-of-N encoding (aka 'one-hot' encoding)
+    :param target: symbolic 2D tensor *or* symbolic vector of ints. In the case of an integer vector argument,
+    each element represents the position of the '1' in a 1-of-N encoding (aka 'one-hot' encoding)
     :type target: Tensor
 
     :return: the mean of the cross-entropy tensor
@@ -73,7 +76,8 @@ def mse(output, target, mean_over_second=True):
     :param target: the symbolic tensor (or compatible) target truth to compare the output against.
     :type target: Tensor
 
-    :param mean_over_second: boolean whether or not to take the mean across all dimensions (True) or just the feature dimensions (False)
+    :param mean_over_second: boolean whether or not to take the mean across all dimensions (True) or just the
+    feature dimensions (False)
     :type mean_over_second: Boolean
 
     :return: the appropriate mean square error
@@ -90,8 +94,8 @@ def mse(output, target, mean_over_second=True):
 # use this for continuous inputs
 def isotropic_gaussian_LL(means_estimated, stds_estimated, targets):
     """
-    This takes the negative log-likelihood of an isotropic Gaussian with estimated mean and standard deviation. Useful for continuous-valued
-    costs.
+    This takes the negative log-likelihood of an isotropic Gaussian with estimated mean and standard deviation.
+    Useful for continuous-valued costs.
 
     :param means_estimated: the symbolic tensor (or compatible) representing the means of the distribution estimated.
     In the case of Generative Stochastic Networks, for example, this would be the final reconstructed output x'.
@@ -106,7 +110,8 @@ def isotropic_gaussian_LL(means_estimated, stds_estimated, targets):
     :return: the negative log-likelihood
     :rtype: Tensor
 
-    :note: Use this cost, for example, on Generative Stochastic Networks when the input/output is continuous (alternative to mse cost).
+    :note: Use this cost, for example, on Generative Stochastic Networks when the input/output is continuous
+    (alternative to mse cost).
     """
     # The following definition came from the Conditional_nade project
     #the loglikelihood of isotropic Gaussian with
@@ -148,8 +153,8 @@ _functions = {
 
 def get_cost_function(name):
     """
-        This helper method returns the appropriate cost function given a string name. It looks up the appropriate function from the
-        internal _functions dictionary.
+        This helper method returns the appropriate cost function given a string name. It looks up the appropriate
+        function from the internal _functions dictionary.
 
         :param name: String representation of the cost function you want (normally grabbed from a config file)
         :type name: String
@@ -166,6 +171,8 @@ def get_cost_function(name):
     # if it couldn't find the function (key didn't exist), raise a NotImplementedError
     if func is None:
         log.critical("Did not recognize cost function %s! Please use one of: ", str(name), str(_functions.keys()))
-        raise NotImplementedError("Did not recognize cost function {0!s}! Please use one of: {1!s}".format(name, _functions.keys()))
+        raise NotImplementedError(
+            "Did not recognize cost function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
+        )
     # return the found function
     return func
