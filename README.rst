@@ -1,3 +1,8 @@
+.. image:: readme_images/OpenDeep_logo_name.png
+   :scale: 50 %
+   :alt: OpenDeep
+   :align: center
+
 =========================================
 OpenDeep: A modular deep learning library
 =========================================
@@ -11,6 +16,7 @@ You can train and use existing deep learning models as a black box implementatio
 to create your own novel research, or write new models from scratch without worrying about the overhead!
 
 .. image:: readme_images/automate!.jpg
+   :align: center
 
 .. _OpenDeep: http://www.opendeep.org/
 .. _Theano: http://deeplearning.net/software/theano/
@@ -117,7 +123,7 @@ Congrats, you just:
 - set up a dataset (MNIST)
 
 - instantiated a denoising autoencoder model with some configurations
- 
+
 - trained it with an AdaDelta optimizer
 
 - and predicted some outputs given inputs (and saved them as an image)!
@@ -135,7 +141,7 @@ User group: `opendeep-users`_
 
 Developer group: `opendeep-dev`_
 
-We would love all help to make this the best library possible! Feel free to fork the repository and 
+We would love all help to make this the best library possible! Feel free to fork the repository and
 join the Google groups!
 
 .. _opendeep-users: https://groups.google.com/forum/#!forum/opendeep-users/
