@@ -261,11 +261,13 @@ class SGD(Optimizer):
                     for key in self.monitors.keys():
                         monitor_function = self.monitors[key]
                         train_monitors[key].append(monitor_function(x, y))
-            log.info('Train: %s', trunc(numpy.mean(train_costs, 0)))
-            log.info('Train monitors: %s', str({key: numpy.mean(value, 0) for key, value in train_monitors.items()}))
+            log.info('Train cost: %s', trunc(numpy.mean(train_costs, 0)))
+            if len(self.monitors.keys()) > 0:
+                log.info('Train monitors: %s',
+                         str({key: numpy.mean(value, 0) for key, value in train_monitors.items()}))
 
             #valid
-            if self.dataset.hasSubset(datasets.VALID):
+            if self.dataset.hasSubset(datasets.VALID) and len(self.monitors.keys()) > 0:
                 valid_monitors = {key: [] for key in self.monitors.keys()}
                 for x, y in self.iterator(
                         self.dataset, datasets.VALID, self.batch_size, self.minimum_batch_size, self.rng
@@ -282,7 +284,7 @@ class SGD(Optimizer):
                          str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
 
             #test
-            if self.dataset.hasSubset(datasets.TEST):
+            if self.dataset.hasSubset(datasets.TEST) and len(self.monitors.keys()) > 0:
                 test_monitors = {key: [] for key in self.monitors.keys()}
                 for x, y in self.iterator(
                         self.dataset, datasets.TEST, self.batch_size, self.minimum_batch_size, self.rng

@@ -42,7 +42,6 @@ from theano.compat.python2x import OrderedDict
 import PIL
 # internal references
 from opendeep import cast32, function, sharedX
-import opendeep.data.dataset as datasets
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.data.iterators.sequential import SequentialIterator
 import opendeep.log.logger as logger

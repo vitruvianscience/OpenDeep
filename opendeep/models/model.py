@@ -218,8 +218,8 @@ class Model(object):
         :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
         :rtype: Dictionary
         """
-        log.critical("%s does not have a get_monitors function!", str(type(self)))
-        raise NotImplementedError("Please implement a get_monitors method for %s" % str(type(self)))
+        # no monitors by default
+        return {}
 
 
     def get_decay_params(self):

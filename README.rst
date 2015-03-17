@@ -6,6 +6,7 @@
 =========================================
 OpenDeep: A modular deep learning library
 =========================================
+Documentation: http://www.opendeep.org/
 
 OpenDeep_ is a general purpose commercial and research grade deep learning library for Python built from the ground up
 in Theano_ with a focus on flexibility and ease of use for both industry data scientists and cutting-edge researchers.
@@ -79,34 +80,40 @@ That's it! Now you should be able to import opendeep into python modules.
 
 Quick Start
 -----------
-To get up to speed on deep learning, check out a blog post here: `Deep Learning 101`_
+To get up to speed on deep learning, check out a blog post here: `Deep Learning 101`_.
 You can also go through guides on OpenDeep's documentation site: http://www.opendeep.org/
 
 Let's say you want to train a Denoising Autoencoder on the MNIST handwritten digit dataset. You can get started
 in just a few lines of code::
 
+    # standard libraries
     import logging
+    # third-party imports
     import opendeep.log.logger as logger
     import opendeep.data.dataset as datasets
     from opendeep.data.standard_datasets.image.mnist import MNIST
-    from opendeep.models.single_layer.autoencoder import DAE
+    from opendeep.models.single_layer.autoencoder import DenoisingAutoencoder
     from opendeep.optimization.adadelta import AdaDelta
 
+    # grab the logger to record our progress
     log = logging.getLogger(__name__)
-
+    # set up the logging to display to std.out and files.
     logger.config_root_logger()
     log.info("Creating a new Denoising Autoencoder")
 
     # create the MNIST dataset
     mnist = MNIST()
-    # define some configuration parameters
+
+    # define some model configuration parameters
     config = {
-        "input_size": 28*28,
-        "hidden_size": 1500
+        "input_size": 28*28, # dimensions of the MNIST images
+        "hidden_size": 1500  # number of hidden units - generally bigger than input size
     }
     # create the denoising autoencoder
-    dae = DAE(config)
+    dae = DenoisingAutoencoder(config)
+
     # create the optimizer to train the denoising autoencoder
+    # AdaDelta is normally a good generic optimizer
     optimizer = AdaDelta(dae, mnist)
     optimizer.train()
 

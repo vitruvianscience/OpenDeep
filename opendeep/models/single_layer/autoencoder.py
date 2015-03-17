@@ -19,9 +19,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
-# third party libraries
-import numpy
-import PIL
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 import opendeep.log.logger as logger
@@ -29,11 +26,10 @@ from opendeep.models.model import Model
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
-from opendeep.utils.image import tile_raster_images
 
 log = logging.getLogger(__name__)
 
-class DAE(GSN):
+class DenoisingAutoencoder(GSN):
     '''
     Class for creating a new Denoising Autoencoder (DAE)
     This is a special case of a GSN with only one hidden layer
@@ -66,7 +62,7 @@ class DAE(GSN):
         defaults['layers'] = 1
         if config:
             config['layers'] = 1
-        super(DAE, self).__init__(config=config,
+        super(DenoisingAutoencoder, self).__init__(config=config,
                                   defaults=defaults,
                                   inputs_hook=inputs_hook,
                                   hiddens_hook=hiddens_hook,
@@ -116,7 +112,7 @@ def main():
 
     mnist = MNIST()
     config = {"output_path": '../../../outputs/dae/mnist/'}
-    dae = DAE(config=config, dataset=mnist)
+    dae = DenoisingAutoencoder(config=config, dataset=mnist)
 
     # # Load initial weights and biases from file
     # params_to_load = 'dae_params.pkl'

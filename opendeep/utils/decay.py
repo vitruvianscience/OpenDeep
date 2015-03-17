@@ -179,15 +179,21 @@ def get_decay_function(name, parameter, initial, reduction_factor):
 
         :raises: NotImplementedError
         """
-    # standardize the input to be lowercase
-    name = name.lower()
-    # grab the appropriate activation function from the dictionary of decay functions
-    func = _functions.get(name)
-    # if it couldn't find the function (key didn't exist), raise a NotImplementedError
-    if func is None:
-        log.critical("Did not recognize decay function %s! Please use one of: ", str(name), str(_functions.keys()))
-        raise NotImplementedError(
-            "Did not recognize decay function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
-        )
-    # return the found function
-    return func(parameter, initial, reduction_factor)
+    # make sure name is a string
+    if isinstance(name, basestring):
+        # standardize the input to be lowercase
+        name = name.lower()
+        # grab the appropriate activation function from the dictionary of decay functions
+        func = _functions.get(name)
+        # if it couldn't find the function (key didn't exist), raise a NotImplementedError
+        if func is None:
+            log.critical("Did not recognize decay function %s! Please use one of: ", str(name), str(_functions.keys()))
+            raise NotImplementedError(
+                "Did not recognize decay function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
+            )
+        # return the found function
+        return func(parameter, initial, reduction_factor)
+    # otherwise we don't know
+    else:
+        log.critical("Decay function not implemented for %s with type %s", str(name), str(type(name)))
+        raise NotImplementedError("Decay function not implemented for %s with type %s", str(name), str(type(name)))

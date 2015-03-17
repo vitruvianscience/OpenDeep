@@ -164,15 +164,24 @@ def get_cost_function(name):
 
         :raises: NotImplementedError
         """
-    # standardize the input to be lowercase
-    name = name.lower()
-    # grab the appropriate activation function from the dictionary of functions
-    func = _functions.get(name)
-    # if it couldn't find the function (key didn't exist), raise a NotImplementedError
-    if func is None:
-        log.critical("Did not recognize cost function %s! Please use one of: ", str(name), str(_functions.keys()))
-        raise NotImplementedError(
-            "Did not recognize cost function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
-        )
-    # return the found function
-    return func
+    # if the name is callable, return the function
+    if callable(name):
+        return name
+    # otherwise if it is a string name
+    elif isinstance(name, basestring):
+        # standardize the input to be lowercase
+        name = name.lower()
+        # grab the appropriate activation function from the dictionary of functions
+        func = _functions.get(name)
+        # if it couldn't find the function (key didn't exist), raise a NotImplementedError
+        if func is None:
+            log.critical("Did not recognize cost function %s! Please use one of: ", str(name), str(_functions.keys()))
+            raise NotImplementedError(
+                "Did not recognize cost function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
+            )
+        # return the found function
+        return func
+    # otherwise we don't know what to do.
+    else:
+        log.critical("Cost function not implemented for %s with type %s", str(name), str(type(name)))
+        raise NotImplementedError("Cost function not implemented for %s with type %s", str(name), str(type(name)))

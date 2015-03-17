@@ -27,12 +27,12 @@ theano_random = RNG_MRG.MRG_RandomStreams(seed=23455)
 
 log = logging.getLogger(__name__)
 
-def dropout(IN, corruption_level=0.5, MRG=None):
+def dropout(input, corruption_level=0.5, MRG=None):
     """
     This is the dropout function.
 
-    :param IN: tensor to apply dropout to
-    :type IN: tensor
+    :param input: tensor to apply dropout to
+    :type input: tensor
 
     :param corruption_level: probability level for dropping an element (used in binomial distribution)
     :type corruption_level: float
@@ -46,16 +46,16 @@ def dropout(IN, corruption_level=0.5, MRG=None):
     if MRG is None:
         MRG = theano_random
 
-    mask = MRG.binomial(p=(1 - corruption_level), n=1, size=IN.shape)
-    OUT = (IN * T.cast(mask, 'float32')) #/ cast32(corruption_level)
+    mask = MRG.binomial(p=(1 - corruption_level), n=1, size=input.shape)
+    OUT = (input * T.cast(mask, 'float32')) #/ cast32(corruption_level)
     return OUT
 
-def add_gaussian(IN, std=1, MRG=None):
+def add_gaussian(input, std=1, MRG=None):
     """
     This takes an input tensor and adds Gaussian noise to its elements with mean zero and provided standard deviation.
 
-    :param IN: tensor to add Gaussian noise to
-    :type IN: tensor
+    :param input: tensor to add Gaussian noise to
+    :type input: tensor
 
     :param std: standard deviation to use
     :type std: float
@@ -69,16 +69,16 @@ def add_gaussian(IN, std=1, MRG=None):
     if MRG is None:
         MRG = theano_random
     log.debug('GAUSSIAN NOISE : %s', str(std))
-    noise = MRG.normal(avg=0, std=std, size=IN.shape, dtype=theano.config.floatX)
-    OUT = IN + noise
+    noise = MRG.normal(avg=0, std=std, size=input.shape, dtype=theano.config.floatX)
+    OUT = input + noise
     return OUT
 
-def salt_and_pepper(IN, corruption_level=0.2, MRG=None):
+def salt_and_pepper(input, corruption_level=0.2, MRG=None):
     """
     This applies salt and pepper noise to the input tensor - randomly setting bits to 1 or 0.
 
-    :param IN: the tensor to apply salt and pepper noise to
-    :type IN: tensor
+    :param input: the tensor to apply salt and pepper noise to
+    :type input: tensor
 
     :param corruption_level: the amount of salt and pepper noise to add
     :type corruption_level: float
@@ -92,7 +92,7 @@ def salt_and_pepper(IN, corruption_level=0.2, MRG=None):
     if MRG is None:
         MRG = theano_random
     # salt and pepper noise
-    a = MRG.binomial(size=IN.shape, n=1, p=(1 - corruption_level), dtype=theano.config.floatX)
-    b = MRG.binomial(size=IN.shape, n=1, p=0.5, dtype=theano.config.floatX)
+    a = MRG.binomial(size=input.shape, n=1, p=(1 - corruption_level), dtype=theano.config.floatX)
+    b = MRG.binomial(size=input.shape, n=1, p=0.5, dtype=theano.config.floatX)
     c = T.eq(a, 0) * b
-    return IN * a + c
+    return input * a + c

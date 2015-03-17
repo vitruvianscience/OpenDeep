@@ -134,22 +134,32 @@ def get_activation_function(name):
     function from the internal _activations dictionary.
 
     :param name: String representation of the function you want (normally grabbed from a config file)
-    :type name: String
+    Or, it could be a function (Callable)
+    :type name: String or Callable
 
     :return: The appropriate activation function, or raise NotImplementedError if it isn't found.
     :rtype: Method
 
     :raises: NotImplementedError
     """
-    # standardize the input to be lowercase
-    name = name.lower()
-    # grab the appropriate activation function from the dictionary of activations
-    func = _activations.get(name)
-    # if it couldn't find the function (key didn't exist), raise a NotImplementedError
-    if func is None:
-        log.critical("Did not recognize activation %s! Please use one of: ", str(name), str(_activations.keys()))
-        raise NotImplementedError(
-            "Did not recognize activation {0!s}! Please use one of: {1!s}".format(name, _activations.keys())
-        )
-    # return the found function
-    return func
+    # return the function itself if it is a Callable
+    if callable(name):
+        return name
+    # otherwise if it is a string
+    elif isinstance(name, basestring):
+        # standardize the input to be lowercase
+        name = name.lower()
+        # grab the appropriate activation function from the dictionary of activations
+        func = _activations.get(name)
+        # if it couldn't find the function (key didn't exist), raise a NotImplementedError
+        if func is None:
+            log.critical("Did not recognize activation %s! Please use one of: ", str(name), str(_activations.keys()))
+            raise NotImplementedError(
+                "Did not recognize activation {0!s}! Please use one of: {1!s}".format(name, _activations.keys())
+            )
+        # return the found function
+        return func
+    # else we don't know what to do so throw error
+    else:
+        log.critical("Activation function not implemented for %s with type %s", str(name), str(type(name)))
+        raise NotImplementedError("Activation function not implemented for %s with type %s", str(name), str(type(name)))
