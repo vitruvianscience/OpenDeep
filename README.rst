@@ -70,7 +70,7 @@ Install from source
 
 2) Navigate to the top-level folder (should be named OpenDeep and contain the file setup.py) and run setup.py with develop mode::
 
-    cd OpenDeep
+    cd opendeep
     python setup.py develop
 
 Using develop instead of the normal <python setup.py install> allows you to update the repository files by pulling
