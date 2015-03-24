@@ -279,22 +279,37 @@ class MemoryDataset(Dataset):
         train_X = numpy.array(train_X)
         self._train_shape = train_X.shape
         self.train_X = sharedX(train_X)
-        if train_Y:
-            self.train_Y = sharedX(numpy.array(train_Y))
+        if train_Y is not None:
+            try:
+                self.train_Y = sharedX(numpy.array(train_Y))
+            except Exception as e:
+                log.exception("COULD NOT CONVERT train_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
-        if valid_X:
-            valid_X = numpy.array(valid_X)
-            self._valid_shape = valid_X.shape
-            self.valid_X = sharedX(valid_X)
-        if valid_Y:
-            self.valid_Y = sharedX(numpy.array(valid_Y))
+        if valid_X is not None:
+            try:
+                valid_X = numpy.array(valid_X)
+                self._valid_shape = valid_X.shape
+                self.valid_X = sharedX(valid_X)
+            except Exception as e:
+                log.exception("COULD NOT CONVERT valid_X TO NUMPY ARRAY. EXCEPTION: %s", str(e))
+        if valid_Y is not None:
+            try:
+                self.valid_Y = sharedX(numpy.array(valid_Y))
+            except Exception as e:
+                log.exception("COULD NOT CONVERT valid_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
-        if test_X:
-            test_X = numpy.array(test_X)
-            self._test_shape = test_X.shape
-            self.test_X = sharedX(test_X)
-        if test_Y:
-            self.test_Y = sharedX(numpy.array(test_Y))
+        if test_X is not None:
+            try:
+                test_X = numpy.array(test_X)
+                self._test_shape = test_X.shape
+                self.test_X = sharedX(test_X)
+            except Exception as e:
+                log.exception("COULD NOT CONVERT test_X TO NUMPY ARRAY. EXCEPTION: %s", str(e))
+        if test_Y is not None:
+            try:
+                self.test_Y = sharedX(numpy.array(test_Y))
+            except Exception as e:
+                log.exception("COULD NOT CONVERT test_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
     def getDataByIndices(self, indices, subset):
         '''
