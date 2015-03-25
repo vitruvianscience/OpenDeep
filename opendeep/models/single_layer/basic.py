@@ -245,9 +245,7 @@ class SoftmaxLayer(BasicLayer):
         monitors = super(SoftmaxLayer, self).get_monitors()
         # if this softmax layer is using integer classes, add the 'error' monitor.
         if self.target_flag:
-            if not hasattr(self, 'f_monitor'):
-                self.f_monitor = function(inputs=self.get_inputs() + self.get_targets(), outputs=self.errors())
-            monitors.update({'error': self.f_monitor})
+            monitors.update({'softmax_error': self.errors()})
         return monitors
 
     def negative_log_likelihood(self):

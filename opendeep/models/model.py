@@ -289,7 +289,7 @@ class Model(object):
 
     def get_monitors(self):
         """
-        This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
+        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
         about during training. For every monitor returned by this method, the function will be run on the
         train/validation/test dataset and its value will be reported.
 
@@ -297,7 +297,7 @@ class Model(object):
         exist!
         ------------------
 
-        :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
+        :return: Dictionary of String: theano expression for each monitor variable we care about in the model.
         :rtype: Dictionary
         """
         # no monitors by default

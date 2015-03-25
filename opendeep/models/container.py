@@ -32,7 +32,7 @@ class Prototype(Model):
 
     You can use an Optimizer with the container as you would a Model - makes training easy :)
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, layers=None):
         """
         During initialization, use the optional config provided to pre-set up the model. This is used
         for repeatable experiments.
@@ -40,8 +40,14 @@ class Prototype(Model):
         :param config: a configuration defining the multiple models/configurations for this container to have.
         :type config: a dictionary-like object or filename to JSON/YAML file.
         """
-        # create an empty list of the models this container holds.
-        self.models = []
+        if layers is None:
+            # create an empty list of the models this container holds.
+            self.models = []
+        else:
+            # otherwise, use the layers input during initialization (make sure to raise to list)
+            layers = raise_to_list(layers)
+            self.models = layers
+
         # TODO: add ability to create the models list from the input config.
 
     def __getitem__(self, item):
@@ -117,6 +123,38 @@ class Prototype(Model):
             log.warning("This container doesn't have any models! So no outputs to get...")
             return None
 
+    def predict(self, input):
+        """
+        This method will return the model's output (run through the function), given an input. In the case that
+        input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
+
+        Try to avoid re-compiling the theano function created for predict - check a hasattr(self, 'f_predict') or
+        something similar first. I recommend creating your theano f_predict in a create_computation_graph method
+        to be called after the class initializes.
+        ------------------
+
+        :param input: Theano/numpy tensor-like object that is the input into the model's computation graph.
+        :type input: tensor
+
+        :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
+        :rtype: tensor
+        """
+        # make sure the input is raised to a list - we are going to splat it!
+        input = raise_to_list(input)
+        # first check if we already made an f_predict function
+        if hasattr(self, 'f_predict'):
+            return self.f_predict(*input)
+        # otherwise, compile it!
+        else:
+            inputs = self.get_inputs()
+            outputs = self.get_outputs()
+            updates = self.get_updates()
+            t = time.time()
+            log.info("Compiling f_predict...")
+            self.f_predict = function(inputs=inputs, outputs=outputs, updates=updates, name="f_predict")
+            log.info("Compilation done! Took %s", make_time_units_string(time.time() - t))
+            return self.f_predict(*input)
+
     def get_targets(self):
         """
         This grabs the targets (for supervised training) of the last layer in the model list.
@@ -130,6 +168,54 @@ class Prototype(Model):
         else:
             log.warning("This container doesn't have any models! So no targets to get...")
             return None
+
+    def get_train_cost(self):
+        """
+        This returns the expression that represents the cost given an input, which is used for the Optimizer during
+        training. The reason we can't just compile a f_train theano function is because updates need to be calculated
+        for the parameters during gradient descent - and these updates are created in the Optimizer object.
+
+        In the specialized case of layer-wise pretraining (or any version of pretraining in the model), you should
+        return a list of training cost expressions in order you want training to happen. This way the optimizer
+        will train each cost in sequence for your model, allowing for easy layer-wise pretraining in the model.
+        ------------------
+
+        :return: theano expression (or list of theano expressions)
+        of the model's training cost, from which parameter gradients will be computed.
+        :rtype: theano tensor or list(theano tensor)
+        """
+        # if this container has models, return the outputs to the very last model.
+        if len(self.models) > 0:
+            return self.models[-1].get_train_cost()
+        # otherwise, warn the user and return None
+        else:
+            log.warning("This container doesn't have any models! So no outputs to get...")
+            return None
+
+    def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
+        """
+        This method allows you to define the gradient for this model manually. It should either work with a provided
+        starting gradient (from upstream layers/models), or grab the training cost if no start gradient is provided.
+
+        Theano's subgraph gradient function specified here:
+        http://deeplearning.net/software/theano/library/gradient.html#theano.gradient.subgraph_grad
+        warning: If the gradients of cost with respect to any of the start variables is already part of the
+        start dictionary, then it may be counted twice with respect to wrt and end.
+
+        You should only implement this method if you want to manually define your gradients for the model.
+        --------------------
+
+        :param starting_gradient: the starting, known gradients for variables
+        :type starting_gradient: dictionary of {variable: known_gradient}
+
+        :param additional_cost: any additional cost to add to the gradient
+        :type additional_cost: theano expression
+
+        :return: tuple of gradient with respect to inputs, and with respect to
+        :rtype:
+        """
+        # for now just use the Model's get_gradient method.
+        return super(Prototype, self).get_gradient(starting_gradient, cost, additional_cost)
 
     def get_updates(self):
         """
@@ -157,60 +243,25 @@ class Prototype(Model):
                 updates = current_updates
         return updates
 
-    def predict(self, input):
+    def get_monitors(self):
         """
-        This method will return the model's output (run through the function), given an input. In the case that
-        input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
+        This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
+        about during training. For every monitor returned by this method, the function will be run on the
+        train/validation/test dataset and its value will be reported.
 
-        Try to avoid re-compiling the theano function created for predict - check a hasattr(self, 'f_predict') or
-        something similar first. I recommend creating your theano f_predict in a create_computation_graph method
-        to be called after the class initializes.
+        Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
+        exist!
         ------------------
 
-        :param input: Theano/numpy tensor-like object that is the input into the model's computation graph.
-        :type input: tensor
-
-        :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
-        :rtype: tensor
+        :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
+        :rtype: Dictionary
         """
-        # make sure the input is raised to a list - we are going to splat it!
-        input = raise_to_list(input)
-        # first check if we already made an f_predict function
-        if hasattr(self, 'f_predict'):
-            return self.f_predict(*input)
-        # otherwise, compile it!
-        else:
-            inputs  = self.get_inputs()
-            outputs = self.get_outputs()
-            updates = self.get_updates()
-            t = time.time()
-            log.info("Compiling f_predict...")
-            self.f_predict = function(inputs=inputs, outputs=outputs, updates=updates, name="f_predict")
-            log.info("Compilation done! Took ", make_time_units_string(time.time() - t))
-            return self.f_predict(*input)
-
-    def get_train_cost(self):
-        """
-        This returns the expression that represents the cost given an input, which is used for the Optimizer during
-        training. The reason we can't just compile a f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the Optimizer object.
-
-        In the specialized case of layer-wise pretraining (or any version of pretraining in the model), you should
-        return a list of training cost expressions in order you want training to happen. This way the optimizer
-        will train each cost in sequence for your model, allowing for easy layer-wise pretraining in the model.
-        ------------------
-
-        :return: theano expression (or list of theano expressions)
-        of the model's training cost, from which parameter gradients will be computed.
-        :rtype: theano tensor or list(theano tensor)
-        """
-        # if this container has models, return the outputs to the very last model.
-        if len(self.models) > 0:
-            return self.models[-1].get_train_cost()
-        # otherwise, warn the user and return None
-        else:
-            log.warning("This container doesn't have any models! So no outputs to get...")
-            return None
+        # Return the monitors going through each model in the list:
+        monitors = {}
+        for model in self.models:
+            current_monitors = model.get_monitors()
+            monitors.update(current_monitors)
+        return monitors
 
     def get_decay_params(self):
         """

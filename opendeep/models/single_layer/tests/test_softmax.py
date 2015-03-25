@@ -18,9 +18,9 @@ if __name__ == '__main__':
     # grab the MNIST dataset
     mnist = MNIST()
     # create your shiny new DAE
-    s = SoftmaxLayer(input_size=28 * 28, output_size=10)
+    s = SoftmaxLayer(input_size=28 * 28, output_size=10, out_as_probs=False)
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=50)
+    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
     # perform training!
     optimizer.train()
     # test it on some images!
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     # create your shiny new DAE
     s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy')
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=50)
+    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
     # perform training!
     optimizer.train()
     # test it on some images!

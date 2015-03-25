@@ -112,7 +112,7 @@ class SGD(Optimizer):
         for i, train_cost in enumerate(train_costs):
             # Now create the training cost function for the model to use while training - update parameters
             # gradient!
-            gradients, _ = model.get_gradient(cost=train_cost)
+            gradients, _ = self.model.get_gradient(cost=train_cost)
 
             # Calculate the optimizer updates each run
             # This is where the magic happens for a lot of sub-implementations of SGD, including AdaDelta!
@@ -120,7 +120,7 @@ class SGD(Optimizer):
             gradient_updates = self.get_updates(gradients)
 
             # Combine the updates from the model also if applicable
-            train_updates = model.get_updates()
+            train_updates = self.model.get_updates()
             if train_updates:
                 train_updates.update(gradient_updates)
             else:
@@ -131,13 +131,23 @@ class SGD(Optimizer):
             t = time.time()
             f_learn = function(inputs  = model.get_inputs()+model.get_targets(),
                                updates = train_updates,
-                               outputs = self.model.get_train_cost(),
-                               name    = 'f_learn')
+                               outputs = train_cost,
+                               name    = 'f_learn_%d' % i)
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
             self.train_functions.append(f_learn)
 
-        # grab the function(s) to use to monitor different model values during training
-        self.monitors = self.model.get_monitors()
+        # grab the expression(s) to use to monitor different model values during training
+        log.debug("Compiling monitor functions...")
+        monitor_t = time.time()
+        monitors_expressions = self.model.get_monitors()
+        self.monitors = {key: [] for key in monitors_expressions.keys()}
+        for monitor_name, monitor_expr in monitors_expressions.iteritems():
+            monitor_function = function(inputs=self.model.get_inputs()+self.model.get_targets(),
+                                        updates=self.model.get_updates(),
+                                        outputs=monitor_expr,
+                                        name=monitor_name)
+            self.monitors[monitor_name].append(monitor_function)
+        log.debug("Compilation done. Took %s", make_time_units_string(time.time() - monitor_t))
 
 
     def get_updates(self, grads):
@@ -268,14 +278,11 @@ class SGD(Optimizer):
             for x, y in self.iterator(self.dataset, datasets.TRAIN, self.batch_size, self.minimum_batch_size, self.rng):
                 if unsupervised:
                     train_costs.append(f_learn(x))
-                    for key in self.monitors.keys():
-                        monitor_function = self.monitors[key]
-                        train_monitors[key].append(monitor_function(x))
+                    self.call_monitors(monitors_dict=train_monitors, inputs=[x])
                 else:
                     train_costs.append(f_learn(x, y))
-                    for key in self.monitors.keys():
-                        monitor_function = self.monitors[key]
-                        train_monitors[key].append(monitor_function(x, y))
+                    self.call_monitors(monitors_dict=train_monitors, inputs=[x, y])
+
             log.info('Train cost: %s', trunc(numpy.mean(train_costs, 0)))
             if len(self.monitors.keys()) > 0:
                 log.info('Train monitors: %s',
@@ -288,13 +295,10 @@ class SGD(Optimizer):
                         self.dataset, datasets.VALID, self.batch_size, self.minimum_batch_size, self.rng
                 ):
                     if unsupervised:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            valid_monitors[key].append(monitor_function(x))
+                        self.call_monitors(monitors_dict=valid_monitors, inputs=[x])
                     else:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            valid_monitors[key].append(monitor_function(x, y))
+                        self.call_monitors(monitors_dict=valid_monitors, inputs=[x, y])
+
                 log.info('Valid monitors: %s',
                          str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
 
@@ -305,13 +309,10 @@ class SGD(Optimizer):
                         self.dataset, datasets.TEST, self.batch_size, self.minimum_batch_size, self.rng
                 ):
                     if unsupervised:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            test_monitors[key].append(monitor_function(x))
+                        self.call_monitors(monitors_dict=test_monitors, inputs=[x])
                     else:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            test_monitors[key].append(monitor_function(x, y))
+                        self.call_monitors(monitors_dict=test_monitors, inputs=[x, y])
+
                 log.info('Test monitors: %s', str({key: numpy.mean(value, 0) for key, value in test_monitors.items()}))
 
             # check for early stopping on train costs
@@ -356,3 +357,9 @@ class SGD(Optimizer):
 
             # return whether or not to stop this epoch
             return stop
+
+    def call_monitors(self, monitors_dict, inputs):
+        for key in self.monitors.keys():
+            monitor_functions = raise_to_list(self.monitors[key])
+            for monitor_function in monitor_functions:
+                monitors_dict[key].append(monitor_function(*inputs))
