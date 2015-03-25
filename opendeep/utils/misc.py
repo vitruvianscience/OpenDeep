@@ -170,3 +170,47 @@ def set_shared_values(variables, values, borrow=False):
             log.exception("Cannot set values, there was an AttributeError %s",
                           str(e))
             raise
+
+def get_expression_inputs(expression):
+    """
+    This returns a list of all the distinct inputs to a theano computation expression
+
+    :param expression: the expression to find the inputs
+    :type expression: theano expression
+
+    :return: yield the inputs
+    :rtype: list(theano expression)
+    """
+    if hasattr(expression, 'owner'):
+        if hasattr(expression.owner, 'inputs'):
+            for input in expression.owner.inputs:
+                yield get_expression_inputs(input)
+        else:
+            yield expression
+
+def numpy_one_hot(vector, n_classes=None):
+    """
+    Takes a vector of integers and creates a matrix of one-hot encodings
+
+    :param vector: the integers to convert to one-hot encoding
+    :type vector: numpy array
+
+    :param n_classes: the number of possible classes. if none, it will grab the maximum value from the vector.
+    :type n_classes: integer
+
+    :return: a matrix of the one-hot encodings of the input vector
+    :rtype: numpy array
+    """
+    # check if input is vector
+    assert vector.ndim == 1, "Dimension mismatch for input vector, found %d dimensions!" % vector.ndim
+    assert numpy.min(vector) > -1, "Found negative numbers in the vector, need all elements to be >= 0."
+    # if no number classes specified, grab it from the vector
+    if n_classes is None:
+        max = numpy.max(vector)
+        n_classes = max + 1
+    # create matrix of zeros
+    one_hot = numpy.zeros(shape=(len(vector), n_classes), dtype=theano.config.floatX)
+    # fill in ones at the indices of the vector elements
+    for i, element in enumerate(vector):
+        one_hot[i, element] = 1
+    return one_hot

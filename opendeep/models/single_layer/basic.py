@@ -16,9 +16,11 @@ import logging
 # third party libraries
 import theano.tensor as T
 # internal references
+from opendeep import function
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights_gaussian, get_weights_uniform, get_bias
 from opendeep.utils.activation import get_activation_function
+from opendeep.utils.cost import get_cost_function
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +30,8 @@ class BasicLayer(Model):
     """
     default = {
         'activation': 'rectifier',  # type of activation function to use for output
+        'cost': 'mse',  # the cost function to use for supervised training - comparing outputs to target labels.
+        'cost_args': {},  # extra arguments to give the cost function (such as std's for gaussian LL). normally not used
         'weights_init': 'gaussian',  # either 'gaussian' or 'uniform' - how to initialize weights
         'weights_mean': 0,  # mean for gaussian weights init
         'weights_std': 0.005,  # standard deviation for gaussian weights init
@@ -35,8 +39,8 @@ class BasicLayer(Model):
         'bias_init': 0.0,  # how to initialize the bias parameter
     }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
-                 input_size=None, output_size=None, activation=None, weights_init=None,
-                 weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
+                 input_size=None, output_size=None, activation=None, cost=None, cost_args=None,
+                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
         # init Model to combine the defaults and config dictionaries.
         super(BasicLayer, self).__init__(config, defaults)
         # all configuration parameters are now in self.args
@@ -49,40 +53,62 @@ class BasicLayer(Model):
             assert len(inputs_hook) == 2  # make sure inputs_hook is a tuple
             input_size = inputs_hook[0] or input_size
             self.input = inputs_hook[1]
+
         else:
             # either grab from the parameter directly or self.args config
             input_size = input_size or self.args.get('input_size')
             # make the input a symbolic matrix
             self.input = T.fmatrix('X')
-        # either grab from the parameter directly, self.args config, or copy n_in
+
+        # now that we have the input specs, define the output 'target' variable to be used in supervised training!
+        self.target = T.fmatrix('Y')
+
+        # either grab the output's desired size from the parameter directly, self.args config, or copy n_in
         output_size = output_size or self.args.get('output_size') or input_size
 
         # other specifications
+        # how to initialize the weights matrix
         weights_init = weights_init or self.args.get('weights_init')
-        # for gaussian weights
+        # for gaussian weights initialization
         mean         = weights_mean or self.args.get('weights_mean')
         std          = weights_std  or self.args.get('weights_std')
-        # for uniform weights
+        # for uniform weights initialization
         interval     = weights_interval or self.args.get('weights_interval')
-        # for bias
+        # for bias vector
         bias_init = bias_init or self.args.get('bias_init')
+
         # activation function!
         activation_name = activation or self.args.get('activation')
+        # if a string name was given, look up the correct function from our utils.
         if isinstance(activation_name, basestring):
             activation_func = get_activation_function(activation_name)
+        # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
             assert callable(activation_name)
             activation_func = activation_name
+
+        # cost function!
+        cost_name = cost or self.args.get('cost')
+        # if a string name was given, look up the correct function from our utils.
+        if isinstance(cost_name, basestring):
+            cost_func = get_cost_function(cost_name)
+        # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
+        else:
+            assert callable(cost_name)
+            cost_func = cost_name
+        # extra cost function arguments (besides the output and target)
+        cost_args = cost_args or self.args.get('cost_args')
 
         ####################################################
         # parameters - make sure to deal with params_hook! #
         ####################################################
         if params_hook:
+            # make sure the params_hook has W (weights matrix) and b (bias vector)
             assert len(params_hook) == 2, "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(
-                len(params_hook))  # make sure the params_hook has W and b
+                len(params_hook))
             W, b = params_hook
         else:
-            # if we are initializing weights from a gaussian
+            # if we are initializing weights from a gaussian distribution
             if weights_init.lower() == 'gaussian':
                 W = get_weights_gaussian(shape=(input_size, output_size), mean=mean, std=std, name="W")
             # if we are initializing weights from a uniform distribution
@@ -95,18 +121,24 @@ class BasicLayer(Model):
                 raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
                                           str(self.args.get('weights_init')))
 
+            # grab the bias vector
             b = get_bias(shape=output_size, name="b", init_values=bias_init)
 
-        # Finally have the two parameters!
+        # Finally have the two parameters - weights matrix W and bias vector b. That is all!
         self.params = [W, b]
 
         ###############
         # computation #
         ###############
         # Here is the meat of the computation transforming input -> output
+        # It simply involves a matrix multiplication of inputs*weights, adding the bias vector, and then passing
+        # the result through our activation function (normally something nonlinear such as: max(0, output))
         self.output = activation_func(T.dot(self.input, W) + b)
 
-        log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s" %
+        # now to define the cost of the model - use the cost function to compare our output with the target value.
+        self.cost = cost_func(output=self.output, target=self.target, **cost_args)
+
+        log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s",
                   str((input_size, output_size)), str(activation_name))
 
     def get_inputs(self):
@@ -114,6 +146,12 @@ class BasicLayer(Model):
 
     def get_outputs(self):
         return self.output
+
+    def get_targets(self):
+        return [self.target]
+
+    def get_train_cost(self):
+        return self.cost
 
     def get_params(self):
         return self.params
@@ -126,12 +164,35 @@ class SoftmaxLayer(BasicLayer):
 
     It is a special subclass of the FullyConnectedLayer, with the activation function forced to be 'softmax'
     """
-    def __init__(self, inputs_hook=None, config=None, params_hook=None, input_size=None, output_size=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
+    default = {'cost': 'nll',  # the cost function to use
+               'out_as_probs': False  # whether output is class guess (False) or vector of class probabilities (True)
+               }
+    def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
+                 input_size=None, output_size=None, weights_init=None, weights_mean=None, weights_std=None,
+                 weights_interval=None, bias_init=None, cost=None, out_as_probs=None):
+        # grab what cost to use
+        if cost is None:
+            if config is not None:
+                cost = config.get('cost', defaults.get('cost'))
+            else:
+                cost = defaults.get('cost')
+        # see if we want to output a class guess or vector of probabilities
+        if out_as_probs is None:
+            if config is not None:
+                out_as_probs = config.get('out_as_probs', defaults.get('out_as_probs'))
+            else:
+                out_as_probs = defaults.get('out_as_probs')
+        self.out_as_probs = out_as_probs
+
+        # if we are using negative log-likelihood, make cost None for superclass init
+        if cost == 'nll':
+            cost = None
+
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
                                            activation='softmax',
+                                           cost=cost,
                                            config=config,
                                            input_size=input_size,
                                            output_size=output_size,
@@ -140,25 +201,96 @@ class SoftmaxLayer(BasicLayer):
                                            weights_std=weights_std,
                                            weights_interval=weights_interval,
                                            bias_init=bias_init)
+        # target_flag shows whether or not we are using the super class's targets, or making our own
+        # integer vector for targets. This becomes true if we are using the nll cost, since it requires
+        # integer labels.
+        self.target_flag = False
 
-        self.y_pred = T.argmax(self.get_outputs(), axis=1)
+        # the outputs of the layer are the probabilities of being in a given class
+        self.p_y_given_x = super(SoftmaxLayer, self).get_outputs()
+        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
+        self.y = T.concatenate(self.get_targets())
 
-    def negative_log_likelihood(self, y):
-        return -T.mean(T.log(self.get_outputs())[T.arange(y.shape[0]), y])
+        # if cost was nll, set self.cost to negative log likelihood
+        # this is what gets returned as the train cost for the BasicLayer superclass.
+        if cost is None:
+            log.debug('Using softmax negative log-likelihood cost!!')
+            # nll requires integer targets 'y'.
+            self.target_flag = True
+            self.y = T.fvector('y')
+            self.cost = self.negative_log_likelihood()
 
-    def errors(self, y):
-        if y.ndim != self.y_pred.ndim:
-            log.error("y should have the same shape as self.y_pred! found y %s and y_pred %s",
-                      str(y.ndim), str(self.y_pred.ndim))
-            raise TypeError('y should have the same shape as self.y_pred',
-                            ('y', y.type, 'y_pred', self.y_pred.type))
-
-        # check if y is of the correct datatype
-        if y.dtype.startswith('int'):
-            # the T.neq operator returns a vector of 0s and 1s, where 1 represents a mistake in prediction
-            return T.mean(T.neq(self.y_pred, y))
+    def get_outputs(self):
+        # if we aren't asking for the class probabilities, return the argmax (gives the index of highest probability)
+        if not self.out_as_probs:
+            return self.get_argmax_prediction()
+        # otherwise, give the output as normal, which is the vector of probabilities
         else:
-            raise NotImplementedError()
+            return self.p_y_given_x
+
+    def get_targets(self):
+        """
+        returns the target 'labels' to compare against
+
+        :return: symbolic tensor
+        """
+        # return our integer targets, or default to superclass
+        if self.target_flag:
+            return [self.y]
+        else:
+            return super(SoftmaxLayer, self).get_targets()
+
+    def get_monitors(self):
+        # grab the basiclayer's monitors
+        monitors = super(SoftmaxLayer, self).get_monitors()
+        # if this softmax layer is using integer classes, add the 'error' monitor.
+        if self.target_flag:
+            monitors.update({'softmax_error': self.errors()})
+        return monitors
+
+    def negative_log_likelihood(self):
+        """Return the mean of the negative log-likelihood of the prediction
+            of this model under a given target distribution.
+
+            .. math::
+
+                \frac{1}{|\mathcal{D}|} \mathcal{L} (\theta=\{W,b\}, \mathcal{D}) =
+                \frac{1}{|\mathcal{D}|} \sum_{i=0}^{|\mathcal{D}|}
+                    \log(P(Y=y^{(i)}|x^{(i)}, W,b)) \\
+                \ell (\theta=\{W,b\}, \mathcal{D})
+
+            Note: we use the mean instead of the sum so that
+                  the learning rate is less dependent on the batch size
+            """
+        # start-snippet-2
+        # y.shape[0] is (symbolically) the number of rows in y, i.e.,
+        # number of examples (call it n) in the minibatch
+        # T.arange(y.shape[0]) is a symbolic vector which will contain
+        # [0,1,2,... n-1] T.log(self.p_y_given_x) is a matrix of
+        # Log-Probabilities (call it LP) with one row per example and
+        # one column per class LP[T.arange(y.shape[0]),y] is a vector
+        # v containing [LP[0,y[0]], LP[1,y[1]], LP[2,y[2]], ...,
+        # LP[n-1,y[n-1]]] and T.mean(LP[T.arange(y.shape[0]),y]) is
+        # the mean (across minibatch examples) of the elements in v,
+        # i.e., the mean log-likelihood across the minibatch.
+        return -T.mean(T.log(self.p_y_given_x)[T.arange(self.y.shape[0]), T.cast(self.y, 'int32')])
+
+    def errors(self):
+        """Return a float representing the number of errors in the minibatch
+        over the total number of examples of the minibatch ; zero-one
+        loss over the size of the minibatch
+        """
+
+        # check if y has same dimension of y_pred
+        if self.y.ndim != self.y_pred.ndim:
+            raise TypeError(
+                'y should have the same shape as self.y_pred',
+                ('y', self.y.type, 'y_pred', self.y_pred.type)
+            )
+        # the T.neq operator returns a vector of 0s and 1s, where 1
+        # represents a mistake in prediction
+        return T.mean(T.neq(self.y_pred, self.y))
 
     def get_argmax_prediction(self):
+        # return the argmax y_pred class
         return self.y_pred

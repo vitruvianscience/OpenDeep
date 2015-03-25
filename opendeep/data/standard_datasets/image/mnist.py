@@ -14,12 +14,14 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import cPickle
 import gzip
+# third party libraries
 import numpy
 # internal imports
 from opendeep import make_shared_variables
 import opendeep.data.dataset as datasets
 from opendeep.data.dataset import FileDataset
 from opendeep.utils import file_ops
+from opendeep.utils.misc import numpy_one_hot
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +30,9 @@ class MNIST(FileDataset):
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets.
     '''
-    def __init__(self, binary=False, dataset_dir='../../datasets'):
+    def __init__(self, binary=False, one_hot=False, dataset_dir='../../datasets'):
         # instantiate the Dataset class to install the dataset from the url
-        log.info('Loading MNIST with binary=%s', str(binary))
+        log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
 
         filename = 'mnist.pkl.gz'
         source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
@@ -56,6 +58,12 @@ class MNIST(FileDataset):
             train_X = (train_X > _binary_cutoff).astype('float32')
             valid_X = (valid_X > _binary_cutoff).astype('float32')
             test_X  = (test_X > _binary_cutoff).astype('float32')
+
+        # make optional one-hot labels
+        if one_hot:
+            train_Y = numpy_one_hot(train_Y, n_classes=10)
+            valid_Y = numpy_one_hot(valid_Y, n_classes=10)
+            test_Y  = numpy_one_hot(test_Y, n_classes=10)
 
         log.debug('Concatenating train and valid sets together...')
         train_X = numpy.concatenate((train_X, valid_X))

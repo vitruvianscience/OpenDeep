@@ -2,6 +2,7 @@ outputs
 datasets
 opendeep/log/logs
 *.npy
+*.pkl
 
 #################
 ## Eclipse

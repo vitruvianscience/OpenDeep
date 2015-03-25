@@ -20,37 +20,37 @@ import numpy.random as random
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 import theano.compat.six as six
 # internal references
-from opendeep import function, grad, trunc, sharedX
+from opendeep import function, trunc, sharedX
 from opendeep.optimization.optimizer import Optimizer
 from opendeep.utils.decay import get_decay_function
 from opendeep.data.iterators.sequential import SequentialIterator
 import opendeep.data.dataset as datasets
-from opendeep.utils.misc import make_time_units_string, get_shared_values, set_shared_values
+from opendeep.utils.misc import make_time_units_string, get_shared_values, set_shared_values, raise_to_list
 
 log = logging.getLogger(__name__)
-
-# Default values to use for some training parameters
-_defaults = {"n_epoch": 1000,
-             "batch_size": 100,
-             "minimum_batch_size": 1,
-             "save_frequency": 10,
-             "early_stop_threshold": .9995,
-             "early_stop_length": 30,
-             "learning_rate": 0.25,
-             "lr_decay": "exponential",
-             "lr_factor": .995,
-             "momentum": 0.5,
-             'momentum_decay': 'linear',
-             'momentum_factor': 0,
-             'nesterov_momentum': True,
-             'flag_para_load': False}
 
 class SGD(Optimizer):
     '''
     Stochastic gradient descent for training a model - includes early stopping, momentum, and annealing
     '''
 
-    def __init__(self, model, dataset, iterator_class=SequentialIterator, config=None, defaults=_defaults, rng=None,
+    # Default values to use for some training parameters
+    defaults = {"n_epoch": 1000,
+                 "batch_size": 100,
+                 "minimum_batch_size": 1,
+                 "save_frequency": 10,
+                 "early_stop_threshold": .9995,
+                 "early_stop_length": 30,
+                 "learning_rate": 0.25,
+                 "lr_decay": "exponential",
+                 "lr_factor": .995,
+                 "momentum": 0.5,
+                 'momentum_decay': 'linear',
+                 'momentum_factor': 0,
+                 'nesterov_momentum': True,
+                 'flag_para_load': False}
+
+    def __init__(self, model, dataset, iterator_class=SequentialIterator, config=None, defaults=defaults, rng=None,
                  n_epoch=None, batch_size=None, minimum_batch_size=None, save_frequency=None,
                  early_stop_threshold=None, early_stop_length=None, learning_rate=None, lr_decay=None, lr_factor=None,
                  momentum=None, momentum_decay=None, momentum_factor=None, nesterov_momentum=None, flag_para_load=None):
@@ -101,60 +101,53 @@ class SGD(Optimizer):
             self.rng = random
         else:
             self.rng = rng
-
+        # grab the parameters to use during training
         self.params = self.model.get_params()
-
-        # Now create the training cost function for the model to use while training - update parameters
         log.info("%s params: %s", str(type(self.model)), str(self.params))
-        # gradient!
-        gradient = grad(self.model.get_train_cost(), self.params)
-        grads    = OrderedDict(zip(self.params, gradient))
 
-        # Calculate the optimizer updates each run
-        # This is where the magic happens for a lot of sub-implementations of SGD, including AdaDelta!
-        # It tells how to update the params each training epoch
-        gradient_updates = self.get_updates(grads)
+        # Now time to create the training cost functions for the model - make sure to handle the possible
+        # list of costs used for pretraining of certain parts of the model.
+        train_costs = raise_to_list(self.model.get_train_cost())
+        self.train_functions = []
+        for i, train_cost in enumerate(train_costs):
+            # Now create the training cost function for the model to use while training - update parameters
+            # gradient!
+            gradients, _ = self.model.get_gradient(cost=train_cost)
 
-        # Combine the updates from the model also if applicable
-        train_updates = model.get_updates()
-        if train_updates:
-            train_updates.update(gradient_updates)
-        else:
-            train_updates = gradient_updates
+            # Calculate the optimizer updates each run
+            # This is where the magic happens for a lot of sub-implementations of SGD, including AdaDelta!
+            # It tells how to update the params each training epoch
+            gradient_updates = self.get_updates(gradients)
 
-        # Compile the training function!
-        log.info('Compiling f_learn function for model %s...', str(type(self.model)))
-        t = time.time()
-        self.f_learn = function(inputs  = model.get_inputs(),
-                                updates = train_updates,
-                                outputs = self.model.get_train_cost(),
-                                name    = 'f_learn')
-        log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
+            # Combine the updates from the model also if applicable
+            train_updates = self.model.get_updates()
+            if train_updates:
+                train_updates.update(gradient_updates)
+            else:
+                train_updates = gradient_updates
 
-        # Determine if this function is unsupervised or not by looking at the number of inputs to the f_learn function.
-        # If there is only one input, it is unsupervised, otherwise, it is supervised.
-        # This workaround was provided by Pascal Lamblin on the theano-users google group
-        num_inputs = len([i for i in self.f_learn.maker.inputs if not i.shared])
-        if num_inputs == 1:
-            log.debug("Model is unsupervised: 1 input to f_learn.")
-            self.unsupervised = True
-        elif num_inputs == 2:
-            log.debug("Model is supervised: 2 inputs to f_learn.")
-            self.unsupervised = False
-        else:
-            log.error(
-                "Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised.",
-                str(type(self.model)),
-                str(num_inputs)
-            )
-            raise AssertionError(
-                "Number of inputs to f_learn on model %s was %s. Needs to be 1 for unsupervised or 2 for supervised." %
-                str(type(self.model)),
-                str(num_inputs)
-            )
+            # Compile the training function!
+            log.info('Compiling f_learn %d/%d function for model %s...', i+1, len(train_costs), str(type(self.model)))
+            t = time.time()
+            f_learn = function(inputs  = model.get_inputs()+model.get_targets(),
+                               updates = train_updates,
+                               outputs = train_cost,
+                               name    = 'f_learn_%d' % i)
+            log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
+            self.train_functions.append(f_learn)
 
-        # grab the function(s) to use to monitor different model values during training
-        self.monitors = self.model.get_monitors()
+        # grab the expression(s) to use to monitor different model values during training
+        log.debug("Compiling monitor functions...")
+        monitor_t = time.time()
+        monitors_expressions = self.model.get_monitors()
+        self.monitors = {key: [] for key in monitors_expressions.keys()}
+        for monitor_name, monitor_expr in monitors_expressions.iteritems():
+            monitor_function = function(inputs=self.model.get_inputs()+self.model.get_targets(),
+                                        updates=self.model.get_updates(),
+                                        outputs=monitor_expr,
+                                        name=monitor_name)
+            self.monitors[monitor_name].append(monitor_function)
+        log.debug("Compilation done. Took %s", make_time_units_string(time.time() - monitor_t))
 
 
     def get_updates(self, grads):
@@ -199,50 +192,82 @@ class SGD(Optimizer):
 
 
     def train(self, continue_training=False):
-        log.info("-----------TRAINING %s FOR %s EPOCHS (continue_training=%s)-----------",
-                 str(type(self.model)), str(self.n_epoch), str(continue_training))
-        log.debug("Train dataset size is: %s", self.dataset.getDataShape(datasets.TRAIN))
-        if self.dataset.hasSubset(datasets.VALID):
-            log.debug("Valid dataset size is: %s", self.dataset.getDataShape(datasets.VALID))
-        if self.dataset.hasSubset(datasets.TEST):
-            log.debug("Test dataset size is: %s", self.dataset.getDataShape(datasets.TEST))
-
-        self.STOP    = False
-        self.epoch_counter = 0
-        if not continue_training:
-            # reset the learning rate
-            if hasattr(self, 'learning_rate_decay'):
-                self.learning_rate_decay.reset()
-            # reset the other model decaying functions
-            for decay_param in self.model.get_decay_params():
-                decay_param.reset()
-
-        self.times       = []
-        self.best_cost   = float('inf')
-        self.best_params = None
-        self.patience    = 0
-
+        # make sure to deal with a list of train_cost functions - for layer-wise pretraining!
+        # this list of training functions was created during __init__()
         start_time = time.time()
+        for func_i, train_function in enumerate(self.train_functions):
+            # Determine if this function is unsupervised or not by looking at the number of inputs
+            # to the f_learn function.
+            # If there is only one input, it is unsupervised, otherwise, it is supervised.
+            # This workaround was provided by Pascal Lamblin on the theano-users google group
+            num_inputs = len([i for i in train_function.maker.inputs if not i.shared])
+            if num_inputs == 1:
+                log.debug("Model is unsupervised: 1 input to f_learn.")
+                unsupervised = True
+            elif num_inputs == 2:
+                log.debug("Model is supervised: 2 inputs to f_learn.")
+                unsupervised = False
+            else:
+                log.error(
+                    "Number of inputs to f_learn on model %s was %s. "
+                    "Needs to be 1 for unsupervised or 2 for supervised.",
+                    str(type(self.model)),
+                    str(num_inputs)
+                )
+                raise AssertionError(
+                    "Number of inputs to f_learn on model %s was %s. "
+                    "Needs to be 1 for unsupervised or 2 for supervised." %
+                    str(type(self.model)),
+                    str(num_inputs)
+                )
 
-        while not self.STOP:
-            try:
-                self.STOP = self._perform_one_epoch()
-            except KeyboardInterrupt:
-                log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
-                self.STOP = True
+            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS (continue_training=%s)-----------",
+                     str(type(self.model)), func_i+1, len(self.train_functions), self.n_epoch, str(continue_training))
 
-        #save params
-        if self.best_params is not None:
-            log.debug("Restoring best model parameters...")
-            set_shared_values(self.params, self.best_params)
-        log.debug("Saving model parameters...")
-        self.model.save_params('trained_epoch_'+str(self.epoch_counter)+'.pkl')
+            log.debug("Train dataset size is: %s", self.dataset.getDataShape(datasets.TRAIN))
+            if self.dataset.hasSubset(datasets.VALID):
+                log.debug("Valid dataset size is: %s", self.dataset.getDataShape(datasets.VALID))
+            if self.dataset.hasSubset(datasets.TEST):
+                log.debug("Test dataset size is: %s", self.dataset.getDataShape(datasets.TEST))
+
+            self.STOP    = False
+            self.epoch_counter = 0
+            if not continue_training:
+                # reset the learning rate
+                if hasattr(self, 'learning_rate_decay'):
+                    self.learning_rate_decay.reset()
+                # reset the other model decaying functions
+                for decay_param in self.model.get_decay_params():
+                    decay_param.reset()
+
+            self.times       = []
+            self.best_cost   = float('inf')
+            self.best_params = None
+            self.patience    = 0
+
+            t = time.time()
+
+            while not self.STOP:
+                try:
+                    self.STOP = self._perform_one_epoch(train_function, unsupervised)
+                except KeyboardInterrupt:
+                    log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
+                    self.STOP = True
+
+            #save params
+            if self.best_params is not None:
+                log.debug("Restoring best model parameters...")
+                set_shared_values(self.params, self.best_params)
+            log.debug("Saving model parameters...")
+            self.model.save_params('trained_epoch_'+str(self.epoch_counter)+'.pkl')
+
+            log.info("------------TRAIN TIME TOOK %s---------", make_time_units_string(time.time()-t))
 
         log.info("------------TOTAL %s TRAIN TIME TOOK %s---------",
-                 str(type(self.model)), make_time_units_string(time.time()-start_time))
+                 str(type(self.model)), make_time_units_string(time.time() - start_time))
 
 
-    def _perform_one_epoch(self):
+    def _perform_one_epoch(self, f_learn, unsupervised):
             self.epoch_counter += 1
             t = time.time()
             log.info('EPOCH %s', str(self.epoch_counter))
@@ -251,16 +276,13 @@ class SGD(Optimizer):
             train_costs = []
             train_monitors = {key: [] for key in self.monitors.keys()}
             for x, y in self.iterator(self.dataset, datasets.TRAIN, self.batch_size, self.minimum_batch_size, self.rng):
-                if self.unsupervised:
-                    train_costs.append(self.f_learn(x))
-                    for key in self.monitors.keys():
-                        monitor_function = self.monitors[key]
-                        train_monitors[key].append(monitor_function(x))
+                if unsupervised:
+                    train_costs.append(f_learn(x))
+                    self.call_monitors(monitors_dict=train_monitors, inputs=[x])
                 else:
-                    train_costs.append(self.f_learn(x, y))
-                    for key in self.monitors.keys():
-                        monitor_function = self.monitors[key]
-                        train_monitors[key].append(monitor_function(x, y))
+                    train_costs.append(f_learn(x, y))
+                    self.call_monitors(monitors_dict=train_monitors, inputs=[x, y])
+
             log.info('Train cost: %s', trunc(numpy.mean(train_costs, 0)))
             if len(self.monitors.keys()) > 0:
                 log.info('Train monitors: %s',
@@ -272,14 +294,11 @@ class SGD(Optimizer):
                 for x, y in self.iterator(
                         self.dataset, datasets.VALID, self.batch_size, self.minimum_batch_size, self.rng
                 ):
-                    if self.unsupervised:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            valid_monitors[key].append(monitor_function(x))
+                    if unsupervised:
+                        self.call_monitors(monitors_dict=valid_monitors, inputs=[x])
                     else:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            valid_monitors[key].append(monitor_function(x, y))
+                        self.call_monitors(monitors_dict=valid_monitors, inputs=[x, y])
+
                 log.info('Valid monitors: %s',
                          str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
 
@@ -289,14 +308,11 @@ class SGD(Optimizer):
                 for x, y in self.iterator(
                         self.dataset, datasets.TEST, self.batch_size, self.minimum_batch_size, self.rng
                 ):
-                    if self.unsupervised:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            test_monitors[key].append(monitor_function(x))
+                    if unsupervised:
+                        self.call_monitors(monitors_dict=test_monitors, inputs=[x])
                     else:
-                        for key in self.monitors.keys():
-                            monitor_function = self.monitors[key]
-                            test_monitors[key].append(monitor_function(x, y))
+                        self.call_monitors(monitors_dict=test_monitors, inputs=[x, y])
+
                 log.info('Test monitors: %s', str({key: numpy.mean(value, 0) for key, value in test_monitors.items()}))
 
             # check for early stopping on train costs
@@ -309,9 +325,14 @@ class SGD(Optimizer):
             else:
                 self.patience += 1
 
-            if self.epoch_counter >= self.n_epoch or self.patience >= self.early_stop_length:
-                log.info("Stopping early...")
-                self.STOP = True
+            # check for stopping either from n_epochs or from threshold/patience
+            stop = False
+            if self.epoch_counter >= self.n_epoch:
+                log.info("Stopping (reached max number of epochs)...")
+                stop = True
+            if self.patience >= self.early_stop_length:
+                log.info("Stopping early (reached stop threshold)...")
+                stop = True
 
             timing = time.time() - t
             self.times.append(timing)
@@ -326,9 +347,19 @@ class SGD(Optimizer):
                 self.model.save_params('trained_epoch_'+str(self.epoch_counter)+'.pkl')
 
             # ANNEAL!
-            if hasattr(self, 'learning_rate_decay'):
-                self.learning_rate_decay.decay()
-            if hasattr(self, 'momentum_decay'):
-                self.momentum_decay.decay()
-            for decay_param in self.model.get_decay_params():
-                decay_param.decay()
+            if not stop:
+                if hasattr(self, 'learning_rate_decay'):
+                    self.learning_rate_decay.decay()
+                if hasattr(self, 'momentum_decay'):
+                    self.momentum_decay.decay()
+                for decay_param in self.model.get_decay_params():
+                    decay_param.decay()
+
+            # return whether or not to stop this epoch
+            return stop
+
+    def call_monitors(self, monitors_dict, inputs):
+        for key in self.monitors.keys():
+            monitor_functions = raise_to_list(self.monitors[key])
+            for monitor_function in monitor_functions:
+                monitors_dict[key].append(monitor_function(*inputs))

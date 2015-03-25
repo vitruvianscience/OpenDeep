@@ -10,7 +10,7 @@ http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf
 
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Pylearn2","Markus Beissinger"]
+__credits__ = ["Pylearn2", "Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
 __email__ = "opendeep-dev@googlegroups.com"
@@ -27,17 +27,6 @@ from opendeep.data.iterators.sequential import SequentialIterator
 
 log = logging.getLogger(__name__)
 
-# Default values to use for some training parameters
-_defaults = {'decay': 0.95, # in this case, decay is rho from the paper
-             "n_epoch": 1000,
-             "batch_size": 100,
-             "minimum_batch_size": 1,
-             "save_frequency": 10,
-             "early_stop_threshold": .9995,
-             "early_stop_length": 30,
-             "learning_rate": 1e-6, # in this case, learning_rate is epsilon from the paper
-             "unsupervised": False}
-
 # All AdaDelta needs to do is implement the get_updates() method for stochastic gradient descent
 class AdaDelta(SGD):
     """
@@ -49,7 +38,11 @@ class AdaDelta(SGD):
     decay : float, optional
     Decay rate :math:`\\rho` in Algorithm 1 of the aforementioned paper.
     """
-    def __init__(self, model, dataset, decay=None, iterator_class=SequentialIterator, config=None, defaults=_defaults,
+
+    # Default values to use for some training parameters
+    defaults = {'decay': 0.95}
+
+    def __init__(self, model, dataset, decay=None, iterator_class=SequentialIterator, config=None, defaults=defaults,
                  rng=None, n_epoch=None, batch_size=None, minimum_batch_size=None, save_frequency=None,
                  early_stop_threshold=None, early_stop_length=None, learning_rate=None, flag_para_load=None):
         if not decay:
@@ -69,7 +62,6 @@ class AdaDelta(SGD):
                                        dataset=dataset,
                                        iterator_class=iterator_class,
                                        config=config,
-                                       defaults=defaults,
                                        rng=rng,
                                        n_epoch=n_epoch,
                                        batch_size=batch_size,
