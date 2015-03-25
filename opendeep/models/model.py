@@ -21,6 +21,7 @@ import cPickle
 import time
 # third party libraries
 import theano
+import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 from opendeep import function
@@ -200,7 +201,7 @@ class Model(object):
         # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
         # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost
         # function here.
-        return None
+        return []
 
     def get_train_cost(self):
         """
@@ -221,7 +222,7 @@ class Model(object):
         raise NotImplementedError("Please implement a get_train_cost method for %s" % str(type(self)))
 
 
-    def get_gradient(self, starting_gradient=None, cost=None):
+    def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
         """
         This method allows you to define the gradient for this model manually. It should either work with a provided
         starting gradient (from upstream layers/models), or grab the training cost if no start gradient is provided.
@@ -237,6 +238,9 @@ class Model(object):
         :param starting_gradient: the starting, known gradients for variables
         :type starting_gradient: dictionary of {variable: known_gradient}
 
+        :param additional_cost: any additional cost to add to the gradient
+        :type additional_cost: theano expression
+
         :return: tuple of gradient with respect to inputs, and with respect to
         :rtype:
         """
@@ -246,13 +250,17 @@ class Model(object):
             params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
                                                                    end=self.get_inputs(),
                                                                    start=starting_gradient,
-                                                                   cost=None,
+                                                                   cost=additional_cost,
                                                                    details=False)
         # otherwise, just use this model's cost to determine gradient
         else:
+            # use the cost if it was given
+            cost = cost or self.get_train_cost()
+            if additional_cost is not None:
+                cost = T.sum(cost, additional_cost)
             params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
                                                                    end=self.get_inputs(),
-                                                                   cost=self.get_train_cost(),
+                                                                   cost=cost,
                                                                    details=False)
         return (OrderedDict(zip(self.get_params(), params_grad)),
                 OrderedDict(zip(self.get_inputs(), next_starting_grad)))

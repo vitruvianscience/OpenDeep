@@ -125,6 +125,7 @@ _activations = {'sigmoid': sigmoid,
                 'softmax': softmax,
                 'softplus': softplus,
                 'rectifier': rectifier,
+                'relu': rectifier,
                 'tanh': tanh,
                 'linear': linear}
 

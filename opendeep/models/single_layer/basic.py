@@ -13,7 +13,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
-import time
 # third party libraries
 import theano.tensor as T
 # internal references
@@ -22,7 +21,6 @@ from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights_gaussian, get_weights_uniform, get_bias
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.cost import get_cost_function
-from opendeep.utils.misc import make_time_units_string
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +53,7 @@ class BasicLayer(Model):
             assert len(inputs_hook) == 2  # make sure inputs_hook is a tuple
             input_size = inputs_hook[0] or input_size
             self.input = inputs_hook[1]
+
         else:
             # either grab from the parameter directly or self.args config
             input_size = input_size or self.args.get('input_size')

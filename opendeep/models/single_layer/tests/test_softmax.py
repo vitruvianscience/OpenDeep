@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # use the predict function!
     preds = s.predict(test_data)
     print '-------'
-    print T.argmax(preds, axis=1).eval()
+    print preds
     print mnist.getLabelsByIndices(indices=range(25), subset=TEST)
     print
     print

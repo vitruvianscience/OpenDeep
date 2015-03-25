@@ -21,7 +21,7 @@ import theano.tensor as T
 # internal references
 from opendeep import function
 from opendeep.models.model import Model
-from opendeep.utils.misc import make_time_units_string
+from opendeep.utils.misc import make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -57,10 +57,13 @@ class Prototype(Model):
         """
         This adds a model to the sequence that the container holds.
 
-        :param model: the model to add
+        :param model: the model (or list of models) to add
         :type model: opendeep.models.Model
         """
-        self.models.append(model)
+        # we want to be able to add multiple layers at a time (in a list), so using extend.
+        # make sure the model is a list
+        model = raise_to_list(model)
+        self.models.extend(model)
 
     def get_inputs(self):
         """
@@ -74,7 +77,7 @@ class Prototype(Model):
         ------------------
 
         :return: Theano variables representing the input(s) to the training function.
-        :rtype: List(theano variable)
+        :rtype: List(symbolic tensor)
         """
         inputs = []
         for model in self.models:
@@ -87,6 +90,7 @@ class Prototype(Model):
                     # if it doesn't have an owner
                     if input.owner is None:
                         # add it to the running inputs list
+                        input = raise_to_list(input)
                         inputs.extend(input)
         return inputs
 
@@ -111,6 +115,20 @@ class Prototype(Model):
         # otherwise, warn the user and return None
         else:
             log.warning("This container doesn't have any models! So no outputs to get...")
+            return None
+
+    def get_targets(self):
+        """
+        This grabs the targets (for supervised training) of the last layer in the model list.
+
+        :return: list(symbolic tensor)
+        """
+        # if this container has models, return the targets to the very last model.
+        if len(self.models) > 0:
+            return self.models[-1].get_targets()
+        # otherwise, warn the user and return None
+        else:
+            log.warning("This container doesn't have any models! So no targets to get...")
             return None
 
     def get_updates(self):
@@ -155,9 +173,11 @@ class Prototype(Model):
         :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
         :rtype: tensor
         """
+        # make sure the input is raised to a list - we are going to splat it!
+        input = raise_to_list(input)
         # first check if we already made an f_predict function
         if hasattr(self, 'f_predict'):
-            return self.f_predict(input)
+            return self.f_predict(*input)
         # otherwise, compile it!
         else:
             inputs  = self.get_inputs()
@@ -167,7 +187,7 @@ class Prototype(Model):
             log.info("Compiling f_predict...")
             self.f_predict = function(inputs=inputs, outputs=outputs, updates=updates, name="f_predict")
             log.info("Compilation done! Took ", make_time_units_string(time.time() - t))
-            return self.f_predict(input)
+            return self.f_predict(*input)
 
     def get_train_cost(self):
         """
