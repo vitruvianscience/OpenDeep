@@ -35,16 +35,19 @@ import logging
 from collections import OrderedDict
 # third party libraries
 import theano.tensor as T
+import numpy
 # internal references
 from opendeep import sharedX
 from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.data.iterators.sequential import SequentialIterator
+from opendeep.utils.config import combine_config_and_defaults
 
 log = logging.getLogger(__name__)
 
 # All AdaSecant needs to do is implement the get_updates() method for stochastic gradient descent
-class Adasecant(SGD):
+class AdaSecant(SGD):
     """
+    Taken from https://github.com/caglar/adasecant_wshp_paper:
     Adasecant:
         Based on the paper:
             Gulcehre, Caglar, and Yoshua Bengio.
@@ -77,52 +80,78 @@ class Adasecant(SGD):
         reduction in the workshop paper).
     """
     # Default values to use for some training parameters
-    defaults = {}
-    def __init__(self, decay=0.95,
-                 gamma_clip=1.8,
+    defaults = {'decay': 0.95,
+                'gamma_clip': 1.8,
+                'grad_clip': None,
+                'start_var_reduction': 0,
+                'delta_clip': None,
+                'use_adagrad': False,
+                'skip_nan_inf': False,
+                'use_corrected_grad': True}
+
+    def __init__(self, model, dataset,
+                 decay=None,
+                 gamma_clip=None,
                  grad_clip=None,
-                 start_var_reduction=0,
+                 start_var_reduction=None,
                  delta_clip=None,
-                 use_adagrad=False,
-                 skip_nan_inf=False,
-                 use_corrected_grad=True):
+                 use_adagrad=None,
+                 skip_nan_inf=None,
+                 use_corrected_grad=None,
+                 config=None, defaults=defaults, iterator_class=SequentialIterator, rng=None, n_epoch=None,
+                 batch_size=None, minimum_batch_size=None, save_frequency=None, early_stop_threshold=None,
+                 early_stop_length=None, learning_rate=None, flag_para_load=None):
+
+        specific_args = combine_config_and_defaults(config, defaults)
+
+        decay = decay or specific_args.get('decay')
 
         assert decay >= 0.
         assert decay < 1.
-
-        self.start_var_reduction = start_var_reduction
-        self.delta_clip = delta_clip
-        self.gamma_clip = gamma_clip
-        self.grad_clip = grad_clip
         self.decay = sharedX(decay, "decay")
-        self.use_corrected_grad = use_corrected_grad
-        self.use_adagrad = use_adagrad
-        self.damping = 1e-7
+
+        self.start_var_reduction = start_var_reduction or specific_args.get('start_var_reduction')
+        self.delta_clip          = delta_clip or specific_args.get('delta_clip')
+        self.gamma_clip          = gamma_clip or specific_args.get('gamma_clip')
+        self.grad_clip           = grad_clip or specific_args.get('grad_clip')
+        self.use_corrected_grad  = use_corrected_grad or specific_args.get('use_corrected_grad')
+        self.use_adagrad         = use_adagrad or specific_args.get('use_adagrad')
+
+        self.damping             = 1e-7
 
         # We have to bound the tau to prevent it to
         # grow to an arbitrarily large number, oftenwise
         # that causes numerical instabilities for very deep
         # networks. Note that once tau become very large, it will keep,
         # increasing indefinitely.
-        self.skip_nan_inf = skip_nan_inf
+        self.skip_nan_inf = skip_nan_inf or specific_args.get('skip_nan_inf')
         self.upper_bound_tau = 1e8
         self.lower_bound_tau = 1.5
 
-    def get_updates(self, learning_rate, grads, lr_scalers=None):
+        # need to call the SGD constructor after parameters are extracted because the constructor calls get_updates()!
+        super(AdaSecant, self).__init__(model=model,
+                                        dataset=dataset,
+                                        iterator_class=iterator_class,
+                                        config=config,
+                                        rng=rng,
+                                        n_epoch=n_epoch,
+                                        batch_size=batch_size,
+                                        minimum_batch_size=minimum_batch_size,
+                                        save_frequency=save_frequency,
+                                        early_stop_length=early_stop_length,
+                                        early_stop_threshold=early_stop_threshold,
+                                        learning_rate=learning_rate,
+                                        flag_para_load=flag_para_load)
+
+    def get_updates(self, grads):
         """
         .. todo::
             WRITEME
         Parameters
         ----------
-        learning_rate : float
-            Learning rate coefficient. Learning rate is not being used but, pylearn2 requires a
-            learning rate to be defined.
         grads : dict
             A dictionary mapping from the model's parameters to their
             gradients.
-        lr_scalers : dict
-            A dictionary mapping from the model's parameters to a learning
-            rate multiplier.
         """
 
         updates = OrderedDict({})
@@ -147,14 +176,14 @@ class Adasecant(SGD):
             assert self.grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
             gnorm = sum([g.norm(2) for g in grads.values()])
 
-            grads = OrderedDict({p : T.switch(gnorm/nparams > self.grad_clip,
-                g * self.grad_clip * nparams / gnorm , g)\
-                    for p, g in grads.iteritems()})
+            grads = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
+                                 g * self.grad_clip * nparams / gnorm , g)\
+                                 for p, g in grads.iteritems()})
 
         for param in grads.keys():
             grads[param].name = "grad_%s" % param.name
             mean_grad = sharedX(param.get_value() * 0. + eps, name="mean_grad_%s" % param.name)
-            mean_corrected_grad = sharedX(param.get_value() * 0 + eps, name="mean_corrected_grad_%s" % param.name)
+            # mean_corrected_grad = sharedX(param.get_value() * 0 + eps, name="mean_corrected_grad_%s" % param.name)
             slow_constant = 2.1
 
             if self.use_adagrad:
@@ -164,25 +193,25 @@ class Adasecant(SGD):
             """
             Initialization of accumulators
             """
-            taus_x_t = sharedX((np.ones_like(param.get_value()) + eps) * slow_constant,
+            taus_x_t = sharedX((numpy.ones_like(param.get_value()) + eps) * slow_constant,
                                name="taus_x_t_" + param.name)
             self.taus_x_t = taus_x_t
 
             #Variance reduction parameters
             #Numerator of the gamma:
-            gamma_nume_sqr = sharedX(np.zeros_like(param.get_value()) + eps,
+            gamma_nume_sqr = sharedX(numpy.zeros_like(param.get_value()) + eps,
                                      name="gamma_nume_sqr_" + param.name)
 
             #Denominator of the gamma:
-            gamma_deno_sqr = sharedX(np.zeros_like(param.get_value()) + eps,
+            gamma_deno_sqr = sharedX(numpy.zeros_like(param.get_value()) + eps,
                                      name="gamma_deno_sqr_" + param.name)
 
             #For the covariance parameter := E[\gamma \alpha]_{t-1}
-            cov_num_t = sharedX(np.zeros_like(param.get_value()) + eps,
-                                  name="cov_num_t_" + param.name)
+            cov_num_t = sharedX(numpy.zeros_like(param.get_value()) + eps,
+                                name="cov_num_t_" + param.name)
 
             # mean_squared_grad := E[g^2]_{t-1}
-            mean_square_grad = sharedX(np.zeros_like(param.get_value()) + eps,
+            mean_square_grad = sharedX(numpy.zeros_like(param.get_value()) + eps,
                                        name="msg_" + param.name)
 
             # mean_square_dx := E[(\Delta x)^2]_{t-1}
@@ -204,22 +233,16 @@ class Adasecant(SGD):
             #For the first time-step, assume that delta_x_t := norm_grad
             cond = T.eq(step, 0)
             msdx = cond * norm_grad**2 + (1 - cond) * mean_square_dx
-            mdx = cond * norm_grad + (1 - cond) * mean_dx
+            mdx  = cond * norm_grad + (1 - cond) * mean_dx
 
             """
             Compute the new updated values.
             """
             # E[g_i^2]_t
-            new_mean_squared_grad = (
-                mean_square_grad * (self.decay)  +
-                T.sqr(norm_grad) * (1 - self.decay)
-            )
+            new_mean_squared_grad = (mean_square_grad * self.decay + T.sqr(norm_grad) * (1 - self.decay))
             new_mean_squared_grad.name = "msg_" + param.name
             # E[g_i]_t
-            new_mean_grad = (
-                mean_grad * (self.decay) +
-                norm_grad * (1 - self.decay)
-            )
+            new_mean_grad = (mean_grad * self.decay + norm_grad * (1 - self.decay))
             new_mean_grad.name = "nmg_" + param.name
 
             mg = new_mean_grad
@@ -227,14 +250,12 @@ class Adasecant(SGD):
 
             # Keep the rms for numerator and denominator of gamma.
             new_gamma_nume_sqr = (
-                gamma_nume_sqr * (1 - 1 / taus_x_t) +
-                T.sqr((norm_grad - old_grad) * (old_grad - mg)) / taus_x_t
+                gamma_nume_sqr * (1 - 1 / taus_x_t) + T.sqr((norm_grad - old_grad) * (old_grad - mg)) / taus_x_t
             )
             new_gamma_nume_sqr.name = "ngammasqr_num_" + param.name
 
             new_gamma_deno_sqr = (
-                gamma_deno_sqr * (1 - 1 / taus_x_t) +
-                T.sqr((mg - norm_grad) * (old_grad - mg)) / taus_x_t
+                gamma_deno_sqr * (1 - 1 / taus_x_t) + T.sqr((mg - norm_grad) * (old_grad - mg)) / taus_x_t
             )
             new_gamma_deno_sqr.name = "ngammasqr_den_" + param.name
 
@@ -254,12 +275,11 @@ class Adasecant(SGD):
             else:
                 corrected_grad = norm_grad
 
+            new_sum_squared_grad = None
             if self.use_adagrad:
                 g = corrected_grad
                 # Accumulate gradient
-                new_sum_squared_grad = (
-                    sum_square_grad + T.sqr(g)
-                )
+                new_sum_squared_grad = (sum_square_grad + T.sqr(g))
 
                 rms_g_t = T.sqrt(new_sum_squared_grad)
                 rms_g_t = T.maximum(rms_g_t, 1.0)
@@ -269,26 +289,20 @@ class Adasecant(SGD):
             cur_curvature = norm_grad - old_plain_grad
             cur_curvature_sqr = T.sqr(cur_curvature)
 
-            new_curvature_ave = (
-                mean_curvature * (1 - 1 / taus_x_t) +
-                (cur_curvature / taus_x_t)
-            )
+            new_curvature_ave = (mean_curvature * (1 - 1 / taus_x_t) + (cur_curvature / taus_x_t))
             new_curvature_ave.name = "ncurve_ave_" + param.name
 
             #Average average curvature
             nc_ave = new_curvature_ave
 
-            new_curvature_sqr_ave = (
-                mean_curvature_sqr * (1 - 1 / taus_x_t) +
-                (cur_curvature_sqr / taus_x_t)
-            )
+            new_curvature_sqr_ave = (mean_curvature_sqr * (1 - 1 / taus_x_t) + (cur_curvature_sqr / taus_x_t))
             new_curvature_sqr_ave.name = "ncurve_sqr_ave_" + param.name
 
             #Unbiased average squared curvature
             nc_sq_ave = new_curvature_sqr_ave
 
-            epsilon = lr_scalers.get(param, 1.) * learning_rate
-            scaled_lr = lr_scalers.get(param, 1.) * sharedX(1.0)
+            epsilon = self.lr_scalers.get(param, 1.) * self.learning_rate
+            scaled_lr = self.lr_scalers.get(param, 1.) * sharedX(1.0)
             rms_dx_tm1 = T.sqrt(msdx + epsilon)
 
             rms_curve_t = T.sqrt(new_curvature_sqr_ave + epsilon)
@@ -300,38 +314,32 @@ class Adasecant(SGD):
             # This part seems to be necessary for only RNNs
             # For feedforward networks this does not seem to be important.
             if self.delta_clip:
-                logger.info("Clipping will be applied on the adaptive step size.")
+                log.info("Clipping will be applied on the adaptive step size.")
                 delta_x_t = delta_x_t.clip(-self.delta_clip, self.delta_clip)
                 if self.use_adagrad:
                     delta_x_t = delta_x_t * corrected_grad / rms_g_t
                 else:
-                    logger.info("Clipped adagrad is disabled.")
+                    log.info("Clipped adagrad is disabled.")
                     delta_x_t = delta_x_t * corrected_grad
             else:
-                logger.info("Clipping will not be applied on the adaptive step size.")
+                log.info("Clipping will not be applied on the adaptive step size.")
                 if self.use_adagrad:
                     delta_x_t = delta_x_t * corrected_grad / rms_g_t
                 else:
-                    logger.info("Clipped adagrad will not be used.")
+                    log.info("Clipped adagrad will not be used.")
                     delta_x_t = delta_x_t * corrected_grad
 
             new_taus_t = (1 - T.sqr(mdx) / (msdx + eps)) * taus_x_t + sharedX(1 + eps, "stabilized")
 
             #To compute the E[\Delta^2]_t
-            new_mean_square_dx = (
-                 msdx * (1 - 1 / taus_x_t) +
-                 (T.sqr(delta_x_t) / taus_x_t)
-             )
+            new_mean_square_dx = (msdx * (1 - 1 / taus_x_t) + (T.sqr(delta_x_t) / taus_x_t))
 
             #To compute the E[\Delta]_t
-            new_mean_dx = (
-                mean_dx * (1 - 1 / taus_x_t) +
-                (delta_x_t / (taus_x_t))
-            )
+            new_mean_dx = (mean_dx * (1 - 1 / taus_x_t) + (delta_x_t / (taus_x_t)))
 
             #Perform the outlier detection:
             #This outlier detection is slightly different:
-            new_taus_t = T.switch(T.or_(abs(norm_grad - mg) > (2 * T.sqrt(mgsq  - mg**2)),
+            new_taus_t = T.switch(T.or_(abs(norm_grad - mg) > (2 * T.sqrt(mgsq - mg**2)),
                                         abs(cur_curvature - nc_ave) > (2 * T.sqrt(nc_sq_ave - nc_ave**2))),
                                         sharedX(2.2), new_taus_t)
 
@@ -339,10 +347,7 @@ class Adasecant(SGD):
             new_taus_t = T.maximum(self.lower_bound_tau, new_taus_t)
             new_taus_t = T.minimum(self.upper_bound_tau, new_taus_t)
 
-            new_cov_num_t = (
-                cov_num_t * (1 - 1 / taus_x_t) +
-                (delta_x_t * cur_curvature) * (1 / taus_x_t)
-            )
+            new_cov_num_t = (cov_num_t * (1 - 1 / taus_x_t) + (delta_x_t * cur_curvature) * (1 / taus_x_t))
 
             update_step = delta_x_t
 

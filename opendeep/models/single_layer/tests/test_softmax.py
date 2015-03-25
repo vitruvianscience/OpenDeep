@@ -41,7 +41,7 @@ if __name__ == '__main__':
     # grab the MNIST dataset
     mnist = MNIST(one_hot=True)
     # create your shiny new DAE
-    s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy')
+    s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy', out_as_probs=True)
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
     # perform training!

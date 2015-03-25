@@ -6,6 +6,7 @@ from opendeep.models.container import Prototype
 from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
 from opendeep.tutorials.tutorial01_modular_dae import DenoisingAutoencoder
 from opendeep.optimization.adadelta import AdaDelta
+from opendeep.optimization.adasecant import AdaSecant
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.data.dataset import TEST
 
@@ -47,7 +48,7 @@ def run_mlp():
 
     mnist = MNIST()
 
-    optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
+    optimizer = AdaSecant(model=mlp, dataset=mnist, n_epoch=20)
     optimizer.train()
 
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)

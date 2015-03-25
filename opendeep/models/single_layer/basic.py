@@ -165,7 +165,7 @@ class SoftmaxLayer(BasicLayer):
     It is a special subclass of the FullyConnectedLayer, with the activation function forced to be 'softmax'
     """
     default = {'cost': 'nll',  # the cost function to use
-               'out_as_probs': True  # whether output is class guess (False) or vector of class probabilities (True)
+               'out_as_probs': False  # whether output is class guess (False) or vector of class probabilities (True)
                }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
                  input_size=None, output_size=None, weights_init=None, weights_mean=None, weights_std=None,
