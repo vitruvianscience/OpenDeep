@@ -33,14 +33,16 @@ log = logging.getLogger(__name__)
 
 class Optimizer(object):
     '''
-    Default interface for an optimizer implementation - to train a model on a dataset
+    Default interface for an optimizer implementation - this provides the necessary parameter updates when
+    training a model on a dataset
     '''
     def __init__(self, config=None, defaults=None):
+        log.debug("Initializing optimizer %s", str(type(self)))
         # set self.args to be the combination of the defaults and the config dictionaries
         self.args = combine_config_and_defaults(config, defaults)
 
         # log the arguments
-        log.debug("ARGS: %s", str(self.args))
+        log.debug("optimizer config args: %s", str(self.args))
 
 
     def train(self):

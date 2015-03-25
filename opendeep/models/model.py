@@ -18,10 +18,15 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import os
 import cPickle
+import time
+# third party libraries
+import theano
+from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
+from opendeep import function
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
-from opendeep.utils.misc import set_shared_values, get_shared_values
+from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string
 
 log = logging.getLogger(__name__)
 
@@ -96,14 +101,14 @@ class Model(object):
     ######################################################################
     def get_inputs(self):
         """
-        This should return the input(s) to the model's computation graph. This is called by the Optimizer when creating
-        the theano train function on the cost expression returned by get_train_cost().
+        This should return the input(s) to the model's computation graph as a list. This only includes inputs for the
+        predict function, not any inputs used for supervised training.
 
-        This should normally return the same theano variable list that is used in the inputs= argument to the f_predict
-        function.
+        Note: This should normally return the same theano variable list that is used in the inputs= argument to the
+        f_predict function.
         ------------------
 
-        :return: Theano variables representing the input(s) to the training function.
+        :return: Theano variables representing the input(s) to the model's 'predict' computation.
         :rtype: List(theano variable)
         """
         log.critical("%s does not have a get_inputs function!", str(type(self)))
@@ -164,25 +169,90 @@ class Model(object):
         :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
         :rtype: tensor
         """
-        log.critical("%s predict method not implemented!", str(type(self)))
-        raise NotImplementedError("Please implement a predict method for %s" % str(type(self)))
+        # check if the predict function is already compiled, otherwise compile it!
+        if not hasattr(self, 'f_predict'):
+            log.debug("Compiling f_predict...")
+            t = time.time()
+            self.f_predict = function(inputs=self.get_inputs(),
+                                      outputs=self.get_outputs())
+            log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
+
+        return self.f_predict(*input)
 
 
-    ###########################################################
-    # Methods to do with training the model with an Optimizer #
-    ###########################################################
-    def get_train_cost(self):
+    #########################################
+    # Methods to do with training the model #
+    #########################################
+    def get_targets(self):
         """
-        This returns the expression that represents the cost given an input, which is used for the Optimizer during
-        training. The reason we can't just compile a f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the Optimizer object.
+        This function returns the list of inputs that are used for supervised training. It should be the 'correct' or
+        'target' variables to compare against the output of the model's computation.
+
+        Example: the labels [Y] for a classification problem.
         ------------------
 
-        :return: theano expression of the model's training cost, from which parameter gradients will be computed.
-        :rtype: theano tensor
+        :return: Theano variables representing the target(s) to the model's computation.
+        :rtype: List(theano variable)
+        """
+        # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
+        # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost
+        # function here.
+        return None
+
+    def get_train_cost(self):
+        """
+        This returns the expression that represents the cost given an input, which is used during training.
+        The reason we can't just compile a f_train theano function is because updates need to be calculated
+        for the parameters during gradient descent - and these updates are created in the Optimizer object.
+
+        In the specialized case of layer-wise pretraining (or any version of pretraining in the model), you should
+        return a list of training cost expressions in order you want training to happen. This way the optimizer
+        will train each cost in sequence for your model, allowing for easy layer-wise pretraining in the model.
+        ------------------
+
+        :return: theano expression (or list of theano expressions)
+        of the model's training cost, from which parameter gradients will be computed.
+        :rtype: theano tensor or list(theano tensor)
         """
         log.critical("%s does not have a get_train_cost function!", str(type(self)))
         raise NotImplementedError("Please implement a get_train_cost method for %s" % str(type(self)))
+
+
+    def get_gradient(self, starting_gradient=None, cost=None):
+        """
+        This method allows you to define the gradient for this model manually. It should either work with a provided
+        starting gradient (from upstream layers/models), or grab the training cost if no start gradient is provided.
+
+        Theano's subgraph gradient function specified here:
+        http://deeplearning.net/software/theano/library/gradient.html#theano.gradient.subgraph_grad
+        warning: If the gradients of cost with respect to any of the start variables is already part of the
+        start dictionary, then it may be counted twice with respect to wrt and end.
+
+        You should only implement this method if you want to manually define your gradients for the model.
+        --------------------
+
+        :param starting_gradient: the starting, known gradients for variables
+        :type starting_gradient: dictionary of {variable: known_gradient}
+
+        :return: tuple of gradient with respect to inputs, and with respect to
+        :rtype:
+        """
+        # check if starting gradients was provided.
+        # if there are known gradients to start, use those instead of the cost for this model
+        if starting_gradient is not None:
+            params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
+                                                                   end=self.get_inputs(),
+                                                                   start=starting_gradient,
+                                                                   cost=None,
+                                                                   details=False)
+        # otherwise, just use this model's cost to determine gradient
+        else:
+            params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
+                                                                   end=self.get_inputs(),
+                                                                   cost=self.get_train_cost(),
+                                                                   details=False)
+        return (OrderedDict(zip(self.get_params(), params_grad)),
+                OrderedDict(zip(self.get_inputs(), next_starting_grad)))
 
 
     def get_updates(self):
@@ -201,6 +271,7 @@ class Model(object):
         """
         # TODO: should we do the parameter decays from get_decay_params() in the model updates?
         # TODO: Right now I'm not because it seems less modular
+        # TODO: do we need a list of these as well to deal with the possible list of get_train_cost()?
         # by default, assume the model doesn't have updates - it's your job to return them in this method.
         return None
 

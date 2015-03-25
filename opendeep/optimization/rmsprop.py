@@ -25,15 +25,7 @@ log = logging.getLogger(__name__)
 
 # Default values to use for some training parameters
 _defaults = {'decay': 0.95,
-             'max_scaling': 1e5,
-             "n_epoch": 1000,
-             "batch_size": 100,
-             "minimum_batch_size": 1,
-             "save_frequency": 10,
-             "early_stop_threshold": .9995,
-             "early_stop_length": 30,
-             "learning_rate": 1e-6,
-             "unsupervised": False}
+             'max_scaling': 1e5}
 
 # All RMSProp needs to do is implement the get_updates() method for stochastic gradient descent
 class RMSProp(SGD):
@@ -90,7 +82,6 @@ class RMSProp(SGD):
                                       dataset=dataset,
                                       iterator_class=iterator_class,
                                       config=config,
-                                      defaults=defaults,
                                       rng=rng,
                                       n_epoch=n_epoch,
                                       batch_size=batch_size,

@@ -20,12 +20,12 @@ class DenoisingAutoencoder(Model):
     # Best practice to define all the default parameters up here
     # Provide comments when giving parameters so people know what they are for!
     _defaults = {
-        "input_size": 28*28, # dimensionality of input - works for MNIST
-        "hidden_size": 1000, # number of hidden units
-        "corruption_level": 0.4, # how much noise to add to the input
-        "hidden_activation": 'tanh', # the nonlinearity to apply to hidden units
-        "visible_activation": 'sigmoid', # the nonlinearity to apply to visible units
-        "cost_function": 'binary_crossentropy' # the cost function to use during training
+        "input_size": 28*28,  # dimensionality of input - works for MNIST
+        "hidden_size": 1000,  # number of hidden units
+        "corruption_level": 0.4,  # how much noise to add to the input
+        "hidden_activation": 'tanh',  # the nonlinearity to apply to hidden units
+        "visible_activation": 'sigmoid',  # the nonlinearity to apply to visible units
+        "cost_function": 'binary_crossentropy'  # the cost function to use during training
     }
     def __init__(self, config=None, defaults=_defaults,
                  inputs_hook=None, hiddens_hook=None, params_hook=None,
@@ -163,9 +163,9 @@ if __name__ == '__main__':
 
     # test it on some images!
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
-    corrupted_test = salt_and_pepper(test_data, 0.4)
+    corrupted_test = salt_and_pepper(test_data, 0.4).eval()
     # use the predict function!
-    reconstructed_images = dae.predict(test_data)
+    reconstructed_images = dae.predict(corrupted_test)
 
     # create an image from this reconstruction!
     # imports for working with tiling outputs into one image
@@ -175,7 +175,7 @@ if __name__ == '__main__':
     # stack the image matrices together in three 5x5 grids next to each other using numpy
     stacked = numpy.vstack(
         [numpy.vstack([test_data[i*5 : (i+1)*5],
-                       corrupted_test.eval()[i*5 : (i+1)*5],
+                       corrupted_test[i*5 : (i+1)*5],
                        reconstructed_images[i*5 : (i+1)*5]])
          for i in range(5)])
     # convert the combined matrix into an image

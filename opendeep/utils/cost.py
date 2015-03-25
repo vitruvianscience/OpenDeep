@@ -3,6 +3,9 @@
 
 These functions are used as the objectives (costs) to minimize during training of deep networks.
 You should be careful to use the appropriate cost function for the type of input and output of the network.
+
+EVERY COST FUNCTION SHOULD INCLUDE AND OUTPUT AND TARGET PARAMETER. Extra parameters can be included and named
+whatever you like.
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -43,7 +46,7 @@ def binary_crossentropy(output, target):
     cost = T.mean(L)
     return cost
 
-def categorical_crossentropy(output_dist, target_dist):
+def categorical_crossentropy(output, target):
     """
     This is the mean multinomial negative log-loss.
     From Theano:
@@ -64,7 +67,7 @@ def categorical_crossentropy(output_dist, target_dist):
     :return: the mean of the cross-entropy tensor
     :rtype: Tensor
     """
-    return T.mean(T.nnet.categorical_crossentropy(output_dist, target_dist))
+    return T.mean(T.nnet.categorical_crossentropy(output, target))
 
 def mse(output, target, mean_over_second=True):
     """
@@ -92,20 +95,20 @@ def mse(output, target, mean_over_second=True):
 
 
 # use this for continuous inputs
-def isotropic_gaussian_LL(means_estimated, stds_estimated, targets):
+def isotropic_gaussian_LL(output, target, std_estimated):
     """
     This takes the negative log-likelihood of an isotropic Gaussian with estimated mean and standard deviation.
     Useful for continuous-valued costs.
 
-    :param means_estimated: the symbolic tensor (or compatible) representing the means of the distribution estimated.
+    :param output: the symbolic tensor (or compatible) representing the means of the distribution estimated.
     In the case of Generative Stochastic Networks, for example, this would be the final reconstructed output x'.
-    :type means_estimated: Tensor
+    :type output: Tensor
 
-    :param stds_estimated: the estimated standard deviation (sigma)
-    :type stds_estimated: Tensor
+    :param std_estimated: the estimated standard deviation (sigma)
+    :type std_estimated: Tensor
 
-    :param targets: the symbolic tensor (or compatible) target truth to compare the means_estimated against.
-    :type targets: Tensor
+    :param target: the symbolic tensor (or compatible) target truth to compare the means_estimated against.
+    :type target: Tensor
 
     :return: the negative log-likelihood
     :rtype: Tensor
@@ -116,14 +119,15 @@ def isotropic_gaussian_LL(means_estimated, stds_estimated, targets):
     # The following definition came from the Conditional_nade project
     #the loglikelihood of isotropic Gaussian with
     # estimated mean and std
-    A = -((targets - means_estimated)**2) / (2*(stds_estimated**2))
-    B = -T.log(stds_estimated * T.sqrt(2*numpy.pi))
+    A = -((target - output)**2) / (2*(std_estimated**2))
+    B = -T.log(std_estimated * T.sqrt(2*numpy.pi))
     LL = (A + B).sum(axis=1).mean()
     return -LL
+    # Example from GSN:
     # this_cost = isotropic_gaussian_LL(
-    #     means_estimated=reconstruction,
-    #     stds_estimated=self.layers[0].sigma,
-    #     targets=self.inputs)
+    #     output=reconstruction,
+    #     std_estimated=self.layers[0].sigma,
+    #     target=self.inputs)
 
 
 def zero_one(output, target):
@@ -175,7 +179,7 @@ def get_cost_function(name):
         func = _functions.get(name)
         # if it couldn't find the function (key didn't exist), raise a NotImplementedError
         if func is None:
-            log.critical("Did not recognize cost function %s! Please use one of: ", str(name), str(_functions.keys()))
+            log.error("Did not recognize cost function %s! Please use one of: ", str(name), str(_functions.keys()))
             raise NotImplementedError(
                 "Did not recognize cost function {0!s}! Please use one of: {1!s}".format(name, _functions.keys())
             )
@@ -183,5 +187,5 @@ def get_cost_function(name):
         return func
     # otherwise we don't know what to do.
     else:
-        log.critical("Cost function not implemented for %s with type %s", str(name), str(type(name)))
+        log.error("Cost function not implemented for %s with type %s", str(name), str(type(name)))
         raise NotImplementedError("Cost function not implemented for %s with type %s", str(name), str(type(name)))
