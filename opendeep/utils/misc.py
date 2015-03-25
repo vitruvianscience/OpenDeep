@@ -201,7 +201,6 @@ def numpy_one_hot(vector, n_classes=None):
     :return: a matrix of the one-hot encodings of the input vector
     :rtype: numpy array
     """
-    log.debug("Converting to one-hot...")
     # check if input is vector
     assert vector.ndim == 1, "Dimension mismatch for input vector, found %d dimensions!" % vector.ndim
     assert numpy.min(vector) > -1, "Found negative numbers in the vector, need all elements to be >= 0."

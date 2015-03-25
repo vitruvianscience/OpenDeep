@@ -165,16 +165,25 @@ class SoftmaxLayer(BasicLayer):
 
     It is a special subclass of the FullyConnectedLayer, with the activation function forced to be 'softmax'
     """
-    default = {'cost': 'nll'}
+    default = {'cost': 'nll',  # the cost function to use
+               'out_as_probs': True  # whether output is class guess (False) or vector of class probabilities (True)
+               }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
                  input_size=None, output_size=None, weights_init=None, weights_mean=None, weights_std=None,
-                 weights_interval=None, bias_init=None, cost=None):
+                 weights_interval=None, bias_init=None, cost=None, out_as_probs=None):
         # grab what cost to use
         if cost is None:
             if config is not None:
                 cost = config.get('cost', defaults.get('cost'))
             else:
                 cost = defaults.get('cost')
+        # see if we want to output a class guess or vector of probabilities
+        if out_as_probs is None:
+            if config is not None:
+                out_as_probs = config.get('out_as_probs', defaults.get('out_as_probs'))
+            else:
+                out_as_probs = defaults.get('out_as_probs')
+        self.out_as_probs = out_as_probs
 
         # if we are using negative log-likelihood, make cost None for superclass init
         if cost == 'nll':
@@ -198,7 +207,8 @@ class SoftmaxLayer(BasicLayer):
         # integer labels.
         self.target_flag = False
 
-        self.p_y_given_x = self.get_outputs()
+        # the outputs of the layer are the probabilities of being in a given class
+        self.p_y_given_x = super(SoftmaxLayer, self).get_outputs()
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
         self.y = T.concatenate(self.get_targets())
 
@@ -211,12 +221,35 @@ class SoftmaxLayer(BasicLayer):
             self.y = T.fvector('y')
             self.cost = self.negative_log_likelihood()
 
+    def get_outputs(self):
+        # if we aren't asking for the class probabilities, return the argmax (gives the index of highest probability)
+        if not self.out_as_probs:
+            return self.get_argmax_prediction()
+        # otherwise, give the output as normal, which is the vector of probabilities
+        else:
+            return self.p_y_given_x
+
     def get_targets(self):
+        """
+        returns the target 'labels' to compare against
+
+        :return: symbolic tensor
+        """
         # return our integer targets, or default to superclass
         if self.target_flag:
             return [self.y]
         else:
             return super(SoftmaxLayer, self).get_targets()
+
+    def get_monitors(self):
+        # grab the basiclayer's monitors
+        monitors = super(SoftmaxLayer, self).get_monitors()
+        # if this softmax layer is using integer classes, add the 'error' monitor.
+        if self.target_flag:
+            if not hasattr(self, 'f_monitor'):
+                self.f_monitor = function(inputs=self.get_inputs() + self.get_targets(), outputs=self.errors())
+            monitors.update({'error': self.f_monitor})
+        return monitors
 
     def negative_log_likelihood(self):
         """Return the mean of the negative log-likelihood of the prediction
@@ -264,13 +297,3 @@ class SoftmaxLayer(BasicLayer):
     def get_argmax_prediction(self):
         # return the argmax y_pred class
         return self.y_pred
-
-    def get_monitors(self):
-        # grab the basiclayer's monitors
-        monitors = super(SoftmaxLayer, self).get_monitors()
-        # if this softmax layer is using integer classes, add the 'error' monitor.
-        if self.target_flag:
-            if not hasattr(self, 'f_monitor'):
-                self.f_monitor = function(inputs=self.get_inputs() + self.get_targets(), outputs=self.errors())
-            monitors.update({'error': self.f_monitor})
-        return monitors

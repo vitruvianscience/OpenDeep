@@ -26,7 +26,7 @@ from theano.compat.python2x import OrderedDict  # use this compatibility Ordered
 from opendeep import function
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
-from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string
+from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -177,6 +177,9 @@ class Model(object):
                                       outputs=self.get_outputs())
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
 
+        # because we use the splat to account for multiple inputs to the function, make sure input is a list.
+        input = raise_to_list(input)
+        # return the results of the predict function!
         return self.f_predict(*input)
 
 
