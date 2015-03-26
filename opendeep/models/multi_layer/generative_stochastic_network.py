@@ -387,10 +387,10 @@ class GSN(Model):
                                      outputs = self.network_state_output + visible_pX_chain,
                                      name    = 'gsn_f_sample')
 
-        # compile the monitoring functions for things we want to run on the valid/test sets
-        if not hiddens_hook:
-            log.debug("monitoring functions...")
-            self.f_monitors = function(inputs=[self.X], outputs=self.monitors.values())
+        # # compile the monitoring functions for things we want to run on the valid/test sets
+        # if not hiddens_hook:
+        #     log.debug("monitoring functions...")
+        #     self.f_monitors = function(inputs=[self.X], outputs=self.monitors.values())
 
         log.debug("GSN compiling done. Took %s", make_time_units_string(time.time() - t))
 
@@ -485,12 +485,9 @@ class GSN(Model):
 
     def get_monitors(self):
         """
-        This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
+        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
         about during training. For every monitor returned by this method, the function will be run on the
         train/validation/test dataset and its value will be reported.
-
-        Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
-        exist!
         ------------------
 
         :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
@@ -499,8 +496,9 @@ class GSN(Model):
         # return OrderedDict([('train_cost', self.f_train_cost),
         #                     ('reconstruction_cost', self.f_recon_cost),
         #                     ('reconstruction_cost_no_noise', self.f_predict_cost)])
-        names = ', '.join(self.monitors.keys())
-        return {names: self.f_monitors}
+        # names = ', '.join(self.monitors.keys())
+        # return {names: self.f_monitors}
+        return self.monitors
 
     def get_decay_params(self):
         """
@@ -1250,8 +1248,8 @@ def main():
     gsn = GSN(config=config, dataset=mnist)
 
     # Load initial weights and biases from file
-    params_to_load = '../../../outputs/gsn/mnist/trained_epoch_395.pkl'
-    gsn.load_params(params_to_load)
+    # params_to_load = '../../../outputs/gsn/mnist/trained_epoch_395.pkl'
+    # gsn.load_params(params_to_load)
 
     optimizer = SGD(model=gsn, dataset=mnist, iterator_class=SequentialIterator, config=_train_args)
     optimizer.train()

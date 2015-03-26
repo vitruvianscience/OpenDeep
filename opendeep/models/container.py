@@ -40,6 +40,11 @@ class Prototype(Model):
         :param config: a configuration defining the multiple models/configurations for this container to have.
         :type config: a dictionary-like object or filename to JSON/YAML file.
         """
+        # initialize superclass (model) with the config
+        super(Prototype, self).__init__(config=config)
+
+        # TODO: add ability to create the models list from the input config.
+
         if layers is None:
             # create an empty list of the models this container holds.
             self.models = []
@@ -48,14 +53,12 @@ class Prototype(Model):
             layers = raise_to_list(layers)
             self.models = layers
 
-        # TODO: add ability to create the models list from the input config.
-
     def __getitem__(self, item):
-        # let someone access a specific model in this container
+        # let someone access a specific model in this container with indexing.
         return self.models[item]
 
     def __iter__(self):
-        # let someone iterate through this container's models
+        # let someone iterate through this container's models.
         for model in self.models:
             yield model
 
@@ -66,6 +69,19 @@ class Prototype(Model):
         :param model: the model (or list of models) to add
         :type model: opendeep.models.Model
         """
+        # TODO: By default, we want single models added sequentially to use the outputs of the previous model as its
+        # inputs_hook (if no inputs_hook was defined by the user)
+
+        # # check if model is a single model
+        # if isinstance(model, Model):
+        #     # if there is a previous layer added
+        #     if len(self.models) > 0:
+        #         # check if inputs_hook wasn't already defined by the user (and hiddens_hook) - basically blank slate
+        #         if model.inputs_hook is None and model.hiddens_hook is None:
+        #             previous_out_size = self[-1].output_size
+        #             previous_out      = self[-1].get_outputs
+        #             inputs_hook = (previous_out_size, previous_out)
+
         # we want to be able to add multiple layers at a time (in a list), so using extend.
         # make sure the model is a list
         model = raise_to_list(model)

@@ -17,7 +17,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 import os
-import cPickle
+import cPickle as pickle
 import time
 # third party libraries
 import theano
@@ -47,7 +47,10 @@ class Model(object):
     shouldn't be a breaking error.
     """
 
-    def __init__(self, config=None, defaults=None, inputs_hook=None, hiddens_hook=None, params_hook=None):
+    def __init__(self, config=None, defaults=None,
+                 inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 output_size=None,
+                 **kwargs):
         """
         This creates the model's combined configuration params from config and defaults into a self.args
         dictionary-like object (meaning it implements collections.Mapping and you can use self.args.get('parameter')
@@ -87,15 +90,60 @@ class Model(object):
         two versions of the model that use the same parameters - such as a training model with dropout applied to layers
         and one without for testing, where the parameters are shared between the two.
         :type params_hook: List(theano shared variable)
+
+        :param output_size: the dimensionality of the output for this model. This is required for stacking models
+        automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
+        compute the size from Theano's graph, so it needs to be explicit. This parameter can be None if it is specified
+        in the default or config dictionaries.
+        :type output_size: int
+
+        :param kwargs: this will be all the other left-over parameters passed to the class as a dictionary of
+        {param: value}. We will use the kwargs to finally combine defaults, config, and arguments together into the
+        self.args dict, making each model's parameters accessible by name in self.args
+        :type kwargs: dict
         """
         log.info("Creating a new instance of %s", str(type(self)))
 
         # set self.args to be the combination of the defaults and the config dictionaries
         self.args = combine_config_and_defaults(config, defaults)
 
-        # log the arguments.
-        log.debug("%s self.args from config parameters: %s", str(type(self)), str(self.args))
+        # now, go through the inputs_hook, hiddens_hook, params_hook, and output_size to add them to self.args
+        # if the variable isn't None, override the argument from config/default. (or add it if it doesn't exist)
+        if inputs_hook is not None or 'inputs_hook' not in self.args:
+            self.args['inputs_hook'] = inputs_hook
 
+        if hiddens_hook is not None or 'hiddens_hook' not in self.args:
+            self.args['hiddens_hook'] = hiddens_hook
+
+        if params_hook is not None or 'params_hook' not in self.args:
+            self.args['params_hook'] = params_hook
+
+        if output_size is not None or 'output_size' not in self.args:
+            self.args['output_size'] = output_size
+
+        # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
+        for arg, val in kwargs.iteritems():
+            if (val is not None or str(arg) not in self.args) and str(arg) != 'kwargs':
+                self.args[str(arg)] = val
+            elif str(arg) == 'kwargs':
+                inner_kwargs = kwargs['kwargs']
+                for key, item in inner_kwargs.iteritems():
+                    if item is not None or str(key) not in self.args:
+                        self.args[str(key)] = item
+
+        # Magic! Now self.args contains the combination of all the initialization variables, overridden like so:
+        # defaults < config < kwargs (explicits)
+
+        # log the arguments.
+        log.debug("%s self.args: %s", str(type(self)), str(self.args))
+        # save the arguments.
+        self.save_args()
+
+        # Finally, to make things really easy, update the class 'self' with everything in self.args to make
+        # all the parameters accessible via self.<param>
+        self.__dict__.update(self.args)
+
+        # Boom! Hyperparameters are now dealt with. Take that!
 
     ######################################################################
     # Methods for the symbolic inputs, hiddens, and outputs of the model #
@@ -443,7 +491,7 @@ class Model(object):
         # try to dump the param values
         with open(param_file, 'wb') as f:
             try:
-                cPickle.dump(params, f, protocol=cPickle.HIGHEST_PROTOCOL)
+                pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
             except Exception as e:
                 log.exception("Some issue saving model %s parameters to %s! Exception: %s",
                               str(type(self)), str(param_file), str(e))
@@ -474,7 +522,7 @@ class Model(object):
                       str(type(self)), str(param_file))
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'r') as f:
-                loaded_params = cPickle.load(f)
+                loaded_params = pickle.load(f)
             self.set_param_values(loaded_params)
             return True
         # if get_file_type didn't return pkl or none, it wasn't a pickle file
@@ -485,3 +533,36 @@ class Model(object):
         else:
             log.error("Param file %s couldn't be found!", str(param_file))
             return False
+
+    def save_args(self, args_file="config.pkl"):
+        """
+        This saves the model's initial configuration (self.args) in a pickle file.
+        -------------------
+
+        :param args_file: filename of pickled configs
+        :type args_file: string
+
+        :return: whether or not successful
+        :rtype: bool
+        """
+        args_file = os.path.realpath(args_file)
+
+        # force extension to be .pkl if it isn't a pickle file
+        _, extension = os.path.splitext(args_file)
+        if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
+            ''.join([args_file, '.pkl'])
+
+        log.debug('Saving %s configuration to %s...',
+                  str(type(self)), str(args_file))
+        # try to dump the param values
+        with open(args_file, 'wb') as f:
+            try:
+                pickle.dump(self.args, f, protocol=pickle.HIGHEST_PROTOCOL)
+            except Exception as e:
+                log.exception("Some issue saving model %s parameters to %s! Exception: %s",
+                              str(type(self)), str(args_file), str(e))
+                return False
+            finally:
+                f.close()
+
+        return True
