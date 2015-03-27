@@ -85,14 +85,14 @@ def combine_config_and_defaults(config=None, defaults=None):
     # make sure the defaults is like a dictionary
     defaults_dict = create_dictionary_like(defaults)
     # override any default values with the config (after making sure they parsed correctly)
-    if config_dict and defaults_dict:
+    if config_dict is not None and defaults_dict is not None:
         defaults_dict.update(config_dict)
     # if there are no configuration options, give a warning because args will be None.
-    elif not config_dict and not defaults_dict:
+    elif config_dict is None and defaults_dict is None:
         log.warning("Both the config and defaults are None! Please supply at least one.")
 
     # set args to either the combined defaults and config, or just config if that is only one provided.
-    if defaults_dict:
+    if defaults_dict is not None:
         args = defaults_dict
     else:
         args = config_dict

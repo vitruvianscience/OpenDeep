@@ -33,8 +33,8 @@ def create_mlp():
     # use the predict function!
     preds = mlp.predict(test_data)
     log.info('-------')
-    log.info(str(preds))
-    log.info(str(mnist.getLabelsByIndices(indices=range(25), subset=TEST)))
+    log.info("predicted: %s",str(preds))
+    log.info("actual:    %s",str(mnist.getLabelsByIndices(indices=range(25), subset=TEST).astype('int32')))
 
 if __name__ == '__main__':
     config_root_logger()

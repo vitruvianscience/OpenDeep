@@ -34,63 +34,57 @@ class DenoisingAutoencoder(Model):
         # Now, initialize with Model class to combine config and defaults!
         # Here, defaults is defined via a dictionary. However, you could also
         # pass a filename to a JSON or YAML file with the same format.
-        super(DenoisingAutoencoder, self).__init__(config=config, defaults=defaults)
-        # Any parameter from the 'config' will overwrite the 'defaults' dictionary.
-        # These parameters are now accessible from the 'self.args' variable!
-
-        # When accessing model parameters, it is best practice to try to find the parameters
-        # explicitly passed first, and then go to the 'self.args' configuration.
+        super(DenoisingAutoencoder, self).__init__(
+            **{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'}
+        )
+        # Any parameter from the 'config' will overwrite the 'defaults' dictionary, which will be overwritten if the
+        # parameter is passed directly to __init__.
+        # These parameters are now accessible from the 'self' variable!
 
         # Define model hyperparameters
         # deal with the inputs_hook and hiddens_hook for the size parameters!
         # if the hook exists, grab the size from the first element of the tuple.
-        if inputs_hook:
-            input_size = inputs_hook[0]
-        # otherwise, grab the size from the configurations.
-        else:
-            input_size = input_size or self.args.get('input_size')
-        if hiddens_hook:
-            hidden_size = hiddens_hook[0]
-        else:
-            hidden_size = hidden_size or self.args.get('hidden_size')
+        if self.inputs_hook is not None:
+            assert len(self.inputs_hook) == 2, "Was expecting inputs_hook to be a tuple."
+            self.input_size = inputs_hook[0]
 
-        corruption_level = corruption_level or self.args.get('corruption_level')
+        if self.hiddens_hook is not None:
+            assert len(self.hiddens_hook) == 2, "was expecting hiddens_hook to be a tuple."
+            self.hidden_size = hiddens_hook[0]
+
 
         # use the helper methods to grab appropriate activation functions from names!
-        hidden_act_name    = hidden_activation or self.args.get('hidden_activation')
-        hidden_activation  = get_activation_function(hidden_act_name)
-        visible_act_name   = visible_activation or self.args.get('visible_activation')
-        visible_activation = get_activation_function(visible_act_name)
+        hidden_activation  = get_activation_function(self.hidden_activation)
+        visible_activation = get_activation_function(self.visible_activation)
 
         # do the same for the cost function
-        cost_func_name = cost_function or self.args.get('cost_function')
-        cost_function  = get_cost_function(cost_func_name)
+        cost_function  = get_cost_function(self.cost_function)
 
         # Now, define the symbolic input to the model (Theano)
         # We use a matrix rather than a vector so that minibatch processing can be done in parallel.
         # Make sure to deal with 'inputs_hook' if it exists!
-        if inputs_hook:
+        if self.inputs_hook is not None:
             # grab the new input variable from the inputs_hook tuple
-            x = inputs_hook[1]
+            x = self.inputs_hook[1]
         else:
             x = T.fmatrix("X")
         self.inputs = [x]
 
         # Build the model's parameters - a weight matrix and two bias vectors
         # Make sure to deal with 'params_hook' if it exists!
-        if params_hook:
+        if self.params_hook:
             # check to see if it contains the three necessary variables
-            assert len(params_hook) == 3, "Not correct number of params to DAE, needs 3!"
-            W, b0, b1 = params_hook
+            assert len(self.params_hook) == 3, "Not correct number of params to DAE, needs 3!"
+            W, b0, b1 = self.params_hook
         else:
-            W  = get_weights_uniform(shape=(input_size, hidden_size), name="W")
-            b0 = get_bias(shape=input_size, name="b0")
-            b1 = get_bias(shape=hidden_size, name="b1")
+            W  = get_weights_uniform(shape=(self.input_size, self.hidden_size), name="W")
+            b0 = get_bias(shape=self.input_size, name="b0")
+            b1 = get_bias(shape=self.hidden_size, name="b1")
         self.params = [W, b0, b1]
 
         # Perform the computation for a denoising autoencoder!
         # first, add noise (corrupt) the input
-        corrupted_input = salt_and_pepper(input=x, corruption_level=corruption_level)
+        corrupted_input = salt_and_pepper(input=x, corruption_level=self.corruption_level)
         # next, compute the hidden layer given the inputs (the encoding function)
         # We don't need to worry about hiddens_hook during training, because we can't
         # compute a cost without having the input!
@@ -106,14 +100,14 @@ class DenoisingAutoencoder(Model):
         # Therefore, create another version of the hiddens and reconstruction without adding the noise.
         # Here is where we would handle hiddens_hook because this is a generative model!
         # For the predict function, it would take in the hiddens instead of the input variable x.
-        if hiddens_hook:
-            self.hiddens = hiddens_hook[1]
+        if self.hiddens_hook is not None:
+            self.hiddens = self.hiddens_hook[1]
         else:
             self.hiddens = hidden_activation(T.dot(x, W) + b1)
         # make the reconstruction (generated) from the hiddens
         self.recon_predict = visible_activation(T.dot(self.hiddens, W.T) + b0)
         # now compile the predict function accordingly - if it used x or hiddens as the input.
-        if hiddens_hook:
+        if self.hiddens_hook is not None:
             self.f_predict = function(inputs=[self.hiddens], outputs=self.recon_predict)
         else:
             self.f_predict = function(inputs=[x], outputs=self.recon_predict)
@@ -133,8 +127,8 @@ class DenoisingAutoencoder(Model):
     def get_train_cost(self):
         return self.train_cost
 
-    def predict(self, input):
-        return self.f_predict(input)
+    def save_args(self, args_file="dae_config.pkl"):
+        super(DenoisingAutoencoder, self).save_args(args_file)
 
 if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
@@ -157,7 +151,7 @@ if __name__ == '__main__':
     dae = DenoisingAutoencoder()
 
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=dae, dataset=mnist)
+    optimizer = AdaDelta(model=dae, dataset=mnist, n_epoch=100)
     # perform training!
     optimizer.train()
 

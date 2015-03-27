@@ -152,7 +152,8 @@ _functions = {
     'categorical_crossentropy': categorical_crossentropy,
     'mse': mse,
     'isotropic_gaussian': isotropic_gaussian_LL,
-    'zero_one': zero_one
+    'zero_one': zero_one,
+    'nll': mse  # this is used as a placeholder - negative log-likelihood will be taken care of by the class.
 }
 
 def get_cost_function(name):

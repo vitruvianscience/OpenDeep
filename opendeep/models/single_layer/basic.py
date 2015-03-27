@@ -16,7 +16,6 @@ import logging
 # third party libraries
 import theano.tensor as T
 # internal references
-from opendeep import function
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights_gaussian, get_weights_uniform, get_bias
 from opendeep.utils.activation import get_activation_function
@@ -37,92 +36,81 @@ class BasicLayer(Model):
         'weights_std': 0.005,  # standard deviation for gaussian weights init
         'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
         'bias_init': 0.0,  # how to initialize the bias parameter
+        'input_size': None,
+        'output_size': None
     }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
                  input_size=None, output_size=None, activation=None, cost=None, cost_args=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None):
-        # init Model to combine the defaults and config dictionaries.
-        super(BasicLayer, self).__init__(config, defaults)
-        # all configuration parameters are now in self.args
+                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
+                 **kwargs):
+        # init Model to combine the defaults and config dictionaries with the initial parameters.
+        super(BasicLayer, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        # all configuration parameters are now in self!
 
         ##################
         # specifications #
         ##################
         # grab info from the inputs_hook, or from parameters
-        if inputs_hook:  # inputs_hook is a tuple of (Shape, Input)
-            assert len(inputs_hook) == 2  # make sure inputs_hook is a tuple
-            input_size = inputs_hook[0] or input_size
-            self.input = inputs_hook[1]
-
+        if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
+            assert len(self.inputs_hook) == 2, 'Expected inputs_hook to be tuple!'  # make sure inputs_hook is a tuple
+            self.input_size = self.inputs_hook[0] or self.input_size
+            self.input = self.inputs_hook[1]
         else:
-            # either grab from the parameter directly or self.args config
-            input_size = input_size or self.args.get('input_size')
             # make the input a symbolic matrix
             self.input = T.fmatrix('X')
 
         # now that we have the input specs, define the output 'target' variable to be used in supervised training!
         self.target = T.fmatrix('Y')
 
-        # either grab the output's desired size from the parameter directly, self.args config, or copy n_in
-        output_size = output_size or self.args.get('output_size') or input_size
+        # either grab the output's desired size from the parameter directly, or copy n_in
+        self.output_size = self.output_size or self.input_size
 
         # other specifications
-        # how to initialize the weights matrix
-        weights_init = weights_init or self.args.get('weights_init')
-        # for gaussian weights initialization
-        mean         = weights_mean or self.args.get('weights_mean')
-        std          = weights_std  or self.args.get('weights_std')
-        # for uniform weights initialization
-        interval     = weights_interval or self.args.get('weights_interval')
-        # for bias vector
-        bias_init = bias_init or self.args.get('bias_init')
-
         # activation function!
-        activation_name = activation or self.args.get('activation')
         # if a string name was given, look up the correct function from our utils.
-        if isinstance(activation_name, basestring):
-            activation_func = get_activation_function(activation_name)
+        if isinstance(self.activation, basestring):
+            activation_func = get_activation_function(self.activation)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
-            assert callable(activation_name)
-            activation_func = activation_name
+            assert callable(self.activation), "Activation function either needs to be a string name or callable!"
+            activation_func = self.activation
 
         # cost function!
-        cost_name = cost or self.args.get('cost')
         # if a string name was given, look up the correct function from our utils.
-        if isinstance(cost_name, basestring):
-            cost_func = get_cost_function(cost_name)
+        if isinstance(self.cost, basestring):
+            cost_func = get_cost_function(self.cost)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
-            assert callable(cost_name)
-            cost_func = cost_name
-        # extra cost function arguments (besides the output and target)
-        cost_args = cost_args or self.args.get('cost_args')
+            assert callable(self.cost), "Cost function either needs to be a string name or callable!"
+            cost_func = self.cost
 
         ####################################################
         # parameters - make sure to deal with params_hook! #
         ####################################################
-        if params_hook:
+        if self.params_hook is not None:
             # make sure the params_hook has W (weights matrix) and b (bias vector)
-            assert len(params_hook) == 2, "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(
-                len(params_hook))
-            W, b = params_hook
+            assert len(self.params_hook) == 2, \
+                "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(len(self.params_hook))
+            W, b = self.params_hook
         else:
             # if we are initializing weights from a gaussian distribution
-            if weights_init.lower() == 'gaussian':
-                W = get_weights_gaussian(shape=(input_size, output_size), mean=mean, std=std, name="W")
+            if self.weights_init.lower() == 'gaussian':
+                W = get_weights_gaussian(
+                    shape=(self.input_size, self.output_size), mean=self.weights_mean, std=self.weights_std, name="W"
+                )
             # if we are initializing weights from a uniform distribution
-            elif self.args.get('weights_init').lower() == 'uniform':
-                W = get_weights_uniform(shape=(input_size, output_size), interval=interval, name="W")
+            elif self.weights_init.lower() == 'uniform':
+                interval = self.weights_interval
+                W = get_weights_uniform(shape=(self.input_size, self.output_size), interval=interval, name="W")
             # otherwise not implemented
             else:
                 log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
-                          str(self.args.get('weights_init')))
+                          str(self.weights_init))
                 raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
-                                          str(self.args.get('weights_init')))
+                                          str(self.weights_init))
 
             # grab the bias vector
-            b = get_bias(shape=output_size, name="b", init_values=bias_init)
+            b = get_bias(shape=self.output_size, name="b", init_values=self.bias_init)
 
         # Finally have the two parameters - weights matrix W and bias vector b. That is all!
         self.params = [W, b]
@@ -136,10 +124,10 @@ class BasicLayer(Model):
         self.output = activation_func(T.dot(self.input, W) + b)
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        self.cost = cost_func(output=self.output, target=self.target, **cost_args)
+        self.cost = cost_func(output=self.output, target=self.target, **self.cost_args)
 
         log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s",
-                  str((input_size, output_size)), str(activation_name))
+                  str((self.input_size, self.output_size)), str(self.activation))
 
     def get_inputs(self):
         return [self.input]
@@ -156,6 +144,9 @@ class BasicLayer(Model):
     def get_params(self):
         return self.params
 
+    def save_args(self, args_file="basiclayer_config.pkl"):
+        super(BasicLayer, self).save_args(args_file)
+
 
 class SoftmaxLayer(BasicLayer):
     """
@@ -169,7 +160,8 @@ class SoftmaxLayer(BasicLayer):
                }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
                  input_size=None, output_size=None, weights_init=None, weights_mean=None, weights_std=None,
-                 weights_interval=None, bias_init=None, cost=None, out_as_probs=None):
+                 weights_interval=None, bias_init=None, cost=None, cost_args=None, activation='softmax',
+                 out_as_probs=None):
         # grab what cost to use
         if cost is None:
             if config is not None:
@@ -182,17 +174,13 @@ class SoftmaxLayer(BasicLayer):
                 out_as_probs = config.get('out_as_probs', defaults.get('out_as_probs'))
             else:
                 out_as_probs = defaults.get('out_as_probs')
-        self.out_as_probs = out_as_probs
-
-        # if we are using negative log-likelihood, make cost None for superclass init
-        if cost == 'nll':
-            cost = None
 
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
                                            activation='softmax',
                                            cost=cost,
+                                           cost_args=cost_args,
                                            config=config,
                                            input_size=input_size,
                                            output_size=output_size,
@@ -200,7 +188,8 @@ class SoftmaxLayer(BasicLayer):
                                            weights_mean=weights_mean,
                                            weights_std=weights_std,
                                            weights_interval=weights_interval,
-                                           bias_init=bias_init)
+                                           bias_init=bias_init,
+                                           out_as_probs=out_as_probs)
         # target_flag shows whether or not we are using the super class's targets, or making our own
         # integer vector for targets. This becomes true if we are using the nll cost, since it requires
         # integer labels.
@@ -213,7 +202,7 @@ class SoftmaxLayer(BasicLayer):
 
         # if cost was nll, set self.cost to negative log likelihood
         # this is what gets returned as the train cost for the BasicLayer superclass.
-        if cost is None:
+        if cost.lower() == 'nll':
             log.debug('Using softmax negative log-likelihood cost!!')
             # nll requires integer targets 'y'.
             self.target_flag = True
@@ -294,3 +283,6 @@ class SoftmaxLayer(BasicLayer):
     def get_argmax_prediction(self):
         # return the argmax y_pred class
         return self.y_pred
+
+    def save_args(self, args_file="softmax_config.pkl"):
+        super(SoftmaxLayer, self).save_args(args_file)
