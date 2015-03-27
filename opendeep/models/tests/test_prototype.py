@@ -14,7 +14,7 @@ from opendeep.data.dataset import TEST
 log = logging.getLogger(__name__)
 
 def run_stacked_dae():
-    stacked_dae = Prototype()
+    # stacked_dae = Prototype()
     # stacked_dae.add(DenoisingAutoencoder(input_size=784, hidden_size=1000))
     # stacked_dae.add(DenoisingAutoencoder(inputs_hook=(1000, stacked_dae[-1].get_hiddens()), hidden_size=1500))
     # stacked_dae.add(DenoisingAutoencoder(inputs_hook=(1500, stacked_dae[-1].get_hiddens()), hidden_size=1500))
@@ -37,18 +37,23 @@ def run_stacked_dae():
     # print '-------'
     # print preds
     # print test_data
+    pass
 
 def run_mlp():
-    # define the model layers
-    layer1 = BasicLayer(input_size=784, output_size=1000, activation='rectifier')
-    layer2 = BasicLayer(inputs_hook=(1000, layer1.get_outputs()), output_size=1000, activation='rectifier')
-    classlayer3 = SoftmaxLayer(inputs_hook=(1000, layer2.get_outputs()), output_size=10, out_as_probs=False)
-    # add the layers to the prototype
-    mlp = Prototype(layers=[layer1, layer2, classlayer3])
+    # # define the model layers
+    # layer1 = BasicLayer(input_size=784, output_size=1000, activation='rectifier')
+    # layer2 = BasicLayer(inputs_hook=(1000, layer1.get_outputs()), output_size=1000, activation='rectifier')
+    # classlayer3 = SoftmaxLayer(inputs_hook=(1000, layer2.get_outputs()), output_size=10, out_as_probs=False)
+    # # add the layers to the prototype
+    # mlp = Prototype(layers=[layer1, layer2, classlayer3])
+    mlp = Prototype()
+    mlp.add(BasicLayer(input_size=784, output_size=1000, activation='rectifier'))
+    mlp.add(BasicLayer(output_size=1500, activation='tanh'))
+    mlp.add(SoftmaxLayer(output_size=10, out_as_probs=False))
 
     mnist = MNIST()
 
-    optimizer = AdaSecant(model=mlp, dataset=mnist, n_epoch=20)
+    optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=10)
     optimizer.train()
 
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)

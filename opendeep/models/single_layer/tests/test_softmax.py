@@ -1,4 +1,3 @@
-import theano.tensor as T
 from opendeep.models.single_layer.basic import SoftmaxLayer
 # import the dataset and optimizer to use
 from opendeep.data.dataset import TEST
@@ -40,7 +39,7 @@ if __name__ == '__main__':
     log.info("Creating softmax with categorical cross-entropy!")
     # grab the MNIST dataset
     mnist = MNIST(one_hot=True)
-    # create your shiny new DAE
+    # create the softmax classifier
     s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy', out_as_probs=True)
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)

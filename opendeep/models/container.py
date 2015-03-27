@@ -72,15 +72,30 @@ class Prototype(Model):
         # TODO: By default, we want single models added sequentially to use the outputs of the previous model as its
         # inputs_hook (if no inputs_hook was defined by the user)
 
-        # # check if model is a single model
-        # if isinstance(model, Model):
-        #     # if there is a previous layer added
-        #     if len(self.models) > 0:
-        #         # check if inputs_hook wasn't already defined by the user (and hiddens_hook) - basically blank slate
-        #         if model.inputs_hook is None and model.hiddens_hook is None:
-        #             previous_out_size = self[-1].output_size
-        #             previous_out      = self[-1].get_outputs
-        #             inputs_hook = (previous_out_size, previous_out)
+        # check if model is a single model (not a list of models)
+        if isinstance(model, Model):
+            # if there is a previous layer added (more than one model in the Prototype)
+            if len(self.models) > 0:
+                # check if inputs_hook (and hiddens_hook) wasn't already defined by the user - basically a blank slate
+                if model.inputs_hook is None and model.hiddens_hook is None:
+                    log.info('Overriding model %s with new inputs_hook!', str(type(model)))
+                    # get the previous layer output size and expression
+                    previous_out_size   = self.models[-1].output_size
+                    previous_out        = self.models[-1].get_outputs()
+                    # create the inputs_hook from the previous outputs
+                    current_inputs_hook = (previous_out_size, previous_out)
+                    # grab the current model class
+                    model_class = type(model)
+                    # make the model a new instance of the current model (same arguments) except new inputs_hook
+                    model_args = model.args
+                    model_args['inputs_hook'] = current_inputs_hook
+                    model_args.pop('hiddens_hook')
+                    new_model = model_class(**model_args)
+                    # clean up allocated variables from old model
+                    for param in model.get_params():
+                        del param
+                    del model
+                    model = new_model
 
         # we want to be able to add multiple layers at a time (in a list), so using extend.
         # make sure the model is a list

@@ -107,6 +107,10 @@ class Model(object):
         # set self.args to be the combination of the defaults and the config dictionaries
         self.args = combine_config_and_defaults(config, defaults)
 
+        # if the args are none, make it a blank dictionary
+        if self.args is None:
+            self.args = {}
+
         # now, go through the inputs_hook, hiddens_hook, params_hook, and output_size to add them to self.args
         # if the variable isn't None, override the argument from config/default. (or add it if it doesn't exist)
         if inputs_hook is not None or 'inputs_hook' not in self.args:

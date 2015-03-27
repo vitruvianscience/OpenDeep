@@ -157,7 +157,8 @@ class SoftmaxLayer(BasicLayer):
                }
     def __init__(self, inputs_hook=None, config=None, defaults=default, params_hook=None,
                  input_size=None, output_size=None, weights_init=None, weights_mean=None, weights_std=None,
-                 weights_interval=None, bias_init=None, cost=None, out_as_probs=None):
+                 weights_interval=None, bias_init=None, cost=None, cost_args=None, activation='softmax',
+                 out_as_probs=None):
         # grab what cost to use
         if cost is None:
             if config is not None:
@@ -171,15 +172,12 @@ class SoftmaxLayer(BasicLayer):
             else:
                 out_as_probs = defaults.get('out_as_probs')
 
-        # if we are using negative log-likelihood, make cost None for superclass init
-        if cost == 'nll':
-            cost = None
-
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
                                            activation='softmax',
                                            cost=cost,
+                                           cost_args=cost_args,
                                            config=config,
                                            input_size=input_size,
                                            output_size=output_size,
@@ -201,7 +199,7 @@ class SoftmaxLayer(BasicLayer):
 
         # if cost was nll, set self.cost to negative log likelihood
         # this is what gets returned as the train cost for the BasicLayer superclass.
-        if cost is None:
+        if cost.lower() == 'nll':
             log.debug('Using softmax negative log-likelihood cost!!')
             # nll requires integer targets 'y'.
             self.target_flag = True
