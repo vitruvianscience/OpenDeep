@@ -89,7 +89,7 @@ in just a few lines of code::
     # standard libraries
     import logging
     # third-party imports
-    import opendeep.log.logger as logger
+    from opendeep.log.logger import config_root_logger
     import opendeep.data.dataset as datasets
     from opendeep.data.standard_datasets.image.mnist import MNIST
     from opendeep.models.single_layer.autoencoder import DenoisingAutoencoder
@@ -98,7 +98,7 @@ in just a few lines of code::
     # grab the logger to record our progress
     log = logging.getLogger(__name__)
     # set up the logging to display to std.out and files.
-    logger.config_root_logger()
+    config_root_logger()
     log.info("Creating a new Denoising Autoencoder")
 
     # create the MNIST dataset
