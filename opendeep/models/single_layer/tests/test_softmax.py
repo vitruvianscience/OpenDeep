@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     # grab the MNIST dataset
     mnist = MNIST()
-    # create your shiny new DAE
+    # create the softmax classifier
     s = SoftmaxLayer(input_size=28 * 28, output_size=10, out_as_probs=False)
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
