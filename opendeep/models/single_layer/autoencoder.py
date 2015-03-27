@@ -21,11 +21,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-import opendeep.log.logger as logger
 from opendeep.models.model import Model
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
-from opendeep.data.standard_datasets.image.mnist import MNIST
-from opendeep.optimization.adadelta import AdaDelta
 
 log = logging.getLogger(__name__)
 
@@ -43,9 +40,15 @@ class DenoisingAutoencoder(GSN):
                 "hidden_activation": 'tanh',
                 "input_sampling": True,
                 "MRG": RNG_MRG.MRG_RandomStreams(1),
+                "weights_init": "uniform",  # how to initialize weights
+                'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
+                'weights_mean': 0,  # mean for gaussian weights init
+                'weights_std': 0.005,  # standard deviation for gaussian weights init
+                'bias_init': 0.0,  # how to initialize the bias parameter
                 # train param
                 "cost_function": 'binary_crossentropy',
                 # noise parameters
+                "noise_decay": 'exponential',  # noise schedule algorithm
                 "noise_annealing": 1.0, #no noise schedule by default
                 "add_noise": True,
                 "noiseless_h1": True,
@@ -56,17 +59,22 @@ class DenoisingAutoencoder(GSN):
                 "is_image": True,
                 "vis_init": False}
 
-    def __init__(self, config=None, defaults=_defaults, inputs_hook=None, hiddens_hook=None, dataset=None):
+    def __init__(self, config=None, defaults=_defaults, inputs_hook=None, hiddens_hook=None, dataset=None,
+                 walkbacks=None, input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
+                 input_sampling=None, MRG=None, weights_init=None, weights_interval=None, weights_mean=None,
+                 weights_std=None, bias_init=None, cost_function=None, noise_decay=None, noise_annealing=None,
+                 add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
+                 output_path=None, is_image=None, vis_init=None):
         # init Model
         # force the model to have one layer - DAE is a specific GSN with a single hidden layer
         defaults['layers'] = 1
         if config:
             config['layers'] = 1
-        super(DenoisingAutoencoder, self).__init__(config=config,
-                                  defaults=defaults,
-                                  inputs_hook=inputs_hook,
-                                  hiddens_hook=hiddens_hook,
-                                  dataset=dataset)
+        # init Model to combine the defaults and config dictionaries with the initial parameters.
+        super(DenoisingAutoencoder, self).__init__(
+            **{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'}
+        )
+        # all configuration parameters are now in self!
 
 class ContractiveAutoencoder(Model):
     '''
@@ -98,35 +106,3 @@ class StackedDAE(Model):
         super(StackedDAE, self).__init__()
         log.error("StackedDAE not implemented yet!")
         raise NotImplementedError("StackedDAE not implemented yet!")
-
-
-###############################################
-# MAIN METHOD FOR RUNNING DEFAULT DAE EXAMPLE #
-###############################################
-def main():
-    ########################################
-    # Initialization things with arguments #
-    ########################################
-    logger.config_root_logger()
-    log.info("Creating a new DAE")
-
-    mnist = MNIST()
-    config = {"output_path": '../../../outputs/dae/mnist/'}
-    dae = DenoisingAutoencoder(config=config, dataset=mnist)
-
-    # # Load initial weights and biases from file
-    # params_to_load = 'dae_params.pkl'
-    # dae.load_params(params_to_load)
-
-    optimizer = AdaDelta(dae, mnist)
-    optimizer.train()
-
-    # Save some reconstruction output images
-    import opendeep.data.dataset as datasets
-    n_examples = 100
-    test_xs = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
-    dae.create_reconstruction_image(test_xs)
-
-
-if __name__ == '__main__':
-    main()

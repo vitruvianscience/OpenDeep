@@ -32,11 +32,6 @@ def run_stacked_dae():
     # optimizer.train()
     #
     # test_data = mnist.getDataByIndices(indices=range(5), subset=TEST)
-    # # use the predict function!
-    # preds = stacked_dae.predict(test_data)
-    # print '-------'
-    # print preds
-    # print test_data
     pass
 
 def run_mlp():
@@ -46,10 +41,12 @@ def run_mlp():
     # classlayer3 = SoftmaxLayer(inputs_hook=(1000, layer2.get_outputs()), output_size=10, out_as_probs=False)
     # # add the layers to the prototype
     # mlp = Prototype(layers=[layer1, layer2, classlayer3])
+
+    # test the new way to automatically fill in inputs_hook for models
     mlp = Prototype()
     mlp.add(BasicLayer(input_size=784, output_size=1000, activation='rectifier'))
     mlp.add(BasicLayer(output_size=1500, activation='tanh'))
-    mlp.add(SoftmaxLayer(output_size=10, out_as_probs=False))
+    mlp.add(SoftmaxLayer(output_size=10))
 
     mnist = MNIST()
 
@@ -58,11 +55,10 @@ def run_mlp():
 
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
     # use the predict function!
-    preds = mlp.predict(test_data)
+    yhat = mlp.predict(test_data)
     print '-------'
-    print preds
-    print mnist.getLabelsByIndices(indices=range(25), subset=TEST)
-
+    print 'Prediction:', yhat
+    print 'Actual:    ', mnist.getLabelsByIndices(indices=range(25), subset=TEST).astype('int32')
 
 
 

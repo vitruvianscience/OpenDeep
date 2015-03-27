@@ -75,17 +75,14 @@ class AlexNet(Model):
     }
     def __init__(self, config=None, defaults=defaults, inputs_hook=None, hiddens_hook=None, params_hook=None,
                  use_data_layer=None, rand_crop=None, batch_size=None):
-        # init Model to combine the defaults and config dictionaries.
-        super(AlexNet, self).__init__(config, defaults)
-        # all configuration parameters are now in self.args
+        # combine everything by passing to Model's init
+        super(AlexNet, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        # configs can now be accessed through self dictionary
 
-        if inputs_hook or hiddens_hook or params_hook:
-            log.critical("Inputs_hook, hiddens_hook, and params_hook not implemented yet for AlexNet!")
-            raise NotImplementedError()
+        if self.inputs_hook or self.hiddens_hook or self.params_hook:
+            log.error("Inputs_hook, hiddens_hook, and params_hook not implemented yet for AlexNet!")
 
-        self.flag_datalayer = use_data_layer or self.args.get('use_data_layer')
-        self.batch_size     = batch_size or self.args.get('batch_size')
-        self.rand_crop      = rand_crop or self.args.get('rand_crop')
+        self.flag_datalayer = self.use_data_layer
 
         ####################
         # Theano variables #
@@ -109,7 +106,7 @@ class AlexNet(Model):
         # whether or not to mirror the input images before feeding them into the network
         if self.flag_datalayer:
             layer_1_input = mirror_images(input=self.x,
-                                          image_shape=(self.batch_size, 3, 256, 256, ),  # bc01 format
+                                          image_shape=(self.batch_size, 3, 256, 256),  # bc01 format
                                           cropsize=227,
                                           rand=self.rand,
                                           flag_rand=self.rand_crop)
@@ -209,7 +206,7 @@ class AlexNet(Model):
                                      params_hook=fc_layer7.get_params(),
                                      config=fc_config)
         # Add this layer's parameters!
-        self.params += fc_layer7_train.get_params()
+        self.params += fc_layer7.get_params()
 
         # apply dropout again for training
         dropout_layer7 = dropout(fc_layer7_train.get_outputs(), corruption_level=0.5)
@@ -253,9 +250,7 @@ class AlexNet(Model):
         log.debug("f_predict...")
         # use the actual argmax from the classification
         self.f_predict = function(inputs=[self.x], outputs=softmax_layer8.get_argmax_prediction())
-        log.debug("f_monitors")
-        self.f_monitors = function(inputs=[self.x, self.y], outputs=self.monitors.values())
-        log.debug("compilation took %s" % make_time_units_string(time.time() - t))
+        log.debug("compilation took %s", make_time_units_string(time.time() - t))
 
     def get_inputs(self):
         """
@@ -285,29 +280,6 @@ class AlexNet(Model):
         """
         return self.output
 
-    def predict(self, input):
-        """
-        This method will return the model's output (run through the function), given an input. In the case that
-        input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
-
-        Try to avoid re-compiling the theano function created for predict - check a hasattr(self, 'f_predict') or
-        something similar first. I recommend creating your theano f_predict in a create_computation_graph method
-        to be called after the class initializes.
-        ------------------
-
-        :param input: Theano/numpy tensor-like object that is the input into the model's computation graph.
-        :type input: tensor
-
-        :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
-        :rtype: tensor
-        """
-        if not hasattr(self, 'f_predict'):
-            log.error(
-                "Missing self.f_predict - make sure you ran self.build_computation_graph()! "
-                "This should have run during initialization....")
-            raise NotImplementedError()
-        return self.f_predict(*input)
-
     def get_train_cost(self):
         """
         This returns the expression that represents the cost given an input, which is used for the Optimizer during
@@ -322,24 +294,15 @@ class AlexNet(Model):
 
     def get_monitors(self):
         """
-        This returns a dictionary of (monitor_name: monitor_function) of variables (monitors) whose values we care
+        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
         about during training. For every monitor returned by this method, the function will be run on the
         train/validation/test dataset and its value will be reported.
-
-        Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
-        exist!
         ------------------
 
         :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
         :rtype: Dictionary
         """
-        if not hasattr(self, 'f_monitors'):
-            log.error(
-                "Missing self.f_monitors - make sure you ran self.build_computation_graph()! "
-                "This should have run during initialization....")
-            raise NotImplementedError()
-        names = ', '.join(self.monitors.keys())
-        return {names: self.f_monitors}
+        return self.monitors
 
     def get_params(self):
         """

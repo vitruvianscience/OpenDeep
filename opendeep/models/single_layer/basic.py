@@ -52,7 +52,7 @@ class BasicLayer(Model):
         ##################
         # grab info from the inputs_hook, or from parameters
         if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
-            assert len(self.inputs_hook) == 2  # make sure inputs_hook is a tuple
+            assert len(self.inputs_hook) == 2, 'Expected inputs_hook to be tuple!'  # make sure inputs_hook is a tuple
             self.input_size = self.inputs_hook[0] or self.input_size
             self.input = self.inputs_hook[1]
         else:
@@ -72,7 +72,7 @@ class BasicLayer(Model):
             activation_func = get_activation_function(self.activation)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
-            assert callable(self.activation)
+            assert callable(self.activation), "Activation function either needs to be a string name or callable!"
             activation_func = self.activation
 
         # cost function!
@@ -81,7 +81,7 @@ class BasicLayer(Model):
             cost_func = get_cost_function(self.cost)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
-            assert callable(self.cost)
+            assert callable(self.cost), "Cost function either needs to be a string name or callable!"
             cost_func = self.cost
 
         ####################################################
@@ -95,9 +95,9 @@ class BasicLayer(Model):
         else:
             # if we are initializing weights from a gaussian distribution
             if self.weights_init.lower() == 'gaussian':
-                mean = self.weights_mean
-                std  = self.weights_std
-                W = get_weights_gaussian(shape=(self.input_size, self.output_size), mean=mean, std=std, name="W")
+                W = get_weights_gaussian(
+                    shape=(self.input_size, self.output_size), mean=self.weights_mean, std=self.weights_std, name="W"
+                )
             # if we are initializing weights from a uniform distribution
             elif self.weights_init.lower() == 'uniform':
                 interval = self.weights_interval
@@ -143,6 +143,9 @@ class BasicLayer(Model):
 
     def get_params(self):
         return self.params
+
+    def save_args(self, args_file="basiclayer_config.pkl"):
+        super(BasicLayer, self).save_args(args_file)
 
 
 class SoftmaxLayer(BasicLayer):
@@ -280,3 +283,6 @@ class SoftmaxLayer(BasicLayer):
     def get_argmax_prediction(self):
         # return the argmax y_pred class
         return self.y_pred
+
+    def save_args(self, args_file="softmax_config.pkl"):
+        super(SoftmaxLayer, self).save_args(args_file)

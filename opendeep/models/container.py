@@ -66,12 +66,12 @@ class Prototype(Model):
         """
         This adds a model to the sequence that the container holds.
 
+        By default, we want single models added sequentially to use the outputs of the previous model as its
+        inputs_hook (if no inputs_hook was defined by the user)
+
         :param model: the model (or list of models) to add
         :type model: opendeep.models.Model
         """
-        # TODO: By default, we want single models added sequentially to use the outputs of the previous model as its
-        # inputs_hook (if no inputs_hook was defined by the user)
-
         # check if model is a single model (not a list of models)
         if isinstance(model, Model):
             # if there is a previous layer added (more than one model in the Prototype)
@@ -89,6 +89,7 @@ class Prototype(Model):
                     # make the model a new instance of the current model (same arguments) except new inputs_hook
                     model_args = model.args
                     model_args['inputs_hook'] = current_inputs_hook
+                    # no need for hiddens_hook - it must be None to be at this point.
                     model_args.pop('hiddens_hook')
                     new_model = model_class(**model_args)
                     # clean up allocated variables from old model

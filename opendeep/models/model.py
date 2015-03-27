@@ -98,8 +98,8 @@ class Model(object):
         :type output_size: int
 
         :param kwargs: this will be all the other left-over parameters passed to the class as a dictionary of
-        {param: value}. We will use the kwargs to finally combine defaults, config, and arguments together into the
-        self.args dict, making each model's parameters accessible by name in self.args
+        {param: value}. We will use the kwargs to finally combine defaults, config, and passed parameters together
+        into the self.args dict, making each model's parameters accessible by name in self.args
         :type kwargs: dict
         """
         log.info("Creating a new instance of %s", str(type(self)))
