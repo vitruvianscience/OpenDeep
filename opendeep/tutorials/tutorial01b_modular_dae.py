@@ -58,7 +58,7 @@ class DenoisingAutoencoder(Model):
         visible_activation = get_activation_function(self.visible_activation)
 
         # do the same for the cost function
-        cost_function  = get_cost_function(self.cost_function)
+        cost_function = get_cost_function(self.cost_function)
 
         # Now, define the symbolic input to the model (Theano)
         # We use a matrix rather than a vector so that minibatch processing can be done in parallel.
@@ -120,6 +120,9 @@ class DenoisingAutoencoder(Model):
 
     def get_outputs(self):
         return self.recon_predict
+
+    def predict(self, input):
+        return self.f_predict(input)
 
     def get_params(self):
         return self.params

@@ -4,7 +4,7 @@ import logging
 from opendeep.log.logger import config_root_logger
 from opendeep.models.container import Prototype
 from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
-from opendeep.tutorials.tutorial01_modular_dae import DenoisingAutoencoder
+from opendeep.tutorials.tutorial01b_modular_dae import DenoisingAutoencoder
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.optimization.adasecant import AdaSecant
 from opendeep.data.standard_datasets.image.mnist import MNIST
