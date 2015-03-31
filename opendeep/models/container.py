@@ -80,8 +80,8 @@ class Prototype(Model):
                 if model.inputs_hook is None and model.hiddens_hook is None:
                     log.info('Overriding model %s with new inputs_hook!', str(type(model)))
                     # get the previous layer output size and expression
-                    previous_out_size   = self.models[-1].output_size
-                    previous_out        = self.models[-1].get_outputs()
+                    previous_out_size = self.models[-1].output_size
+                    previous_out      = self.models[-1].get_outputs()
                     # create the inputs_hook from the previous outputs
                     current_inputs_hook = (previous_out_size, previous_out)
                     # grab the current model class

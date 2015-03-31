@@ -40,7 +40,8 @@ class AdaDelta(SGD):
     """
 
     # Default values to use for some training parameters
-    defaults = {'decay': 0.95}
+    defaults = {'decay': 0.95,
+                'learning_rate': 0.001}
 
     def __init__(self, model, dataset, decay=None, iterator_class=SequentialIterator, config=None, defaults=defaults,
                  rng=None, n_epoch=None, batch_size=None, minimum_batch_size=None, save_frequency=None,

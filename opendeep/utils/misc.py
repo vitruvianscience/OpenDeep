@@ -164,6 +164,9 @@ def set_shared_values(variables, values, borrow=False):
     """
     # use the safe_zip wrapper to ensure the variables and values lists are of the same length
     for variable, value in safe_zip(variables, values):
+        # make sure the variable and value have the same shape
+        assert value.shape == variable.get_value().shape, \
+            "Shape mismatch! Value had shape %s, expected %s" % (str(value.shape), str(variable.get_value().shape))
         try:
             variable.set_value(value, borrow=borrow)
         except AttributeError as e:

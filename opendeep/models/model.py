@@ -129,6 +129,7 @@ class Model(object):
         for arg, val in kwargs.iteritems():
             if (val is not None or str(arg) not in self.args) and str(arg) != 'kwargs':
                 self.args[str(arg)] = val
+            # flatten kwargs if it was passed as a variable
             elif str(arg) == 'kwargs':
                 inner_kwargs = kwargs['kwargs']
                 for key, item in inner_kwargs.iteritems():
@@ -136,7 +137,7 @@ class Model(object):
                         self.args[str(key)] = item
 
         # Magic! Now self.args contains the combination of all the initialization variables, overridden like so:
-        # defaults < config < kwargs (explicits)
+        # defaults < config < kwargs (explicits passed to model's __init__)
 
         # log the arguments.
         log.debug("%s self.args: %s", str(type(self)), str(self.args))
