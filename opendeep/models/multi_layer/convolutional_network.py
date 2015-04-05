@@ -247,9 +247,9 @@ class AlexNet(Model):
         #########################
         log.debug("Compiling functions!")
         t = time.time()
-        log.debug("f_predict...")
+        log.debug("f_run...")
         # use the actual argmax from the classification
-        self.f_predict = function(inputs=[self.x], outputs=softmax_layer8.get_argmax_prediction())
+        self.f_run = function(inputs=[self.x], outputs=softmax_layer8.get_argmax_prediction())
         log.debug("compilation took %s", make_time_units_string(time.time() - t))
 
     def get_inputs(self):
@@ -257,7 +257,7 @@ class AlexNet(Model):
         This should return the input(s) to the model's computation graph. This is called by the Optimizer when creating
         the theano train function on the cost expression returned by get_train_cost().
 
-        This should normally return the same theano variable list that is used in the inputs= argument to the f_predict
+        This should normally return the same theano variable list that is used in the inputs= argument to the f_run
         function.
         ------------------
 
@@ -269,7 +269,7 @@ class AlexNet(Model):
     def get_outputs(self):
         """
         This method will return the model's output variable expression from the computational graph.
-        This should be what is given for the outputs= part of the 'f_predict' function from self.predict().
+        This should be what is given for the outputs= part of the 'f_run' function from self.run().
 
         This will be used for creating hooks to link models together, where these outputs can be strung as the inputs
         or hiddens to another model :)

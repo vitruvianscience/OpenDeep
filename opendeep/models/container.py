@@ -108,9 +108,9 @@ class Prototype(Model):
         This should return the input(s) to the container's computation graph as a list.
         This is called by the Optimizer when creating the theano train function on the cost expressions
         returned by get_train_cost(). Therefore, these are the training function inputs! (Which is different
-        from f_predict inputs if you include the supervised labels)
+        from f_run inputs if you include the supervised labels)
 
-        This should normally return the same theano variable list that is used in the inputs= argument to the f_predict
+        This should normally return the same theano variable list that is used in the inputs= argument to the f_run
         function for unsupervised models, and the [inputs, label] variables for the supervised case.
         ------------------
 
@@ -135,7 +135,7 @@ class Prototype(Model):
     def get_outputs(self):
         """
         This method will return the container's output variable expression from the computational graph.
-        This should be what is given for the outputs= part of the 'f_predict' function from self.predict().
+        This should be what is given for the outputs= part of the 'f_run' function from self.run().
 
         This will be used for creating hooks to link models together,
         where these outputs can be strung as the inputs or hiddens to another model :)
@@ -173,7 +173,7 @@ class Prototype(Model):
         """
         # make sure the input is raised to a list - we are going to splat it!
         input = raise_to_list(input)
-        # first check if we already made an f_predict function
+        # first check if we already made an f_run function
         if hasattr(self, 'f_run'):
             return self.f_run(*input)
         # otherwise, compile it!

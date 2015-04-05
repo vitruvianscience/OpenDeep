@@ -78,17 +78,20 @@ class AdaSecant(Optimizer):
         reduction in the workshop paper).
     """
     # Default values to use for some training parameters
-    defaults = {'decay': 0.95,
-                'gamma_clip': 1.8,
-                'damping': 1e-7,
-                'grad_clip': None,
-                'start_var_reduction': 0,
-                'delta_clip': None,
-                'use_adagrad': False,
-                'skip_nan_inf': False,
-                'upper_bound_tau': 1e8,
-                'lower_bound_tau': 1.5,
-                'use_corrected_grad': True}
+    defaults = {
+        'decay': 0.95,
+        'gamma_clip': 1.8,
+        'damping': 1e-7,
+        'grad_clip': None,
+        'start_var_reduction': 0,
+        'delta_clip': None,
+        'use_adagrad': False,
+        'skip_nan_inf': False,
+        'upper_bound_tau': 1e8,
+        'lower_bound_tau': 1.5,
+        'use_corrected_grad': True,
+        'learning_rate': 1e-6  # epsilon
+    }
 
     def __init__(self, model, dataset,
                  config=None, defaults=defaults,

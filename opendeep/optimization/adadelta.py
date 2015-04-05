@@ -39,8 +39,9 @@ class AdaDelta(Optimizer):
     """
 
     # Default values to use for some training parameters
-    defaults = {'decay': 0.95,
-                'learning_rate': 0.001}
+    defaults = {'decay': 0.95,  # rho
+                'learning_rate': 1e-6  # epsilon
+                }
 
     def __init__(self, model, dataset,
                  config=None, defaults=defaults,

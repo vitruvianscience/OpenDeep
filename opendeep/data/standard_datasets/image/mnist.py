@@ -106,6 +106,7 @@ class MNIST(FileDataset):
         else:
             return None, None
 
+
     def hasSubset(self, subset):
         '''
         :param subset: integer

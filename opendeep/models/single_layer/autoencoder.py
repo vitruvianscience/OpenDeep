@@ -57,7 +57,9 @@ class DenoisingAutoencoder(GSN):
                 # data parameters
                 "output_path": 'outputs/dae/',
                 "is_image": True,
-                "vis_init": False}
+                "vis_init": False,
+                'outdir': 'outputs/dae/'  # the output directory for this model's outputs
+                }
 
     def __init__(self, config=None, defaults=_defaults, inputs_hook=None, hiddens_hook=None, dataset=None,
                  walkbacks=None, input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,

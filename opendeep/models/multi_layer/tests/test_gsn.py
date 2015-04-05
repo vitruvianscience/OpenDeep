@@ -8,6 +8,7 @@ from opendeep.log.logger import config_root_logger
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.optimization.stochastic_gradient_descent import SGD
+from opendeep.optimization.adadelta import AdaDelta
 from opendeep.data.iterators.sequential import SequentialIterator
 from opendeep.utils.image import tile_raster_images
 
@@ -40,14 +41,16 @@ def main():
     log.info("Creating a new GSN")
 
     mnist = MNIST()
-    config = {"output_path": '../../../../outputs/gsn/mnist/'}
-    gsn = GSN(config=config, dataset=mnist)
+    # config = {"outdir": '../../../../outputs/gsn/mnist/'}
+    config = {"outdir": '../../single_layer/tests/outputs/gsn/'}
+    gsn = GSN(config=config, dataset=mnist, layers=3, walkbacks=5, hidden_size=1000, input_size=28*28)
 
     # Load initial weights and biases from file
     # params_to_load = '../../../outputs/gsn/mnist/trained_epoch_395.pkl'
     # gsn.load_params(params_to_load)
 
-    optimizer = SGD(model=gsn, dataset=mnist, iterator_class=SequentialIterator, config=_train_args)
+    # optimizer = SGD(model=gsn, dataset=mnist, iterator_class=SequentialIterator, config=_train_args)
+    optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
     optimizer.train()
 
     # Save some reconstruction output images
@@ -55,7 +58,7 @@ def main():
     n_examples = 100
     xs_test = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
     noisy_xs_test = gsn.f_noise(mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST))
-    reconstructed = gsn.predict(noisy_xs_test)
+    reconstructed = gsn.run(noisy_xs_test)
     # Concatenate stuff
     stacked = numpy.vstack(
         [numpy.vstack([xs_test[i * 10: (i + 1) * 10],

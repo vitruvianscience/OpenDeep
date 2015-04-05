@@ -34,6 +34,7 @@ try:
 except ImportError:
     import pickle
 
+
 log = logging.getLogger(__name__)
 
 OUTDIR_DEFAULT = 'outputs/'
@@ -179,6 +180,7 @@ class Model(object):
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
+
 
     ######################################################################
     # Methods for the symbolic inputs, hiddens, and outputs of the model #

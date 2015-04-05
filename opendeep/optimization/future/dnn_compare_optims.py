@@ -221,12 +221,12 @@ class NeuralNet(object):
         batch_x = T.fmatrix('batch_x')
         batch_y = T.ivector('batch_y')
         learning_rate = T.fscalar('lr')  # learning rate to use
-        # compute the gradients with respect to the model parameters
+        # run the gradients with respect to the model parameters
         # using mean_cost so that the learning rate is not too dependent
         # on the batch size
         gparams = T.grad(self.mean_cost, self.params)
 
-        # compute list of weights updates
+        # run list of weights updates
         updates = OrderedDict()
         for param, gparam in zip(self.params, gparams):
             updates[param] = param - gparam * learning_rate
@@ -245,7 +245,7 @@ class NeuralNet(object):
         batch_y = T.ivector('batch_y')
         ind_minibatch = T.iscalar('ind_minibatch')
         n_seen = T.fscalar('n_seen')
-        # compute the gradients with respect to the model parameters
+        # run the gradients with respect to the model parameters
         cost = self.cost
         gparams = T.grad(cost, self.params)
         #sparams = T.grad(cost, self.pre_activations)  # SAG specific
@@ -280,10 +280,10 @@ class NeuralNet(object):
         batch_x = T.fmatrix('batch_x')
         batch_y = T.ivector('batch_y')
         learning_rate = T.fscalar('lr')  # learning rate to use
-        # compute the gradients with respect to the model parameters
+        # run the gradients with respect to the model parameters
         gparams = T.grad(self.cost, self.params)
 
-        # compute list of weights updates
+        # run list of weights updates
         updates = OrderedDict()
         for accugrad, param, gparam in zip(self._accugrads, self.params, gparams):
             # c.f. Algorithm 1 in the Adadelta paper (Zeiler 2012)
@@ -307,10 +307,10 @@ class NeuralNet(object):
         """
         batch_x = T.fmatrix('batch_x')
         batch_y = T.ivector('batch_y')
-        # compute the gradients with respect to the model parameters
+        # run the gradients with respect to the model parameters
         gparams = T.grad(self.cost, self.params)
 
-        # compute list of weights updates
+        # run list of weights updates
         updates = OrderedDict()
         for accugrad, accudelta, param, gparam in zip(self._accugrads,
                 self._accudeltas, self.params, gparams):

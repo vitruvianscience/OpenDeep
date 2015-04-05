@@ -24,8 +24,8 @@ if __name__ == '__main__':
     optimizer.train()
     # test it on some images!
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
-    # use the predict function!
-    preds = s.predict(test_data)
+    # use the run function!
+    preds = s.run(test_data)
     print '-------'
     print preds
     print mnist.getLabelsByIndices(indices=range(25), subset=TEST)
@@ -47,8 +47,8 @@ if __name__ == '__main__':
     optimizer.train()
     # test it on some images!
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
-    # use the predict function!
-    preds = s.predict(test_data)
+    # use the run function!
+    preds = s.run(test_data)
     print '-------'
     print preds
     print mnist.getLabelsByIndices(indices=range(25), subset=TEST)

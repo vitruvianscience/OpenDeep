@@ -54,8 +54,8 @@ def run_mlp():
     optimizer.train()
 
     test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
-    # use the predict function!
-    yhat = mlp.predict(test_data)
+    # use the run function!
+    yhat = mlp.run(test_data)
     print '-------'
     print 'Prediction:', yhat
     print 'Actual:    ', mnist.getLabelsByIndices(indices=range(25), subset=TEST).astype('int32')

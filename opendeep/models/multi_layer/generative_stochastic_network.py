@@ -39,17 +39,15 @@ import numpy.random as rng
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
-import theano.compat.six as six
 import PIL
 # internal references
 from opendeep import cast32, function, sharedX
 from opendeep.models.model import Model
-from opendeep.utils import file_ops
 from opendeep.utils.decay import get_decay_function
-from opendeep.utils.activation import get_activation_function
+from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils.cost import get_cost_function
 from opendeep.utils.misc import closest_to_square_factors, make_time_units_string
-from opendeep.utils.nnet import get_weights_uniform, get_weights_gaussian, get_bias
+from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import salt_and_pepper, add_gaussian
 from opendeep.utils.image import tile_raster_images
 
@@ -65,7 +63,7 @@ _defaults = {# gsn parameters
             "visible_activation": 'sigmoid',  # activation for visible layer - make appropriate for input data type.
             "hidden_activation": 'tanh',  # activation for hidden layers
             "input_sampling": True,  # whether to sample at each walkback step - makes it like Gibbs sampling.
-            "MRG": RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
+            "mrg": RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
             "weights_init": "uniform",  # how to initialize weights
             'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
             'weights_mean': 0,  # mean for gaussian weights init
@@ -81,7 +79,7 @@ _defaults = {# gsn parameters
             "hidden_add_noise_sigma": 2,  # sigma value for adding the gaussian hidden layer noise
             "input_salt_and_pepper": 0.4,  # the salt and pepper value for inputs corruption
             # data parameters
-            "output_path": 'outputs/gsn/',  # base directory to output various files
+            "outdir": 'outputs/gsn/',  # base directory to output various files
             "is_image": True,  # whether the input should be treated as an image
             "vis_init": False}
 
@@ -89,41 +87,37 @@ class GSN(Model):
     '''
     Class for creating a new Generative Stochastic Network (GSN)
     '''
-    def __init__(self, config=None, defaults=_defaults, inputs_hook=None, hiddens_hook=None, dataset=None,
-                 layers=None, walkbacks=None, input_size=None, hidden_size=None, visible_activation=None,
-                 hidden_activation=None, input_sampling=None, MRG=None, weights_init=None, weights_interval=None,
-                 weights_mean=None, weights_std=None, bias_init=None, cost_function=None, noise_decay=None,
-                 noise_annealing=None, add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None,
-                 input_salt_and_pepper=None, output_path=None, is_image=None, vis_init=None):
-        # set up base path for the outputs of the model during training, etc.
-        self.outdir = output_path
-        if not self.outdir and config:
-            self.outdir = config.get('output_path', defaults.get('output_path'))
-        else:
-            self.outdir = defaults.get('output_path')
-        if self.outdir[-1] != '/':
-            self.outdir = self.outdir+'/'
-        file_ops.mkdir_p(self.outdir)
-
-        # combine everything by passing to Model's init
-        super(GSN, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+    def __init__(self, config=None, defaults=_defaults,
+                 inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 input_size=None, hidden_size=None,
+                 layers=None, walkbacks=None,
+                 visible_activation=None,
+                 hidden_activation=None,
+                 input_sampling=None, mrg=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 bias_init=None,
+                 cost_function=None,
+                 noise_decay=None, noise_annealing=None,
+                 add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
+                 outdir=None,
+                 is_image=None,
+                 vis_init=None):
+        # init Model to combine the defaults and config dictionaries with the initial parameters.
+        initial_parameters = locals()
+        initial_parameters.pop('self')
+        super(GSN, self).__init__(**initial_parameters)
         # configs can now be accessed through self! huzzah!
 
         # variables from the dataset that are used for initialization and image reconstruction
         if self.inputs_hook is None:
-            if self.dataset is None:
-                # if no inputs_hook or dataset given, look for the dimensionality of the input from the
-                # 'input_size' parameter.
-                self.N_input = self.input_size
-                if self.input_size is None:
-                    log.critical("Please either specify input_size in the arguments or provide an example "
-                                 "dataset object for input dimensionality.")
-                    raise AssertionError("Please either specify input_size in the arguments or provide an example "
-                                         "dataset object for input dimensionality.")
-            else:
-                # otherwise grab shape from dataset example that was given
-                self.N_input = self.dataset.get_example_shape()
+            # if no inputs_hook given, look for the dimensionality of the input from the 'input_size' parameter.
+            self.N_input = self.input_size
+            if self.input_size is None:
+                log.critical("Please specify input_size.")
+                raise AssertionError("Please specify input_size.")
         else:
+            assert len(self.inputs_hook) == 2, "inputs_hook was expected (shape, input) tuple. " \
+                                               "Found length %s instead" % str(len(self.inputs_hook))
             # otherwise grab shape from inputs_hook that was given
             self.N_input = self.inputs_hook[0]
 
@@ -133,7 +127,7 @@ class GSN(Model):
             (_h, _w) = closest_to_square_factors(self.N_input)
             self.image_width  = self.args.get('width', _w)
             self.image_height = self.args.get('height', _h)
-
+        
         ##########################
         # Network specifications #
         ##########################
@@ -161,40 +155,17 @@ class GSN(Model):
         # Activation functions! #
         #########################
         # hidden unit activation
-        if callable(self.hidden_activation):
-            log.debug('Using specified activation for hiddens')
-        elif isinstance(self.args.get('hidden_activation'), six.string_types):
-            self.hidden_activation = get_activation_function(self.hidden_activation)
-            log.debug('Using %s activation for hiddens', self.hidden_activation)
-        else:
-            log.critical('Missing a hidden activation function!')
-            raise NotImplementedError('Missing a hidden activation function!')
-
+        self.hidden_activation = get_activation_function(self.hidden_activation)
         # Visible layer activation
-        if callable(self.visible_activation):
-            log.debug('Using specified activation for visible layer')
-        elif isinstance(self.visible_activation, six.string_types):
-            self.visible_activation = get_activation_function(self.visible_activation)
-            log.debug('Using %s activation for visible layer', self.visible_activation)
-        else:
-            log.critical('Missing a visible activation function!')
-            raise NotImplementedError('Missing a visible activation function!')
-
+        self.visible_activation = get_activation_function(self.visible_activation)
         # Cost function
-        if callable(self.cost_function):
-            log.debug('Using specified cost function')
-        elif isinstance(self.args.get('cost_function'), six.string_types):
-            self.cost_function = get_cost_function(self.cost_function)
-            log.debug('Using %s cost function', self.cost_function)
-        else:
-            log.critical('Missing a cost function!')
-            raise NotImplementedError('Missing a cost function!')
+        self.cost_function = get_cost_function(self.cost_function)
 
         ############################
         # Theano variables and RNG #
         ############################
         if self.inputs_hook is None:
-            self.X = T.fmatrix('X')
+            self.X = T.matrix('X')
         else:
             # inputs_hook is a (shape, input) tuple
             self.X = self.inputs_hook[1]
@@ -206,24 +177,15 @@ class GSN(Model):
         # Parameters! #
         ###############
         # initialize a list of weights and biases based on layer_sizes for the GSN
-        if self.weights_init.lower() == 'uniform':
-            self.weights_list = [get_weights_uniform(shape=(self.layer_sizes[i], self.layer_sizes[i + 1]),
-                                                     name="W_{0!s}_{1!s}".format(i, i + 1),
-                                                     interval=self.weights_interval)
-                                 for i in range(self.layers)]
-        # if the weights should be gaussian
-        elif self.weights_init.lower() == 'gaussian':
-            self.weights_list = [get_weights_gaussian(shape=(self.layer_sizes[i], self.layer_sizes[i + 1]),
-                                                      name="W_{0!s}_{1!s}".format(i, i + 1),
-                                                      mean=self.weights_mean,
-                                                      std=self.weights_std)
-                                 for i in range(self.layers)]
-        # otherwise not implemented
-        else:
-            log.error("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
-                      str(self.weights_init))
-            raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian or uniform" %
-                                      str(self.weights_init))
+        self.weights_list = [get_weights(weights_init=self.weights_init,
+                                         shape=(self.layer_sizes[i], self.layer_sizes[i+1]),
+                                         name="W_{0!s}_{1!s}".format(i, i+1),
+                                         # if gaussian
+                                         mean=self.weights_mean,
+                                         std=self.weights_std,
+                                         # if uniform
+                                         interval=self.weights_interval)
+                             for i in range(self.layers)]
 
         # initialize each layer bias to 0's.
         self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
@@ -236,80 +198,39 @@ class GSN(Model):
         log.debug("gsn params: %s", str(self.params))
 
         # using the properties, build the computational graph
-        self.build_computation_graph()
-
+        self.cost, self.monitors, self.output, self.hiddens = self.build_computation_graph()
 
     def build_computation_graph(self):
         #################
         # Build the GSN #
         #################
         log.debug("Building GSN graphs...")
+
+        # if there was a hiddens_hook, unpack the hidden layers in the tensor
+        if self.hiddens_hook is not None:
+            hiddens = self.unpack_hiddens(self.hiddens_hook[1])
+            hiddens_flag = True
+        else:
+            hiddens_flag = False
+
         # GSN for training - with noise
         add_noise = True
-        # if there is no hiddens_hook,
-        if self.hiddens_hook is None:
-            p_X_chain, _ = GSN.build_gsn(self.X,
-                                         self.weights_list,
-                                         self.bias_list,
-                                         add_noise,
-                                         self.noiseless_h1,
-                                         self.hidden_add_noise_sigma,
-                                         self.input_salt_and_pepper,
-                                         self.input_sampling,
-                                         self.MRG,
-                                         self.visible_activation,
-                                         self.hidden_activation,
-                                         self.walkbacks)
+        # if there is no hiddens_hook, build the GSN normally using the input X
+        if not hiddens_flag:
+            p_X_chain, _ = self.build_gsn(add_noise=add_noise)
 
         # if there is a hiddens_hook, we want to change the order layers are updated and make this purely
         # generative from the hiddens
         else:
-            p_X_chain, _, _, _ = GSN.build_gsn_given_hiddens(self.X,
-                                                             self.unpack_hiddens(self.hiddens_hook[1]),
-                                                             self.weights_list,
-                                                             self.bias_list,
-                                                             add_noise,
-                                                             self.noiseless_h1,
-                                                             self.hidden_add_noise_sigma,
-                                                             self.input_salt_and_pepper,
-                                                             self.input_sampling,
-                                                             self.MRG,
-                                                             self.visible_activation,
-                                                             self.hidden_activation,
-                                                             self.walkbacks,
-                                                             self.cost_function)
+            p_X_chain, _,  = self.build_gsn(hiddens=hiddens, add_noise=add_noise, reverse=True)
 
-        # GSN for prediction - no noise
+        # GSN for prediction - same as above but no noise
         add_noise = False
         # deal with hiddens_hook exactly as above.
-        if self.hiddens_hook is None:
-            p_X_chain_recon, recon_hiddens = GSN.build_gsn(self.X,
-                                                           self.weights_list,
-                                                           self.bias_list,
-                                                           add_noise,
-                                                           self.noiseless_h1,
-                                                           self.hidden_add_noise_sigma,
-                                                           self.input_salt_and_pepper,
-                                                           self.input_sampling,
-                                                           self.MRG,
-                                                           self.visible_activation,
-                                                           self.hidden_activation,
-                                                           self.walkbacks)
+        if not hiddens_flag:
+            p_X_chain_recon, recon_hiddens = self.build_gsn(add_noise=add_noise)
         else:
-            p_X_chain_recon, recon_hiddens, _, _ = GSN.build_gsn_given_hiddens(self.X,
-                                                                               self.unpack_hiddens(self.hiddens_hook[1]),
-                                                                               self.weights_list,
-                                                                               self.bias_list,
-                                                                               add_noise,
-                                                                               self.noiseless_h1,
-                                                                               self.hidden_add_noise_sigma,
-                                                                               self.input_salt_and_pepper,
-                                                                               self.input_sampling,
-                                                                               self.MRG,
-                                                                               self.visible_activation,
-                                                                               self.hidden_activation,
-                                                                               self.walkbacks,
-                                                                               self.cost_function)
+            p_X_chain_recon, recon_hiddens = self.build_gsn(hiddens=hiddens, add_noise=add_noise, reverse=True)
 
         ####################
         # Costs and output #
@@ -318,7 +239,7 @@ class GSN(Model):
         # use the noisy ones for training cost
         costs          = [self.cost_function(rX, self.X) for rX in p_X_chain]
         self.show_cost = costs[-1]  # for a monitor to show progress
-        self.cost      = numpy.sum(costs)  # THIS IS THE TRAINING COST - RECONSTRUCTION OF OUTPUT FROM NOISY GRAPH
+        cost           = numpy.sum(costs)  # THIS IS THE TRAINING COST - RECONSTRUCTION OF OUTPUT FROM NOISY GRAPH
 
         # use the non-noisy graph for prediction
         gsn_costs_recon = [self.cost_function(rX, self.X) for rX in p_X_chain_recon]
@@ -326,14 +247,14 @@ class GSN(Model):
         self.monitor    = gsn_costs_recon[-1]
         # this should be considered the main output of the computation, the sample after the
         # last walkback from the non-noisy graph.
-        self.output     = p_X_chain_recon[-1]
+        output     = p_X_chain_recon[-1]
         # these should be considered the model's hidden representation - the hidden representation after
         # the last walkback from the non-noisy graph.
-        self.hiddens    = recon_hiddens
+        hiddens    = recon_hiddens
 
 
-        self.monitors = OrderedDict([('noisy_recon_cost', self.show_cost), ('recon_cost', self.monitor)])
-
+        monitors = OrderedDict([('noisy_recon_cost', self.show_cost), ('recon_cost', self.monitor)])
+        
 
         ############
         # Sampling #
@@ -341,12 +262,12 @@ class GSN(Model):
         # the input to the sampling function
         X_sample = T.fmatrix("X_sampling")
         self.network_state_input = [X_sample] + [T.fmatrix("H_sampling_"+str(i+1)) for i in range(self.layers)]
-
+       
         # "Output" state of the network (noisy)
         # initialized with input, then we apply updates
         self.network_state_output = [X_sample] + self.network_state_input[1:]
         visible_pX_chain = []
-
+    
         # ONE update
         log.debug("Performing one walkback in network state sampling.")
         GSN.update_layers(self.network_state_output,
@@ -358,36 +279,36 @@ class GSN(Model):
                           self.hidden_add_noise_sigma,
                           self.input_salt_and_pepper,
                           self.input_sampling,
-                          self.MRG,
+                          self.mrg,
                           self.visible_activation,
                           self.hidden_activation)
 
         #####################################################
-        #     Create the predict and monitor functions      #
+        #     Create the run and monitor functions      #
         #####################################################
         log.debug("Compiling functions...")
         t = time.time()
 
         # doesn't make sense to have this if there is a hiddens_hook
-        if self.hiddens_hook is None:
+        if not hiddens_flag:
             # THIS IS THE MAIN PREDICT FUNCTION - takes in a real matrix and produces the output from the non-noisy
             # computation graph
-            log.debug("f_predict...")
-            self.f_predict = function(inputs  = [self.X],
-                                      outputs = self.output,
-                                      name    = 'gsn_f_predict')
+            log.debug("f_run...")
+            self.f_run = function(inputs  = [self.X],
+                                  outputs = output,
+                                  name    = 'gsn_f_run')
 
         # this is a helper function - it corrupts inputs when testing the non-noisy graph (aka before feeding the
-        # input to f_predict)
+        # input to f_run)
         log.debug("f_noise...")
         self.f_noise = function(inputs  = [self.X],
-                                outputs = salt_and_pepper(self.X, self.input_salt_and_pepper, self.MRG),
+                                outputs = salt_and_pepper(self.X, self.input_salt_and_pepper, self.mrg),
                                 name    = 'gsn_f_noise')
 
         # the sampling function, for creating lots of samples from the computational graph. (mostly for log-likelihood
         # or visualization)
         log.debug("f_sample...")
-        if self.layers == 1:
+        if self.layers == 1: 
             self.f_sample = function(inputs  = [X_sample],
                                      outputs = visible_pX_chain[-1],
                                      name    = 'gsn_f_sample_single_layer')
@@ -401,112 +322,134 @@ class GSN(Model):
 
         log.debug("GSN compiling done. Took %s", make_time_units_string(time.time() - t))
 
-    def get_inputs(self):
-        """
-        This should return the input(s) to the model's computation graph. This is called by the Optimizer when creating
-        the theano train function on the cost expression returned by get_train_cost().
+        return cost, monitors, output, hiddens
 
-        This should normally return the same theano variable list that is used in the inputs= argument to the f_predict
-        function.
-        ------------------
+    ##############################
+    # Computation helper methods #
+    ##############################
+    def build_gsn(self, add_noise, hiddens=None, reverse=False):
+        p_X_chain = []
+        # Whether or not to corrupt the visible input X
+        if add_noise:
+            X_init = salt_and_pepper(self.X, self.input_salt_and_pepper, self.mrg)
+        else:
+            X_init = self.X
 
-        :return: Theano variables representing the input(s) to the training function.
-        :rtype: List(theano variable)
-        """
-        return [self.X]
+        # if no input hiddens were provided, initialize with zeros
+        if hiddens is None:
+            # init hiddens with zeros
+            hiddens = [X_init]
+            for w in self.weights_list:
+                hiddens.append(T.zeros_like(T.dot(hiddens[-1], w)))
 
-    def get_hiddens(self):
-        """
-        This method will return the model's hidden representation expression (if applicable) from the
-        computational graph.
+        # The layer update scheme
+        log.info("Building the GSN graph : %s updates", str(self.walkbacks))
+        for i in range(self.walkbacks):
+            log.debug("GSN Walkback %s/%s", str(i + 1), str(self.walkbacks))
+            self.update_layers(hiddens, p_X_chain, add_noise, reverse=reverse)
+        return p_X_chain, hiddens
 
-        This will also be used for creating hooks to link models together, where these hidden variables can be strung
-        as the inputs or hiddens to another model :)
-        ------------------
+    def update_layers(self, hiddens, p_X_chain, add_noise, reverse):
+        # in the normal update order, first update odd layers, then even
+        if not reverse:
+            # One update over the odd layers + one update over the even layers
+            log.debug('odd layer updates')
+            self.update_odd_layers(hiddens=hiddens, add_noise=add_noise)
 
-        :return: theano expression of the hidden representation from this model's computation
-        :rtype: theano tensor (expression)
-        """
-        if not hasattr(self, 'hiddens'):
-            log.error("Missing self.hiddens - make sure you ran self.build_computation_graph()! "
-                      "This should have run during initialization....")
-            raise NotImplementedError()
-        return self.pack_hiddens(self.hiddens)
+            log.debug('even layer updates')
+            self.update_even_layers(hiddens=hiddens, p_X_chain=p_X_chain, add_noise=add_noise)
 
-    def get_outputs(self):
-        """
-        This method will return the model's output variable expression from the computational graph. This should be
-        what is given for the outputs= part of the 'f_predict' function from self.predict().
+            log.debug('done full update.')
+        # otherwise, update even first, then odd (starts from hiddens, ignores starting visible layer)
+        else:
+            log.debug('even layer updates')
+            self.update_even_layers(hiddens=hiddens, p_X_chain=p_X_chain, add_noise=add_noise)
 
-        This will be used for creating hooks to link models together, where these outputs can be strung as the inputs
-        or hiddens to another model :)
-        ------------------
+            log.debug('odd layer updates')
+            self.update_odd_layers(hiddens=hiddens, add_noise=add_noise)
 
-        :return: theano expression of the outputs from this model's computation
-        :rtype: theano tensor (expression)
-        """
-        if not hasattr(self, 'output'):
-            log.error(
-                "Missing self.output - make sure you ran self.build_computation_graph()! "
-                "This should have run during initialization....")
-            raise NotImplementedError()
-        return self.output
+            log.debug('done full update.')
 
-    def get_train_cost(self):
-        """
-        This returns the expression that represents the cost given an input, which is used for the Optimizer during
-        training. The reason we can't just compile a f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the Optimizer object.
-        ------------------
+    def update_odd_layers(self, hiddens, add_noise):
+        # Odd layer update function
+        # just a loop over the odd layers
+        for i in range(1, len(hiddens), 2):
+            log.debug('updating layer %s', str(i))
+            self.update_single_layer(hiddens=hiddens, p_X_chain=None, layer_idx=i, add_noise=add_noise)
 
-        :return: theano expression of the model's training cost, from which parameter gradients will be computed.
-        :rtype: theano tensor
-        """
-        return self.cost
+    def update_even_layers(self, hiddens, p_X_chain, add_noise):
+        # Even layer update
+        # p_X_chain is given to append the p(X|...) at each full update (one update = odd update + even update)
+        for i in range(0, len(hiddens), 2):
+            log.debug('updating layer %s', str(i))
+            self.update_single_layer(hiddens=hiddens, p_X_chain=p_X_chain, layer_idx=i, add_noise=add_noise)
 
-    def get_monitors(self):
-        """
-        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
-        about during training. For every monitor returned by this method, the function will be run on the
-        train/validation/test dataset and its value will be reported.
-        ------------------
+    def update_single_layer(self, hiddens, p_X_chain, layer_idx, add_noise):
+        # Compute the dot product, whatever layer
+        # If the visible layer X
+        if layer_idx == 0:
+            log.debug('using ' + str(self.weights_list[layer_idx]) + '.T')
+            hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + self.bias_list[layer_idx]
+        # If the top layer
+        elif layer_idx == len(hiddens) - 1:
+            log.debug('using ' + str(self.weights_list[layer_idx-1]))
+            hiddens[layer_idx] = T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + self.bias_list[layer_idx]
+        # Otherwise in-between layers
+        else:
+            log.debug("using %s and %s.T", str(self.weights_list[layer_idx-1]), str(self.weights_list[layer_idx]))
+            # next layer        :   hiddens[layer_idx+1], assigned weights : W_i
+            # previous layer    :   hiddens[layer_idx-1], assigned weights : W_(layer_idx-1)
+            hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + \
+                         T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + \
+                         self.bias_list[layer_idx]
 
-        :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
-        :rtype: Dictionary
-        """
-        return self.monitors
+        # Add pre-activation noise if NOT input layer
+        if layer_idx == 1 and self.noiseless_h1:
+            log.debug('>>NO noise in first hidden layer')
+            add_noise = False
 
-    def get_decay_params(self):
-        """
-        If the model requires any of its internal parameters to decay over time during training, return the list
-        of the DecayFunction objects here so the Optimizer can decay them each epoch. An example is the noise
-        amount in a Generative Stochastic Network - we decay the noise over time when implementing noise scheduling.
+        # pre activation noise
+        if layer_idx != 0 and add_noise:
+            log.debug('Adding pre-activation gaussian noise for layer %s', str(layer_idx))
+            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], std=self.hidden_add_noise_sigma, mrg=self.mrg)
 
-        Most models don't need to decay parameters, so we return an empty list by default. Please override this method
-        if you need to decay some variables.
-        ------------------
+        # ACTIVATION!
+        if layer_idx == 0:
+            log.debug('Activation for visible layer')
+            hiddens[layer_idx] = self.visible_activation(hiddens[layer_idx])
+        else:
+            log.debug('Hidden units activation for layer %s', str(layer_idx))
+            hiddens[layer_idx] = self.hidden_activation(hiddens[layer_idx])
 
-        :return: List of opendeep.utils.decay_functions.DecayFunction objects of the parameters to decay for this model.
-        :rtype: List
-        """
-        # noise scheduling
-        noise_schedule = get_decay_function(self.noise_decay,
-                                            self.input_salt_and_pepper,
-                                            self.args.get('input_salt_and_pepper'),
-                                            self.noise_annealing)
-        return [noise_schedule]
+        # post activation noise
+        # why is there post activation noise? Because there is already pre-activation noise,
+        # this just doubles the amount of noise between each activation of the hiddens.
+        if layer_idx != 0 and add_noise:
+            log.debug('Adding post-activation gaussian noise for layer %s', str(layer_idx))
+            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], std=self.hidden_add_noise_sigma, mrg=self.mrg)
 
-    def get_params(self):
-        """
-        This returns the list of theano shared variables that will be trained by the Optimizer.
-        These parameters are used in the gradient.
-        ------------------
+        # build the reconstruction chain if updating the visible layer X
+        if layer_idx == 0:
+            # if input layer -> append p(X|H...)
+            p_X_chain.append(hiddens[layer_idx])
 
-        :return: flattened list of theano shared variables to be trained
-        :rtype: List(shared_variables)
-        """
-        return self.params
+            # sample from p(X|H...) - SAMPLING NEEDS TO BE CORRECT FOR INPUT TYPES
+            # I.E. FOR BINARY MNIST SAMPLING IS BINOMIAL. real-valued inputs should be gaussian
+            if self.input_sampling:
+                if not is_binary(self.visible_activation):
+                    # TODO: implement non-binary sampling (gaussian)
+                    log.error("Non-binary visible activation sampling not yet supported.")
+                    raise NotImplementedError("Non-binary visible activation sampling not yet supported.")
+                log.debug('Sampling from input')
+                sampled = self.mrg.binomial(p=hiddens[layer_idx], size=hiddens[layer_idx].shape, dtype='float32')
+            else:
+                log.debug('>>NO input sampling')
+                sampled = hiddens[layer_idx]
+            # add noise to input layer
+            sampled = salt_and_pepper(sampled, self.input_salt_and_pepper, self.mrg)
 
+            # set input layer
+            hiddens[layer_idx] = sampled
 
     # def gen_10k_samples(self):
     #     log.info('Generating 10,000 samples')
@@ -554,7 +497,7 @@ class GSN(Model):
     #         for i in xrange(n_samples-1):
     #             _t = time.time()
     #
-    #             # feed the last state into the network, compute new state, and obtain visible units expectation chain
+    #             # feed the last state into the network, run new state, and obtain visible units expectation chain
     #             net_state_out, vis_pX_chain = sampling_wrapper(network_state[-1])
     #
     #             # append to the visible chain
@@ -608,7 +551,7 @@ class GSN(Model):
             n_examples = len(input_data)
             xs_test = input_data
             noisy_xs_test = self.f_noise(input_data)
-            reconstructed = self.predict(noisy_xs_test)
+            reconstructed = self.run(noisy_xs_test)
             # Concatenate stuff
             width, height = closest_to_square_factors(n_examples)
             stacked = numpy.vstack(
@@ -626,7 +569,6 @@ class GSN(Model):
             log.info("saved output image to %s", save_path)
         else:
             log.warning("Asked to create reconstruction image for something that isn't an image. Ignoring...")
-
 
     def pack_hiddens(self, hiddens_list):
         '''
@@ -647,7 +589,6 @@ class GSN(Model):
 
         hiddens_tensor = T.concatenate(output_list, axis=1)
         return hiddens_tensor
-
 
     def unpack_hiddens(self, hiddens_tensor):
         '''
@@ -671,527 +612,44 @@ class GSN(Model):
 
         return h_list
 
+    ###################
+    # Model functions #
+    ###################
+    def get_inputs(self):
+        return [self.X]
+
+    def get_hiddens(self):
+        return self.pack_hiddens(self.hiddens)
+
+    def get_outputs(self):
+        return self.output
+
+    def run(self, input):
+        if hasattr(self, 'f_run'):
+            return self.f_run(*input)
+        else:
+            log.warning("No f_run for the GSN (this is most likely the case when a hiddens_hook was provided.")
+            return None
+
+    def get_train_cost(self):
+        return self.cost
+
+    def get_monitors(self):
+        return self.monitors
+
+    def get_decay_params(self):
+        # noise scheduling
+        noise_schedule = get_decay_function(self.noise_decay,
+                                            self.input_salt_and_pepper,
+                                            self.args.get('input_salt_and_pepper'),
+                                            self.noise_annealing)
+        return [noise_schedule]
+
+    def get_params(self):
+        return self.params
 
     def save_params(self, param_file):
-        """
-        This saves the model's parameters to the param_file (pickle file)
-        ------------------
-
-        :param param_file: filename of pickled params file
-        :type param_file: String
-
-        :return: whether or not successful
-        :rtype: Boolean
-        """
-        # save to the output directory from the model config
-        base = self.outdir
-        filepath = os.path.join(base, param_file)
-        super(GSN, self).save_params(filepath)
-
+        super(GSN, self).save_params(param_file)
 
     def save_args(self, args_file="gsn_config.pkl"):
-        # save to the output directory from the model config
-        base = self.outdir
-        filepath = os.path.join(base, args_file)
-        super(GSN, self).save_args(filepath)
-
-
-###############################################
-# COMPUTATIONAL GRAPH HELPER METHODS FOR GSN #
-###############################################
-    @staticmethod
-    def update_layers(hiddens,
-                      weights_list,
-                      bias_list,
-                      p_X_chain,
-                      add_noise              = _defaults["add_noise"],
-                      noiseless_h1           = _defaults["noiseless_h1"],
-                      hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                      input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                      input_sampling         = _defaults["input_sampling"],
-                      MRG                    = _defaults["MRG"],
-                      visible_activation     = _defaults["visible_activation"],
-                      hidden_activation      = _defaults["hidden_activation"]):
-        # One update over the odd layers + one update over the even layers
-        log.debug('odd layer updates')
-        # update the odd layers
-        GSN.update_odd_layers(hiddens,
-                              weights_list,
-                              bias_list,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-        log.debug('even layer updates')
-        # update the even layers
-        GSN.update_even_layers(hiddens,
-                               weights_list,
-                               bias_list,
-                               p_X_chain,
-                               add_noise,
-                               noiseless_h1,
-                               hidden_add_noise_sigma,
-                               input_salt_and_pepper,
-                               input_sampling,
-                               MRG,
-                               visible_activation,
-                               hidden_activation)
-        log.debug('done full update.')
-
-    @staticmethod
-    def update_layers_scan_step(hiddens_t,
-                                weights_list,
-                                bias_list,
-                                add_noise              = _defaults["add_noise"],
-                                noiseless_h1           = _defaults["noiseless_h1"],
-                                hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                                input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                                input_sampling         = _defaults["input_sampling"],
-                                MRG                    = _defaults["MRG"],
-                                visible_activation     = _defaults["visible_activation"],
-                                hidden_activation      = _defaults["hidden_activation"]):
-        p_X_chain = []
-        log.debug("One full update step for layers.")
-        # One update over the odd layers + one update over the even layers
-        log.debug('odd layer updates')
-        # update the odd layers
-        GSN.update_odd_layers(hiddens_t,
-                              weights_list,
-                              bias_list,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-        log.debug('even layer updates')
-        # update the even layers
-        GSN.update_even_layers(hiddens_t,
-                               weights_list,
-                               bias_list,
-                               p_X_chain,
-                               add_noise,
-                               noiseless_h1,
-                               hidden_add_noise_sigma,
-                               input_salt_and_pepper,
-                               input_sampling,
-                               MRG,
-                               visible_activation,
-                               hidden_activation)
-        log.debug('done full update.')
-        # return the generated sample, the sampled next input, and hiddens
-        return p_X_chain[0], hiddens_t
-
-    @staticmethod
-    def update_layers_reverse(hiddens,
-                              weights_list,
-                              bias_list,
-                              p_X_chain,
-                              add_noise              = _defaults["add_noise"],
-                              noiseless_h1           = _defaults["noiseless_h1"],
-                              hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                              input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                              input_sampling         = _defaults["input_sampling"],
-                              MRG                    = _defaults["MRG"],
-                              visible_activation     = _defaults["visible_activation"],
-                              hidden_activation      = _defaults["hidden_activation"]):
-        # One update over the even layers + one update over the odd layers
-        log.debug('even layer updates')
-        # update the even layers
-        GSN.update_even_layers(hiddens,
-                               weights_list,
-                               bias_list,
-                               p_X_chain,
-                               add_noise,
-                               noiseless_h1,
-                               hidden_add_noise_sigma,
-                               input_salt_and_pepper,
-                               input_sampling,
-                               MRG,
-                               visible_activation,
-                               hidden_activation)
-        log.debug('odd layer updates')
-        # update the odd layers
-        GSN.update_odd_layers(hiddens,
-                              weights_list,
-                              bias_list,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-        log.debug('done full update.')
-
-
-    # Odd layer update function
-    # just a loop over the odd layers
-    @staticmethod
-    def update_odd_layers(hiddens,
-                          weights_list,
-                          bias_list,
-                          add_noise              = _defaults["add_noise"],
-                          noiseless_h1           = _defaults["noiseless_h1"],
-                          hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                          input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                          input_sampling         = _defaults["input_sampling"],
-                          MRG                    = _defaults["MRG"],
-                          visible_activation     = _defaults["visible_activation"],
-                          hidden_activation      = _defaults["hidden_activation"]):
-        # Loop over the odd layers
-        for i in range(1, len(hiddens), 2):
-            log.debug('updating layer %s', str(i))
-            GSN.simple_update_layer(hiddens,
-                                    weights_list,
-                                    bias_list,
-                                    None,
-                                    i,
-                                    add_noise,
-                                    noiseless_h1,
-                                    hidden_add_noise_sigma,
-                                    input_salt_and_pepper,
-                                    input_sampling,
-                                    MRG,
-                                    visible_activation,
-                                    hidden_activation)
-
-    # Even layer update
-    # p_X_chain is given to append the p(X|...) at each full update (one update = odd update + even update)
-    @staticmethod
-    def update_even_layers(hiddens,
-                           weights_list,
-                           bias_list,
-                           p_X_chain,
-                           add_noise              = _defaults["add_noise"],
-                           noiseless_h1           = _defaults["noiseless_h1"],
-                           hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                           input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                           input_sampling         = _defaults["input_sampling"],
-                           MRG                    = _defaults["MRG"],
-                           visible_activation     = _defaults["visible_activation"],
-                           hidden_activation      = _defaults["hidden_activation"]):
-        # Loop over even layers
-        for i in range(0, len(hiddens), 2):
-            log.debug('updating layer %s', str(i))
-            GSN.simple_update_layer(hiddens,
-                                    weights_list,
-                                    bias_list,
-                                    p_X_chain,
-                                    i,
-                                    add_noise,
-                                    noiseless_h1,
-                                    hidden_add_noise_sigma,
-                                    input_salt_and_pepper,
-                                    input_sampling,
-                                    MRG,
-                                    visible_activation,
-                                    hidden_activation)
-
-
-    # The layer update function
-    # hiddens   :   list containing the symbolic theano variables [visible, hidden1, hidden2, ...]
-    #               layer_update will modify this list inplace
-    # weights_list : list containing the theano variables weights between hidden layers
-    # bias_list :   list containing the theano variables bias corresponding to hidden layers
-    # p_X_chain :   list containing the successive p(X|...) at each update
-    #               update_layer will append to this list
-    # i         :   the current layer being updated
-    # add_noise :   pre (and post) activation gaussian noise flag
-    @staticmethod
-    def simple_update_layer(hiddens,
-                            weights_list,
-                            bias_list,
-                            p_X_chain,
-                            i,
-                            add_noise              = _defaults["add_noise"],
-                            noiseless_h1           = _defaults["noiseless_h1"],
-                            hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                            input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                            input_sampling         = _defaults["input_sampling"],
-                            MRG                    = _defaults["MRG"],
-                            visible_activation     = _defaults["visible_activation"],
-                            hidden_activation      = _defaults["hidden_activation"]):
-        # Compute the dot product, whatever layer
-        # If the visible layer X
-        if i == 0:
-            log.debug('using '+str(weights_list[i])+'.T')
-            hiddens[i] = T.dot(hiddens[i+1], weights_list[i].T) + bias_list[i]
-        # If the top layer
-        elif i == len(hiddens)-1:
-            log.debug('using '+str(weights_list[i-1]))
-            hiddens[i] = T.dot(hiddens[i-1], weights_list[i-1]) + bias_list[i]
-        # Otherwise in-between layers
-        else:
-            log.debug("using %s and %s.T", str(weights_list[i-1]), str(weights_list[i]))
-            # next layer        :   hiddens[i+1], assigned weights : W_i
-            # previous layer    :   hiddens[i-1], assigned weights : W_(i-1)
-            hiddens[i] = T.dot(hiddens[i+1], weights_list[i].T) + T.dot(hiddens[i-1], weights_list[i-1]) + bias_list[i]
-
-        # Add pre-activation noise if NOT input layer
-        if i == 1 and noiseless_h1:
-            log.debug('>>NO noise in first hidden layer')
-            add_noise = False
-
-        # pre activation noise
-        if i != 0 and add_noise:
-            log.debug('Adding pre-activation gaussian noise for layer %s', str(i))
-            hiddens[i] = add_gaussian(hiddens[i], std=hidden_add_noise_sigma, MRG=MRG)
-
-        # ACTIVATION!
-        if i == 0:
-            log.debug('Activation for visible layer')
-            hiddens[i] = visible_activation(hiddens[i])
-        else:
-            log.debug('Hidden units activation for layer %s', str(i))
-            hiddens[i] = hidden_activation(hiddens[i])
-
-        # post activation noise
-        # why is there post activation noise? Because there is already pre-activation noise,
-        # this just doubles the amount of noise between each activation of the hiddens.
-        if i != 0 and add_noise:
-            log.debug('Adding post-activation gaussian noise for layer %s', str(i))
-            hiddens[i] = add_gaussian(hiddens[i], std=hidden_add_noise_sigma, MRG=MRG)
-
-        # build the reconstruction chain if updating the visible layer X
-        if i == 0:
-            # if input layer -> append p(X|H...)
-            p_X_chain.append(hiddens[i])
-
-            # sample from p(X|H...) - SAMPLING NEEDS TO BE CORRECT FOR INPUT TYPES
-            # I.E. FOR BINARY MNIST SAMPLING IS BINOMIAL. real-valued inputs should be gaussian
-            if input_sampling:
-                log.debug('Sampling from input')
-                sampled = MRG.binomial(p=hiddens[i], size=hiddens[i].shape, dtype='float32')
-            else:
-                log.debug('>>NO input sampling')
-                sampled = hiddens[i]
-            # add noise
-            sampled = salt_and_pepper(sampled, input_salt_and_pepper, MRG)
-
-            # set input layer
-            hiddens[i] = sampled
-
-
-
-    ############################
-    #   THE MAIN GSN BUILDER   #
-    ############################
-    @staticmethod
-    def build_gsn(X,
-                  weights_list,
-                  bias_list,
-                  add_noise              = _defaults["add_noise"],
-                  noiseless_h1           = _defaults["noiseless_h1"],
-                  hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                  input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                  input_sampling         = _defaults["input_sampling"],
-                  MRG                    = _defaults["MRG"],
-                  visible_activation     = _defaults["visible_activation"],
-                  hidden_activation      = _defaults["hidden_activation"],
-                  walkbacks              = _defaults["walkbacks"]):
-        """
-        Construct a GSN (unimodal transition operator) for k walkbacks on the input X.
-        Returns the list of predicted X's after k walkbacks and the resulting layer values.
-
-        @type  X: Theano symbolic variable
-        @param X: The variable representing the visible input.
-
-        @type  weights_list: List(matrix)
-        @param weights_list: The list of weights to use between layers.
-
-        @type  bias_list: List(vector)
-        @param bias_list: The list of biases to use for each layer.
-
-        @type  add_noise: Boolean
-        @param add_noise: Whether or not to add noise in the computational graph.
-
-        @type  noiseless_h1: Boolean
-        @param noiseless_h1: Whether or not to add noise in the first hidden layer.
-
-        @type  hidden_add_noise_sigma: Float
-        @param hidden_add_noise_sigma: The sigma value for the hidden noise function.
-
-        @type  input_salt_and_pepper: Float
-        @param input_salt_and_pepper: The amount of masking noise to use.
-
-        @type  input_sampling: Boolean
-        @param input_sampling: Whether to sample from each walkback prediction (like Gibbs).
-
-        @type  MRG: Theano random generator
-        @param MRG: Random generator.
-
-        @type  visible_activation: Function
-        @param visible_activation: The visible layer X activation function.
-
-        @type  hidden_activation: Function
-        @param hidden_activation: The hidden layer activation function.
-
-        @type  walkbacks: Integer
-        @param walkbacks: The k number of walkbacks to use for the GSN.
-
-        @rtype:   List
-        @return:  predicted_x_chain, hiddens
-        """
-        p_X_chain = []
-        # Whether or not to corrupt the visible input X
-        if add_noise:
-            X_init = salt_and_pepper(X, input_salt_and_pepper, MRG)
-        else:
-            X_init = X
-        # init hiddens with zeros
-        hiddens = [X_init]
-        for w in weights_list:
-            hiddens.append(T.zeros_like(T.dot(hiddens[-1], w)))
-        # The layer update scheme
-        log.info("Building the GSN graph : %s updates", str(walkbacks))
-        for i in range(walkbacks):
-            log.debug("GSN Walkback %s/%s", str(i+1), str(walkbacks))
-            GSN.update_layers(hiddens,
-                              weights_list,
-                              bias_list,
-                              p_X_chain,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-
-        return p_X_chain, hiddens
-
-    @staticmethod
-    def build_gsn_given_hiddens(X,
-                                hiddens,
-                                weights_list,
-                                bias_list,
-                                add_noise              = _defaults["add_noise"],
-                                noiseless_h1           = _defaults["noiseless_h1"],
-                                hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                                input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                                input_sampling         = _defaults["input_sampling"],
-                                MRG                    = _defaults["MRG"],
-                                visible_activation     = _defaults["visible_activation"],
-                                hidden_activation      = _defaults["hidden_activation"],
-                                walkbacks              = _defaults["walkbacks"],
-                                cost_function          = _defaults["cost_function"]):
-
-        log.info("Building the GSN graph given hiddens with %s walkbacks", str(walkbacks))
-        p_X_chain = []
-        for i in range(walkbacks):
-            log.debug("GSN (prediction) Walkback %s/%s", str(i+1), str(walkbacks))
-            GSN.update_layers_reverse(hiddens,
-                                      weights_list,
-                                      bias_list,
-                                      p_X_chain,
-                                      add_noise,
-                                      noiseless_h1,
-                                      hidden_add_noise_sigma,
-                                      input_salt_and_pepper,
-                                      input_sampling,
-                                      MRG,
-                                      visible_activation,
-                                      hidden_activation)
-
-        # x_sample = p_X_chain[-1]
-
-        costs     = [cost_function(rX, X) for rX in p_X_chain]
-        show_cost = costs[-1] # for logging to show progress
-        cost      = numpy.sum(costs)
-
-        return p_X_chain, hiddens, cost, show_cost
-
-    @staticmethod
-    def build_gsn_scan(X,
-                       weights_list,
-                       bias_list,
-                       add_noise              = _defaults["add_noise"],
-                       noiseless_h1           = _defaults["noiseless_h1"],
-                       hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                       input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                       input_sampling         = _defaults["input_sampling"],
-                       MRG                    = _defaults["MRG"],
-                       visible_activation     = _defaults["visible_activation"],
-                       hidden_activation      = _defaults["hidden_activation"],
-                       walkbacks              = _defaults["walkbacks"],
-                       cost_function          = _defaults["cost_function"]):
-
-        # Whether or not to corrupt the visible input X
-        if add_noise:
-            X_init = salt_and_pepper(X, input_salt_and_pepper, MRG)
-        else:
-            X_init = X
-        # init hiddens with zeros
-        hiddens_0 = [X_init]
-        for w in weights_list:
-            hiddens_0.append(T.zeros_like(T.dot(hiddens_0[-1], w)))
-
-        log.info("Building the GSN graph (for scan) with %s walkbacks", str(walkbacks))
-        p_X_chain = []
-        for i in range(walkbacks):
-            log.debug("GSN (after scan) Walkback %s/%s", str(i+1), str(walkbacks))
-            GSN.update_layers(hiddens_0,
-                              weights_list,
-                              bias_list,
-                              p_X_chain,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-
-
-        x_sample = p_X_chain[-1]
-
-        costs     = [cost_function(rX, X) for rX in p_X_chain]
-        show_cost = costs[-1] # for logging to show progress
-        cost      = numpy.sum(costs)
-
-        return x_sample, cost, show_cost#, updates
-
-    @staticmethod
-    def build_gsn_pxh(hiddens,
-                    weights_list,
-                    bias_list,
-                    add_noise              = _defaults["add_noise"],
-                    noiseless_h1           = _defaults["noiseless_h1"],
-                    hidden_add_noise_sigma = _defaults["hidden_add_noise_sigma"],
-                    input_salt_and_pepper  = _defaults["input_salt_and_pepper"],
-                    input_sampling         = _defaults["input_sampling"],
-                    MRG                    = _defaults["MRG"],
-                    visible_activation     = _defaults["visible_activation"],
-                    hidden_activation      = _defaults["hidden_activation"],
-                    walkbacks              = _defaults["walkbacks"]):
-
-        log.info("Building the GSN graph for P(X=x|H) with %s walkbacks", str(walkbacks))
-        p_X_chain = []
-        for i in range(walkbacks):
-            log.debug("GSN Walkback %s/%s", str(i+1), str(walkbacks))
-            GSN.update_layers(hiddens,
-                              weights_list,
-                              bias_list,
-                              p_X_chain,
-                              add_noise,
-                              noiseless_h1,
-                              hidden_add_noise_sigma,
-                              input_salt_and_pepper,
-                              input_sampling,
-                              MRG,
-                              visible_activation,
-                              hidden_activation)
-
-        x_sample = p_X_chain[-1]
-
-        return x_sample
+        super(GSN, self).save_args(args_file)
