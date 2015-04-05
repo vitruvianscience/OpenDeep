@@ -41,8 +41,8 @@ def get_subset_strings(subset):
     else:
         return str(subset)
 
-# TODO: I don't think this is very efficient implementation, especially with the iterators.
-# However, it is flexible. Need to look into it further to optimize.
+# TODO: I don't think this is very efficient implementation, due to the iterators. Indexing directly is faster.
+# However, it is more flexible than indexing. Need to look into it further to optimize.
 class Dataset(object):
     '''
     Default interface for a dataset object - a bunch of sources for an iterator to grab data from
@@ -103,11 +103,11 @@ class Dataset(object):
     def getDataShape(self, subset):
         '''
         :return: tuple
-        Return the shape of this dataset's subset in a NxD tuple where N=#examples and D=dimensionality
+        Return the shape of this dataset's subset in a tuple where the first number is #examples N
         '''
         if subset not in [TRAIN, VALID, TEST]:
             log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return None
+            return (0, None)
         if subset is TRAIN:
             log.error("No training shape implemented")
             raise NotImplementedError("No training shape implemented")
@@ -117,11 +117,6 @@ class Dataset(object):
         elif subset is TEST:
             log.error("No test shape implemented")
             raise NotImplementedError("No test shape implemented")
-        else:
-            log.critical('No getDataShape method implemented for %s for subset %s!',
-                         str(type(self)),
-                         get_subset_strings(subset))
-            raise NotImplementedError()
 
 
     def get_example_shape(self):
@@ -348,3 +343,18 @@ class MemoryDataset(Dataset):
             return self.test_Y.get_value(borrow=True)[indices]
         else:
             return None
+
+    def getDataShape(self, subset):
+        '''
+        :return: tuple
+        Return the shape of this dataset's subset in a tuple where the first number is #examples N
+        '''
+        if subset not in [TRAIN, VALID, TEST]:
+            log.error('Subset %s not recognized!', get_subset_strings(subset))
+            return (0, None)
+        if subset is TRAIN:
+            return self._train_shape
+        elif subset is VALID and hasattr(self, '_valid_shape'):
+            return self._valid_shape
+        elif subset is TEST and hasattr(self, '_test_shape'):
+            return self._test_shape
