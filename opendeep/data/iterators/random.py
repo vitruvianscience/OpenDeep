@@ -27,7 +27,9 @@ class RandomIterator(Iterator):
     '''
     An iterator that goes through a dataset in a random sequence
     '''
-    def __init__(self, dataset, subset=datasets.TRAIN, batch_size=1, minimum_batch_size=1, rng=None):
+    def __init__(self, dataset, unsupervised=False, subset=datasets.TRAIN,
+                 batch_size=1, minimum_batch_size=1,
+                 rng=None):
         # initialize a numpy rng if one is not provided
         if rng is None:
             random.seed(123)
@@ -35,14 +37,13 @@ class RandomIterator(Iterator):
         else:
             self.rng = rng
 
-        _t = time.time()
-        log.debug('Initializing a %s random iterator over %s', str(type(dataset)), datasets.get_subset_strings(subset))
-        super(self.__class__, self).__init__(dataset, subset, batch_size, minimum_batch_size)
+        log.debug('Initializing a %s random iterator over %s, unsupervised=%s',
+                  str(type(dataset)), datasets.get_subset_strings(subset), str(unsupervised))
+        super(self.__class__, self).__init__(dataset, unsupervised, subset, batch_size, minimum_batch_size)
 
         # randomize the indices to access
-        self.indices = numpy.arange(self.data_len)
+        self.indices = numpy.arange(self.total_data_len)
         self.rng.shuffle(self.indices)
-        log.debug('iterator took %s to make' % make_time_units_string(time.time() - _t))
 
     def next(self):
         '''
@@ -57,18 +58,19 @@ class RandomIterator(Iterator):
         to do so on subsequent calls. Implementations that do not obey this property are deemed broken.
         '''
         if self.iteration_index < len(self.iterations):
-            # convert the iteration index into the start and end indices for the batch in the dataset
-            _start_index = self.iteration_index*self.batch_size
-            _end_index   = _start_index + self.iterations[self.iteration_index]
-            indices_this_step = self.indices[_start_index:_end_index]
+            # grab the start and end indices for the batch in the dataset
+            start_index, end_index = self.iterations[self.iteration_index]
+            indices_this_step = self.indices[start_index:end_index]
             # increment the iteration index
             self.iteration_index += 1
             # grab the labels and data to return
             data = self.dataset.getDataByIndices(indices=indices_this_step,
                                                  subset=self.subset)
+            # if this is an unsupervised iteration, only return the data (saves some time by not evaluating labels)
+            if self.unsupervised:
+                return data, None
             labels = self.dataset.getLabelsByIndices(indices=indices_this_step,
                                                      subset=self.subset)
-
             return data, labels
         else:
             raise StopIteration()

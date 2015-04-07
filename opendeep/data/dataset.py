@@ -247,7 +247,7 @@ class FileDataset(Dataset):
         Method to delete dataset files from disk (if in file form)
         '''
         # TODO: Check if this shutil.rmtree is unsafe...
-        log.info('Uninstalling (removing) dataset %s...', self.dataset_location)
+        log.info('Uninstalling (removing) dataset %s', self.dataset_location)
         if self.dataset_location is not None and os.path.exists(self.dataset_location):
             # If we are trying to remove something not from the dataset directory, give a warning
             if not self.dataset_location.startswith(self.dataset_dir):

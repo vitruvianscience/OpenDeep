@@ -94,11 +94,12 @@ class MNIST(FileDataset):
         The dataset values at the index (indices)
         '''
         if subset is datasets.TRAIN:
-            return self.train_X.get_value(borrow=True)[indices]
+            # return self.train_X.get_value(borrow=True)[indices]
+            return self.train_X[indices].eval()
         elif subset is datasets.VALID and hasattr(self, 'valid_X') and self.valid_X:
-            return self.valid_X.get_value(borrow=True)[indices]
+            return self.valid_X[indices].eval()
         elif subset is datasets.TEST and hasattr(self, 'test_X') and self.test_X:
-            return self.test_X.get_value(borrow=True)[indices]
+            return self.test_X[indices].eval()
         else:
             return None
 
@@ -113,11 +114,11 @@ class MNIST(FileDataset):
         The dataset labels at the index (indices)
         '''
         if subset is datasets.TRAIN and hasattr(self, 'train_Y') and self.train_Y:
-            return self.train_Y.get_value(borrow=True)[indices]
+            return self.train_Y[indices].eval()
         elif subset is datasets.VALID and hasattr(self, 'valid_Y') and self.valid_Y:
-            return self.valid_Y.get_value(borrow=True)[indices]
+            return self.valid_Y[indices].eval()
         elif subset is datasets.TEST and hasattr(self, 'test_Y') and self.test_Y:
-            return self.test_Y.get_value(borrow=True)[indices]
+            return self.test_Y[indices].eval()
         else:
             return None
 
@@ -153,3 +154,215 @@ class MNIST(FileDataset):
                          str(type(self)),
                          datasets.get_subset_strings(subset))
             raise NotImplementedError()
+
+    def sequence(self, sequence_number, rng=None, one_hot=False):
+        """
+        Sequences the train, valid, and test datasets according to the artificial sequences
+
+        :param sequence_number: which sequence to do
+        :type sequence_number: int
+
+        :param rng: the random number generator to use
+        :type rng: rng
+
+        :param one_hot: whether to encode the data as one-hot
+        :type one_hot: bool
+        """
+        log.debug("Sequencing MNIST with sequence %d", sequence_number)
+        if rng is None:
+            rng = numpy.random
+            rng.seed(1)
+
+        def set_xy_indices(x, y, indices):
+            x.set_value(x.get_value(borrow=True)[indices])
+            y.set_value(y.get_value(borrow=True)[indices])
+
+        # Find the order of MNIST data going from 0-9 repeating if the first dataset
+        train_ordered_indices = None
+        valid_ordered_indices = None
+        test_ordered_indices  = None
+        if sequence_number == 1:
+            train_ordered_indices = sequence1_indices(self.train_Y.get_value(borrow=True))
+            valid_ordered_indices = sequence1_indices(self.valid_Y.get_value(borrow=True))
+            test_ordered_indices  = sequence1_indices(self.test_Y.get_value(borrow=True))
+        elif sequence_number == 2:
+            train_ordered_indices = sequence2_indices(self.train_Y.get_value(borrow=True))
+            valid_ordered_indices = sequence2_indices(self.valid_Y.get_value(borrow=True))
+            test_ordered_indices  = sequence2_indices(self.test_Y.get_value(borrow=True))
+        elif sequence_number == 3:
+            train_ordered_indices = sequence3_indices(self.train_Y.get_value(borrow=True))
+            valid_ordered_indices = sequence3_indices(self.valid_Y.get_value(borrow=True))
+            test_ordered_indices  = sequence3_indices(self.test_Y.get_value(borrow=True))
+        elif sequence_number == 4:
+            train_ordered_indices = sequence4_indices(self.train_Y.get_value(borrow=True))
+            valid_ordered_indices = sequence4_indices(self.valid_Y.get_value(borrow=True))
+            test_ordered_indices  = sequence4_indices(self.test_Y.get_value(borrow=True))
+
+        # Put the data sets in order
+        if train_ordered_indices and valid_ordered_indices and test_ordered_indices:
+            set_xy_indices(self.train_X, self.train_Y, train_ordered_indices)
+            set_xy_indices(self.valid_X, self.valid_Y, valid_ordered_indices)
+            set_xy_indices(self.test_X, self.test_Y, test_ordered_indices)
+
+
+        ###############################################################################################################
+        # For testing one-hot encoding to see if it can learn sequences without having to worry about nonlinear input #
+        ###############################################################################################################
+        if one_hot:
+            # construct the numpy matrix of representations from y
+            train = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.train_Y.get_value(borrow=True)],
+                                dtype="float32")
+            self.train_X.set_value(train)
+            valid = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.valid_Y.get_value(borrow=True)],
+                                dtype="float32")
+            self.valid_X.set_value(valid)
+            test = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.test_Y.get_value(borrow=True)],
+                               dtype="float32")
+            self.test_X.set_value(test)
+
+        # re-set the sizes
+        self._train_shape = self.train_X.shape.eval()
+        self._valid_shape = self.valid_X.shape.eval()
+        self._test_shape = self.test_X.shape.eval()
+        log.debug('Train shape is: %s', str(self._train_shape))
+        log.debug('Valid shape is: %s', str(self._valid_shape))
+        log.debug('Test shape is: %s', str(self._test_shape))
+
+def sequence1_indices(labels, classes=10):
+    # make sure labels are integers
+    labels = [label.astype('int32') for label in labels]
+    #Creates an ordering of indices for this MNIST label series (normally expressed as y in dataset) that makes the numbers go in order 0-9....
+    sequence = []
+    pool = []
+    for _ in range(classes):
+        pool.append([])
+    #organize the indices into groups by label
+    for i in range(len(labels)):
+        pool[labels[i]].append(i)
+    #draw from each pool (also with the random number insertions) until one is empty
+    stop = False
+    #check if there is an empty class
+    for n in pool:
+        if len(n) == 0:
+            stop = True
+            log.warning("stopped early from dataset1 sequencing - missing some class of labels")
+    while not stop:
+        #for i in range(classes)+range(classes-2,0,-1):
+        for i in range(classes):
+            if not stop:
+                if len(pool[i]) == 0: #stop the procedure if you are trying to pop from an empty list
+                    stop = True
+                else:
+                    sequence.append(pool[i].pop())
+    return sequence
+
+#order sequentially up then down 0-9-9-0....
+def sequence2_indices(labels, classes=10):
+    # make sure labels are integers
+    labels = [label.astype('int32') for label in labels]
+    sequence = []
+    pool = []
+    for _ in range(classes):
+        pool.append([])
+    #organize the indices into groups by label
+    for i in range(len(labels)):
+        pool[labels[i]].append(i)
+    #draw from each pool (also with the random number insertions) until one is empty
+    stop = False
+    #check if there is an empty class
+    for n in pool:
+        if len(n) == 0:
+            stop = True
+            log.warning("stopped early from dataset2a sequencing - missing some class of labels")
+    while not stop:
+        for i in range(classes)+range(classes-1,-1,-1):
+            if not stop:
+                if len(pool[i]) == 0: #stop the procedure if you are trying to pop from an empty list
+                    stop = True
+                else:
+                    sequence.append(pool[i].pop())
+    return sequence
+
+def sequence3_indices(labels, classes=10):
+    # make sure labels are integers
+    labels = [label.astype('int32') for label in labels]
+    sequence = []
+    pool = []
+    for _ in range(classes):
+        pool.append([])
+    #organize the indices into groups by label
+    for i in range(len(labels)):
+        pool[labels[i]].append(i)
+    #draw from each pool (also with the random number insertions) until one is empty
+    stop = False
+    #check if there is an empty class
+    for n in pool:
+        if len(n) == 0:
+            stop = True
+            log.warning("stopped early from dataset3 sequencing - missing some class of labels")
+    a = False
+    while not stop:
+        for i in range(classes):
+            if not stop:
+                n=i
+                if i == 1 and a:
+                    n = 4
+                elif i == 4 and a:
+                    n = 8
+                elif i == 8 and a:
+                    n = 1
+                if len(pool[n]) == 0: #stop the procedure if you are trying to pop from an empty list
+                    stop = True
+                else:
+                    sequence.append(pool[n].pop())
+        a = not a
+
+    return sequence
+
+# extra bits of parity
+def sequence4_indices(labels, classes=10):
+    # make sure labels are integers
+    labels = [label.astype('int32') for label in labels]
+    def even(n):
+        return n%2==0
+    def odd(n):
+        return not even(n)
+    sequence = []
+    pool = []
+    for _ in range(classes):
+        pool.append([])
+    #organize the indices into groups by label
+    for i in range(len(labels)):
+        pool[labels[i]].append(i)
+    #draw from each pool (also with the random number insertions) until one is empty
+    stop = False
+    #check if there is an empty class
+    for n in pool:
+        if len(n) == 0:
+            stop = True
+            log.warning("stopped early from dataset4 sequencing - missing some class of labels")
+    s = [0, 1, 2]
+    sequence.append(pool[0].pop())
+    sequence.append(pool[1].pop())
+    sequence.append(pool[2].pop())
+    while not stop:
+        if odd(s[-3]):
+            first_bit = (s[-2] - s[-3])%classes
+        else:
+            first_bit = (s[-2] + s[-3])%classes
+        if odd(first_bit):
+            second_bit = (s[-1] - first_bit)%classes
+        else:
+            second_bit = (s[-1] + first_bit)%classes
+        if odd(second_bit):
+            next_num = (s[-1] - second_bit)%classes
+        else:
+            next_num = (s[-1] + second_bit + 1)%classes
+
+        if len(pool[next_num]) == 0: #stop the procedure if you are trying to pop from an empty list
+            stop = True
+        else:
+            s.append(next_num)
+            sequence.append(pool[next_num].pop())
+
+    return sequence
