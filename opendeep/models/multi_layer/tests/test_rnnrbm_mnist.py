@@ -53,7 +53,7 @@ if __name__ == '__main__':
             tile_spacing=(1, 1)
         )
     )
-    image.save('generated.png')
+    image.save('rnnrbm_mnist_generated.png')
     print 'saved generated.png'
 
     # Construct image from the weight matrix
@@ -65,7 +65,7 @@ if __name__ == '__main__':
             tile_spacing=(1, 1)
         )
     )
-    image.save('weights.png')
+    image.save('rnnrbm_mnist_weights.png')
 
     print "done!"
     del mnist
