@@ -38,7 +38,7 @@ class RNN_RBM(Model):
             'recurrent_hidden_activation': 'tanh',  # type of activation to use for recurrent hidden activation
             'recurrent_weights_init': 'gaussian',  # either 'gaussian' or 'uniform' - how to initialize weights
             'recurrent_weights_mean': 0,  # mean for gaussian weights init
-            'recurrent_weights_std': 1e-4,  # standard deviation for gaussian weights init
+            'recurrent_weights_std': 0.005,  # standard deviation for gaussian weights init
             'recurrent_weights_interval': 'montreal',  # how to initialize from uniform
             'recurrent_bias_init': 0.0,  # how to initialize the bias parameter
             'generate_n_steps': 200,  # how many steps to generate
@@ -186,14 +186,15 @@ class RNN_RBM(Model):
             # rnn bias
             self.bu = get_bias(shape=self.recurrent_hidden_size, name="bu", init_values=self.recurrent_bias_init)
 
-        # Finally have the three parameters
+        # Finally have the parameters
         self.params = [self.W, self.bh, self.bv, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
+        # self.params = [self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
 
         # Create the RNN-RBM graph!
         self.v_sample, self.cost, self.monitors, self.updates_train, self.v_ts, self.updates_generate, self.u_t = \
             self.build_rnnrbm()
 
-        log.debug("Initialized an RNN-RBM!")
+        log.info("Initialized an RNN-RBM!")
 
     def build_rnnrbm(self):
         """
@@ -210,10 +211,11 @@ class RNN_RBM(Model):
         # For training, the deterministic recurrence is used to compute all the
         # {bv_t, bh_t, 1 <= t <= T} given v. Conditional RBMs can then be trained
         # in batches using those parameters.
-        (u_ts, bv_ts, bh_ts), updates_train = theano.scan(fn=lambda v_t, u_tm1, *_: self.recurrence(v_t, u_tm1),
+        (u_ts, bv_ts, bh_ts), updates_train = theano.scan(fn=lambda v_t, u_tm1: self.recurrence(v_t, u_tm1),
                                                        sequences=self.input,
                                                        outputs_info=[self.u0, None, None],
-                                                       non_sequences=self.params)
+                                                       #non_sequences=self.params,
+                                                       name="rnnrbm_computation_scan")
 
         # rbm = RBM(inputs_hook=(self.input_size, self.input),
         #           params_hook=(self.W, bh_ts[:], bv_ts[:]),
@@ -230,13 +232,28 @@ class RNN_RBM(Model):
                                                                k=self.k,
                                                                rng=self.MRG)
 
+        # make another chain to determine frame-level accuracy
+        v_prediction, _, _, updates_predict = RBM.create_rbm(v=self.input[:-1],
+                                                             W=self.W,
+                                                             bv=bv_ts[1:],
+                                                             bh=bh_ts[1:],
+                                                             k=self.k,
+                                                             rng=self.MRG)
+
+        frame_level_mse = T.mean(T.sqr(v_sample[1:] - v_prediction), axis=0)
+        frame_level_accuracy = T.mean(frame_level_mse)
+        # add the accuracy to the monitors
+        monitors['accuracy'] = frame_level_accuracy
+
         updates_train.update(updates_rbm)
+        updates_train.update(updates_predict)
 
         # symbolic loop for sequence generation
         (v_ts, u_ts), updates_generate = theano.scan(lambda u_tm1, *_: self.recurrence(None, u_tm1),
                                                      outputs_info=[None, self.generate_u0],
                                                      non_sequences=self.params,
-                                                     n_steps=self.n_steps)
+                                                     n_steps=self.n_steps,
+                                                     name="rnnrbm_generate_scan")
 
         return v_sample, cost, monitors, updates_train, v_ts, updates_generate, u_ts[-1]
 
@@ -286,7 +303,11 @@ class RNN_RBM(Model):
         :return: whether successful
         :rtype: boolean
         """
+        # placeholder biases so they don't get overridden by loading rbm parameters (testing out only loading W)
+        # fake_bh = get_bias(shape=self.hidden_size, name="fake_bh", init_values=self.bias_init)
+        # fake_bv = get_bias(shape=self.input_size, name="fake_bv", init_values=self.bias_init)
         # create a proxy rbm to set the parameter values
+        # rbm = RBM(params_hook=(self.W, fake_bh, fake_bv), outdir=self.outdir)
         rbm = RBM(params_hook=(self.W, self.bh, self.bv), outdir=self.outdir)
         success = rbm.load_params(param_file)
         return success

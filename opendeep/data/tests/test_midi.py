@@ -12,7 +12,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 import unittest
 import logging
 import numpy
-import time
 # internal references
 from opendeep.data.standard_datasets.midi.musedata import MuseData
 from opendeep.data.standard_datasets.midi.jsb_chorales import JSBChorales
@@ -20,7 +19,6 @@ from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.data.standard_datasets.midi.piano_midi_de import PianoMidiDe
 from opendeep.data.dataset import TRAIN, VALID, TEST
 import opendeep.log.logger as logger
-from opendeep.utils.misc import make_time_units_string
 
 
 class TestMuse(unittest.TestCase):

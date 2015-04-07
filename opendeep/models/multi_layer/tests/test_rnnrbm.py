@@ -3,8 +3,9 @@ import theano
 from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
-from opendeep.optimization.stochastic_gradient_descent import SGD
+# from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.utils.image import tile_raster_images
+from opendeep.utils.misc import closest_to_square_factors
 import PIL.Image as Image
 
 
@@ -34,26 +35,37 @@ if __name__ == '__main__':
                      recurrent_weights_std=1e-4,
                      rng=rng)
     # load pretrained rbm on mnist
-    rnnrbm.load_rbm_params('rbm_trained.pkl')
+    # rnnrbm.load_rbm_params('rbm_trained.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
     # optimizer = SGD(model=rbm, dataset=mnist, n_epoch=20, batch_size=100, learning_rate=0.1, lr_decay='exponential', lr_factor=1, nesterov_momentum=False)
     optimizer = AdaDelta(model=rnnrbm, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6, save_frequency=1)
     # perform training!
     optimizer.train()
     # use the generate function!
-    generated, ut = rnnrbm.generate(initial=None, n_steps=100)
+    generated, ut = rnnrbm.generate(initial=None, n_steps=400)
 
-    # Construct image from the weight matrix
+    # Construct image
     image = Image.fromarray(
         tile_raster_images(
             X=generated,
             img_shape=(28, 28),
-            tile_shape=(10, 10),
+            tile_shape=(20, 20),
             tile_spacing=(1, 1)
         )
     )
     image.save('generated.png')
+    print 'saved generated.png'
 
+    # Construct image from the weight matrix
+    image = Image.fromarray(
+        tile_raster_images(
+            X=rnnrbm.W.get_value(borrow=True).T,
+            img_shape=(28, 28),
+            tile_shape=closest_to_square_factors(rnnrbm.hidden_size),
+            tile_spacing=(1, 1)
+        )
+    )
+    image.save('weights.png')
 
     print "done!"
     del mnist
