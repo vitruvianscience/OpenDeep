@@ -12,6 +12,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import unittest
 import logging
 import numpy
+import time
 # internal references
 from opendeep.data.standard_datasets.midi.musedata import MuseData
 from opendeep.data.standard_datasets.midi.jsb_chorales import JSBChorales
@@ -49,7 +50,6 @@ class TestMuse(unittest.TestCase):
         assert self.nottingham.train.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TRAIN)])
         assert self.nottingham.valid.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(VALID)])
         assert self.nottingham.test.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TEST)])
-
 
     def tearDown(self):
         del self.muse

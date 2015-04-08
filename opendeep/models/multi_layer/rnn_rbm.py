@@ -14,6 +14,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
+import os
+import cPickle as pickle
 # third party libraries
 import numpy
 import theano
@@ -25,6 +27,7 @@ from opendeep.models.model import Model
 from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
+from opendeep.utils import file_ops
 
 log = logging.getLogger(__name__)
 
@@ -128,10 +131,10 @@ class RNN_RBM(Model):
         if self.params_hook is not None:
             # make sure the params_hook has W (weights matrix) and bh, bv (bias vectors)
             assert len(self.params_hook) == 8, \
-                "Expected 8 params (W, bh, bv, Wuh, Wuv, Wvu, Wuu, bu) for RBM, found {0!s}!".format(
+                "Expected 8 params (W, bv, bh, Wuh, Wuv, Wvu, Wuu, bu) for RBM, found {0!s}!".format(
                     len(self.params_hook)
                 )
-            self.W, self.bh, self.bv, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu = self.params_hook
+            self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu = self.params_hook
         else:
             # RBM weight params
             self.W = get_weights(weights_init=self.weights_init,
@@ -181,14 +184,13 @@ class RNN_RBM(Model):
 
             # grab the bias vectors
             # rbm biases
-            self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=self.bias_init)
             self.bv = get_bias(shape=self.input_size, name="bv", init_values=self.bias_init)
+            self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=self.bias_init)
             # rnn bias
             self.bu = get_bias(shape=self.recurrent_hidden_size, name="bu", init_values=self.recurrent_bias_init)
 
         # Finally have the parameters
-        self.params = [self.W, self.bh, self.bv, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
-        # self.params = [self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
+        self.params = [self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
 
         # Create the RNN-RBM graph!
         self.v_sample, self.cost, self.monitors, self.updates_train, self.v_ts, self.updates_generate, self.u_t = \
@@ -214,31 +216,27 @@ class RNN_RBM(Model):
         (u_ts, bv_ts, bh_ts), updates_train = theano.scan(fn=lambda v_t, u_tm1: self.recurrence(v_t, u_tm1),
                                                        sequences=self.input,
                                                        outputs_info=[self.u0, None, None],
-                                                       #non_sequences=self.params,
                                                        name="rnnrbm_computation_scan")
 
-        # rbm = RBM(inputs_hook=(self.input_size, self.input),
-        #           params_hook=(self.W, bh_ts[:], bv_ts[:]),
-        #           k=self.k,
-        #           outdir=self.outdir)
-        # v_sample    = rbm.get_outputs()
-        # cost        = rbm.get_train_cost()
-        # monitors    = rbm.get_monitors()
-        # updates_rbm = rbm.get_updates()
-        v_sample, cost, monitors, updates_rbm = RBM.create_rbm(v=self.input,
-                                                               W=self.W,
-                                                               bh=bh_ts[:],
-                                                               bv=bv_ts[:],
-                                                               k=self.k,
-                                                               rng=self.MRG)
+        rbm = RBM(inputs_hook=(self.input_size, self.input),
+                  params_hook=(self.W, bv_ts[:], bh_ts[:]),
+                  k=self.k,
+                  outdir=self.outdir,
+                  MRG=self.MRG)
+        v_sample    = rbm.get_outputs()
+        cost        = rbm.get_train_cost()
+        monitors    = rbm.get_monitors()
+        updates_rbm = rbm.get_updates()
 
         # make another chain to determine frame-level accuracy
-        v_prediction, _, _, updates_predict = RBM.create_rbm(v=self.input[:-1],
-                                                             W=self.W,
-                                                             bv=bv_ts[1:],
-                                                             bh=bh_ts[1:],
-                                                             k=self.k,
-                                                             rng=self.MRG)
+        rbm = RBM(inputs_hook=(self.input_size, self.input[:-1]),
+                  params_hook=(self.W, bv_ts[1:], bh_ts[1:]),
+                  k=self.k,
+                  outdir=self.outdir,
+                  MRG=self.MRG)
+
+        v_prediction    = rbm.get_outputs()
+        updates_predict = rbm.get_updates()
 
         frame_level_mse = T.mean(T.sqr(v_sample[1:] - v_prediction), axis=0)
         frame_level_accuracy = T.mean(frame_level_mse)
@@ -277,18 +275,13 @@ class RNN_RBM(Model):
         generate = v_t is None
         updates = None
         if generate:
-            # rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
-            #           params_hook=(self.W, bh_t, bv_t),
-            #           k=self.k,
-            #           outdir=self.outdir)
-            # v_t = rbm.get_outputs()
-            # updates = rbm.get_updates()
-            v_t, _, _, updates = RBM.create_rbm(v=T.zeros((self.input_size,)),
-                                                W=self.W,
-                                                bh=bh_t,
-                                                bv=bv_t,
-                                                k=self.k,
-                                                rng=self.MRG)
+            rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
+                      params_hook=(self.W, bv_t, bh_t),
+                      k=self.k,
+                      outdir=self.outdir)
+            v_t = rbm.get_outputs()
+            updates = rbm.get_updates()
+
         # update recurrent hiddens
         u_t = T.tanh(self.bu + T.dot(v_t, self.Wvu) + T.dot(u_tm1, self.Wuu))
         return ([v_t, u_t], updates) if generate else (u_t, bv_t, bh_t)
@@ -303,14 +296,31 @@ class RNN_RBM(Model):
         :return: whether successful
         :rtype: boolean
         """
-        # placeholder biases so they don't get overridden by loading rbm parameters (testing out only loading W)
-        # fake_bh = get_bias(shape=self.hidden_size, name="fake_bh", init_values=self.bias_init)
-        # fake_bv = get_bias(shape=self.input_size, name="fake_bv", init_values=self.bias_init)
-        # create a proxy rbm to set the parameter values
-        # rbm = RBM(params_hook=(self.W, fake_bh, fake_bv), outdir=self.outdir)
-        rbm = RBM(params_hook=(self.W, self.bh, self.bv), outdir=self.outdir)
-        success = rbm.load_params(param_file)
-        return success
+        param_file = os.path.realpath(param_file)
+
+        # make sure it is a pickle file
+        ftype = file_ops.get_file_type(param_file)
+        if ftype == file_ops.PKL:
+            log.debug("loading model %s parameters from %s",
+                      str(type(self)), str(param_file))
+            # try to grab the pickled params from the specified param_file path
+            with open(param_file, 'r') as f:
+                loaded_params = pickle.load(f)
+            #############################################################################
+            # set the W, bv, and bh values (make sure same order as saved in RBM class) #
+            #############################################################################
+            self.W.set_value(loaded_params[0])
+            self.bv.set_value(loaded_params[1])
+            self.bh.set_value(loaded_params[2])
+            return True
+        # if get_file_type didn't return pkl or none, it wasn't a pickle file
+        elif ftype:
+            log.error("Param file %s doesn't have a supported pickle extension!", str(param_file))
+            return False
+        # if get_file_type returned none, it couldn't find the file
+        else:
+            log.error("Param file %s couldn't be found!", str(param_file))
+            return False
 
     ####################
     # Model functions! #
@@ -344,16 +354,8 @@ class RNN_RBM(Model):
         n_steps = n_steps or self.generate_n_steps
         return self.f_generate(initial, n_steps)
 
-
     def get_train_cost(self):
         return self.cost
-
-    def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
-        # consider v_sample constant when computing gradients
-        # this actually keeps v_sample from being considered in the gradient, to set gradient to 0 instead,
-        # use theano.gradient.zero_grad
-        theano.gradient.disconnected_grad(self.v_sample)
-        return super(RNN_RBM, self).get_gradient(starting_gradient, cost, additional_cost)
 
     def get_updates(self):
         return self.updates_train

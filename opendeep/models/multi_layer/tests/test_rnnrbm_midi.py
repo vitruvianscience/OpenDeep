@@ -8,7 +8,6 @@ from theano.tensor.shared_randomstreams import RandomStreams
 from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
 from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.optimization.stochastic_gradient_descent import SGD
-# from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.utils.midi import midiwrite
@@ -39,10 +38,16 @@ if __name__ == '__main__':
                      recurrent_weights_init='gaussian',
                      recurrent_weights_std=0.0001,
                      rng=rng)
-    # load pretrained rbm on mnist
-    # rnnrbm.load_rbm_params('rbm_trained.pkl')
-    # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = SGD(model=rnnrbm, dataset=midi, n_epoch=200, batch_size=100, learning_rate=.001, save_frequency=10, nesterov_momentum=False, momentum=False)
+    # make an optimizer to train it
+    optimizer = SGD(model=rnnrbm,
+                    dataset=midi,
+                    n_epoch=200,
+                    batch_size=100,
+                    minimum_batch_size=2,
+                    learning_rate=.001,
+                    save_frequency=10,
+                    momentum=False,
+                    nesterov_momentum=False)
     # perform training!
     optimizer.train()
     # use the generate function!
@@ -50,7 +55,7 @@ if __name__ == '__main__':
 
     dt = 0.3
     r = (21, 109)
-    midiwrite('rnnrbm_generated_midi.midi', generated, r=r, dt=dt)
+    midiwrite('rnnrbm_generated_midi.mid', generated, r=r, dt=dt)
     extent = (0, dt * len(generated)) + r
     pylab.figure()
     pylab.imshow(generated.T, origin='lower', aspect='auto',
@@ -75,3 +80,5 @@ if __name__ == '__main__':
     del midi
     del rnnrbm
     del optimizer
+
+    pylab.show()
