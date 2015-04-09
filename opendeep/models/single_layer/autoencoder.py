@@ -39,7 +39,7 @@ class DenoisingAutoencoder(GSN):
                 "visible_activation": 'sigmoid',
                 "hidden_activation": 'tanh',
                 "input_sampling": True,
-                "MRG": RNG_MRG.MRG_RandomStreams(1),
+                "mrg": RNG_MRG.MRG_RandomStreams(1),
                 "weights_init": "uniform",  # how to initialize weights
                 'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
                 'weights_mean': 0,  # mean for gaussian weights init
@@ -63,7 +63,7 @@ class DenoisingAutoencoder(GSN):
 
     def __init__(self, config=None, defaults=_defaults, inputs_hook=None, hiddens_hook=None, dataset=None,
                  walkbacks=None, input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
-                 input_sampling=None, MRG=None, weights_init=None, weights_interval=None, weights_mean=None,
+                 input_sampling=None, mrg=None, weights_init=None, weights_interval=None, weights_mean=None,
                  weights_std=None, bias_init=None, cost_function=None, noise_decay=None, noise_annealing=None,
                  add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
                  output_path=None, is_image=None, vis_init=None):

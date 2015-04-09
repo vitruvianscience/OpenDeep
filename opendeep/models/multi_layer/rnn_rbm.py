@@ -57,7 +57,7 @@ class RNN_RBM(Model):
             'k': 15,  # the k steps used for CD-k or PCD-k with Gibbs sampling
             # general parameters
             'input_size': None,
-            'MRG': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
+            'mrg': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
             'rng': numpy.random.RandomState(1),  #default random number generator from Numpy
             'outdir': 'outputs/rnnrbm/',  # the output directory for this model's outputs
     }
@@ -65,7 +65,7 @@ class RNN_RBM(Model):
     def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, config=None, defaults=default,
                  input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
                  weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
-                 MRG=None, rng=None, k=None, outdir=None, recurrent_hidden_size=None, recurrent_hidden_activation=None,
+                 mrg=None, rng=None, k=None, outdir=None, recurrent_hidden_size=None, recurrent_hidden_activation=None,
                  recurrent_weights_init=None, recurrent_weights_mean=None, recurrent_weights_std=None,
                  recurrent_weights_interval=None, recurrent_bias_init=None, generate_n_steps=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
@@ -102,7 +102,7 @@ class RNN_RBM(Model):
 
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.visible_activation_func):
-            self.visible_sampling = self.MRG.binomial
+            self.visible_sampling = self.mrg.binomial
         else:
             # TODO: implement non-binary activation
             log.error("Non-binary visible activation not supported yet!")
@@ -113,7 +113,7 @@ class RNN_RBM(Model):
 
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.hidden_activation_func):
-            self.hidden_sampling = self.MRG.binomial
+            self.hidden_sampling = self.mrg.binomial
         else:
             # TODO: implement non-binary activation
             log.error("Non-binary hidden activation not supported yet!")
@@ -140,6 +140,7 @@ class RNN_RBM(Model):
             self.W = get_weights(weights_init=self.weights_init,
                                  shape=(self.input_size, self.hidden_size),
                                  name="W",
+                                 rng=self.rng,
                                  # if gaussian
                                  mean=self.weights_mean,
                                  std=self.weights_std,
@@ -149,6 +150,7 @@ class RNN_RBM(Model):
             self.Wuh = get_weights(weights_init=self.recurrent_weights_init,
                                    shape=(self.recurrent_hidden_size, self.hidden_size),
                                    name="Wuh",
+                                   rng=self.rng,
                                    # if gaussian
                                    mean=self.recurrent_weights_mean,
                                    std=self.recurrent_weights_std,
@@ -158,6 +160,7 @@ class RNN_RBM(Model):
             self.Wuv = get_weights(weights_init=self.recurrent_weights_init,
                                    shape=(self.recurrent_hidden_size, self.input_size),
                                    name="Wuv",
+                                   rng=self.rng,
                                    # if gaussian
                                    mean=self.recurrent_weights_mean,
                                    std=self.recurrent_weights_std,
@@ -167,6 +170,7 @@ class RNN_RBM(Model):
             self.Wvu = get_weights(weights_init=self.recurrent_weights_init,
                                    shape=(self.input_size, self.recurrent_hidden_size),
                                    name="Wvu",
+                                   rng=self.rng,
                                    # if gaussian
                                    mean=self.recurrent_weights_mean,
                                    std=self.recurrent_weights_std,
@@ -176,6 +180,7 @@ class RNN_RBM(Model):
             self.Wuu = get_weights(weights_init=self.recurrent_weights_init,
                                    shape=(self.recurrent_hidden_size, self.recurrent_hidden_size),
                                    name="Wuu",
+                                   rng=self.rng,
                                    # if gaussian
                                    mean=self.recurrent_weights_mean,
                                    std=self.recurrent_weights_std,
@@ -222,26 +227,28 @@ class RNN_RBM(Model):
                   params_hook=(self.W, bv_ts[:], bh_ts[:]),
                   k=self.k,
                   outdir=self.outdir,
-                  MRG=self.MRG)
+                  mrg=self.mrg,
+                  rng=self.rng)
         v_sample    = rbm.get_outputs()
         cost        = rbm.get_train_cost()
         monitors    = rbm.get_monitors()
         updates_rbm = rbm.get_updates()
 
-        # make another chain to determine frame-level accuracy
+        # make another chain to determine frame-level accuracy/error
         rbm = RBM(inputs_hook=(self.input_size, self.input[:-1]),
                   params_hook=(self.W, bv_ts[1:], bh_ts[1:]),
                   k=self.k,
                   outdir=self.outdir,
-                  MRG=self.MRG)
+                  mrg=self.mrg,
+                  rng=self.rng)
 
         v_prediction    = rbm.get_outputs()
         updates_predict = rbm.get_updates()
 
         frame_level_mse = T.mean(T.sqr(v_sample[1:] - v_prediction), axis=0)
-        frame_level_accuracy = T.mean(frame_level_mse)
-        # add the accuracy to the monitors
-        monitors['accuracy'] = frame_level_accuracy
+        frame_level_error = T.mean(frame_level_mse)
+        # add the frame-level error to the monitors
+        monitors['frame_error'] = frame_level_error
 
         updates_train.update(updates_rbm)
         updates_train.update(updates_predict)
@@ -278,7 +285,9 @@ class RNN_RBM(Model):
             rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
                       params_hook=(self.W, bv_t, bh_t),
                       k=self.k,
-                      outdir=self.outdir)
+                      outdir=self.outdir,
+                      mrg=self.mrg,
+                      rng=self.rng)
             v_t = rbm.get_outputs()
             updates = rbm.get_updates()
 
@@ -309,9 +318,10 @@ class RNN_RBM(Model):
             #############################################################################
             # set the W, bv, and bh values (make sure same order as saved in RBM class) #
             #############################################################################
+            # TODO: Switch back to correct order after testing mnist rnn-rbm
             self.W.set_value(loaded_params[0])
-            self.bv.set_value(loaded_params[1])
-            self.bh.set_value(loaded_params[2])
+            self.bv.set_value(loaded_params[2])
+            self.bh.set_value(loaded_params[1])
             return True
         # if get_file_type didn't return pkl or none, it wasn't a pickle file
         elif ftype:
