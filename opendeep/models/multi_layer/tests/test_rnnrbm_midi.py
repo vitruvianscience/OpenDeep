@@ -15,7 +15,7 @@ from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.utils.midi import midiwrite
 import PIL.Image as Image
-import pylab
+#import pylab
 import logging
 import opendeep.log.logger as logger
 logger.config_root_logger()
@@ -77,13 +77,13 @@ def run_midi(dataset):
     r = (21, 109)
     midiwrite(outdir + 'rnnrbm_generated_midi.mid', generated, r=r, dt=dt)
     extent = (0, dt * len(generated)) + r
-    pylab.figure()
-    pylab.imshow(generated.T, origin='lower', aspect='auto',
-                 interpolation='nearest', cmap=pylab.cm.gray_r,
-                 extent=extent)
-    pylab.xlabel('time (s)')
-    pylab.ylabel('MIDI note number')
-    pylab.title('generated piano-roll')
+    # pylab.figure()
+    # pylab.imshow(generated.T, origin='lower', aspect='auto',
+    #              interpolation='nearest', cmap=pylab.cm.gray_r,
+    #              extent=extent)
+    # pylab.xlabel('time (s)')
+    # pylab.ylabel('MIDI note number')
+    # pylab.title('generated piano-roll')
 
     # Construct image from the weight matrix
     image = Image.fromarray(
@@ -101,7 +101,7 @@ def run_midi(dataset):
     del rnnrbm
     del optimizer
 
-    pylab.show()
+    # pylab.show()
 
 if __name__ == '__main__':
     run_midi('nottingham')
