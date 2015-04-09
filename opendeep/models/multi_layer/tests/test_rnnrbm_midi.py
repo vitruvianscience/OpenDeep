@@ -35,7 +35,7 @@ def run_midi(dataset):
     elif dataset == 'muse':
         midi = MuseData()
     elif dataset == 'piano_de':
-        midi = PianoMidiDe
+        midi = PianoMidiDe()
     else:
         raise AssertionError("dataset %s not recognized." % dataset)
 
