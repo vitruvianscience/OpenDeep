@@ -15,10 +15,19 @@ from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.utils.midi import midiwrite
 import PIL.Image as Image
-#import pylab
+try:
+    import pylab
+    has_pylab = True
+except ImportError:
+    print (
+        "pylab isn't available."
+    )
+    print "It can be installed with 'pip install -q Pillow'"
+    has_pylab = False
+
 import logging
-import opendeep.log.logger as logger
-logger.config_root_logger()
+from opendeep.log.logger import config_root_logger
+
 log = logging.getLogger(__name__)
 
 
@@ -76,14 +85,16 @@ def run_midi(dataset):
     dt = 0.3
     r = (21, 109)
     midiwrite(outdir + 'rnnrbm_generated_midi.mid', generated, r=r, dt=dt)
-    extent = (0, dt * len(generated)) + r
-    # pylab.figure()
-    # pylab.imshow(generated.T, origin='lower', aspect='auto',
-    #              interpolation='nearest', cmap=pylab.cm.gray_r,
-    #              extent=extent)
-    # pylab.xlabel('time (s)')
-    # pylab.ylabel('MIDI note number')
-    # pylab.title('generated piano-roll')
+
+    if has_pylab:
+        extent = (0, dt * len(generated)) + r
+        pylab.figure()
+        pylab.imshow(generated.T, origin='lower', aspect='auto',
+                     interpolation='nearest', cmap=pylab.cm.gray_r,
+                     extent=extent)
+        pylab.xlabel('time (s)')
+        pylab.ylabel('MIDI note number')
+        pylab.title('generated piano-roll')
 
     # Construct image from the weight matrix
     image = Image.fromarray(
@@ -101,9 +112,11 @@ def run_midi(dataset):
     del rnnrbm
     del optimizer
 
-    # pylab.show()
+    if has_pylab:
+        pylab.show()
 
 if __name__ == '__main__':
+    config_root_logger()
     run_midi('nottingham')
     run_midi('jsb')
     run_midi('piano_de')
