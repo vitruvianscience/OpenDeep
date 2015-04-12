@@ -73,9 +73,14 @@ class Conv1D(Model):
         "convolution": conv1d_mc0,
         'outdir': 'outputs/conv1d'  # the output directory for this model's outputs
     }
-    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, stride=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None, bias_init=None,
-                 border_mode=None, activation=None, convolution=None, config=None, defaults=defaults):
+    def __init__(self, config=None, defaults=defaults,
+                 inputs_hook=None, params_hook=None,
+                 input_shape=None, filter_shape=None, stride=None, border_mode=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 bias_init=None,
+                 activation=None,
+                 convolution=None,
+                 outdir=None):
         # combine everything by passing to Model's init
         super(Conv1D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # configs can now be accessed through self dictionary
@@ -181,9 +186,14 @@ class Conv2D(Model):
         "convolution": T.nnet.conv2d,
         'outdir': 'outputs/conv2d'  # the output directory for this model's outputs
     }
-    def __init__(self, inputs_hook, params_hook=None, input_shape=None, filter_shape=None, strides=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None, bias_init=None,
-                 border_mode=None, activation=None, convolution=None, config=None, defaults=defaults):
+    def __init__(self, config=None, defaults=defaults,
+                 inputs_hook=None, params_hook=None,
+                 input_shape=None, filter_shape=None, strides=None, border_mode=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 bias_init=None,
+                 activation=None,
+                 convolution=None,
+                 outdir=None):
         # combine everything by passing to Model's init
         super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # configs can now be accessed through self!
@@ -325,9 +335,16 @@ class ConvPoolLayer(Model):
         'weights_std': 0.01,  # standard deviation for gaussian weights init
         'outdir': 'outputs/convpool'  # the output directory for this model's outputs
     }
-    def __init__(self, inputs_hook, input_shape=None, filter_shape=None, convstride=None, padsize=None, group=None,
-                 poolsize=None, poolstride=None, bias_init=None, local_response_normalization=None,
-                 convolution=None, activation=None, params_hook=None, config=None, defaults=defaults):
+    def __init__(self, config=None, defaults=defaults,
+                 inputs_hook=None, params_hook=None,
+                 input_shape=None, filter_shape=None, convstride=None, padsize=None, group=None,
+                 poolsize=None, poolstride=None,
+                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 bias_init=None,
+                 local_response_normalization=None,
+                 convolution=None,
+                 activation=None,
+                 outdir=None):
         # combine everything by passing to Model's init
         super(ConvPoolLayer, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # configs can now be accessed through self!

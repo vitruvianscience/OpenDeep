@@ -1,8 +1,8 @@
 """
-.. module:: rnn_rbm
+.. module:: rnn_gsn
 
-This module provides the RNN-RBM.
-http://deeplearning.net/tutorial/rnnrbm.html
+This module provides the RNN-GSN.
+<link to my paper when it is on arxiv>
 """
 
 __authors__ = "Markus Beissinger"
@@ -24,53 +24,56 @@ import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep import function
 from opendeep.models.model import Model
-from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
+from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
-from opendeep.utils.noise import get_noise
 from opendeep.utils import file_ops
 
 log = logging.getLogger(__name__)
 
-class RNN_RBM(Model):
-    """
-    http://deeplearning.net/tutorial/rnnrbm.html
-    """
+class RNN_GSN(Model):
     default = {
             # recurrent parameters
             'rnn_hidden_size': None,
-            'rnn_hidden_activation': 'relu',  # type of activation to use for recurrent hidden activation
-            'rnn_weights_init': 'identity',  # how to initialize weights
+            'rnn_hidden_activation': 'tanh',  # type of activation to use for recurrent hidden activation
+            'rnn_weights_init': 'gaussian',  # how to initialize weights
+            'rnn_weights_noise': None,  # if the weights are 'identity', what noise to add
             'rnn_weights_mean': 0,  # mean for gaussian weights init
             'rnn_weights_std': 0.005,  # standard deviation for gaussian weights init
             'rnn_weights_interval': 'montreal',  # how to initialize from uniform
             'rnn_bias_init': 0.0,  # how to initialize the bias parameter
             'generate_n_steps': 200,  # how many steps to generate
-            # rbm parameters
-            'hidden_size': None,
-            'visible_activation': 'sigmoid',  # type of activation to use for visible activation
-            'hidden_activation': 'sigmoid',  # type of activation to use for hidden activation
-            'weights_init': 'uniform',  # either 'gaussian' or 'uniform' - how to initialize weights
+            # gsn parameters
+            "layers": 3,  # number of hidden layers to use
+            "walkbacks": 5,  # number of walkbacks (generally 2*layers) - need enough to propagate to visible layer
+            "input_size": None,  # number of input units - please specify for your dataset!
+            "hidden_size": 1500,  # number of hidden units in each layer
+            "visible_activation": 'sigmoid',  # activation for visible layer - make appropriate for input data type.
+            "hidden_activation": 'tanh',  # activation for hidden layers
+            "input_sampling": True,  # whether to sample at each walkback step - makes it like Gibbs sampling.
+            "mrg": RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
+            "weights_init": "uniform",  # how to initialize weights
+            'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
             'weights_mean': 0,  # mean for gaussian weights init
             'weights_std': 0.005,  # standard deviation for gaussian weights init
-            'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
             'bias_init': 0.0,  # how to initialize the bias parameter
-            'k': 15,  # the k steps used for CD-k or PCD-k with Gibbs sampling
             # general parameters
             'input_size': None,
             'mrg': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
             'rng': numpy.random.RandomState(1),  #default random number generator from Numpy
-            'outdir': 'outputs/rnnrbm/',  # the output directory for this model's outputs
+            'outdir': 'outputs/rnngsn/',  # the output directory for this model's outputs
     }
 
     def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, config=None, defaults=default,
                  input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
                  weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
-                 mrg=None, rng=None, k=None, outdir=None, rnn_hidden_size=None, rnn_hidden_activation=None,
+                 mrg=None, rng=None, outdir=None, rnn_hidden_size=None, rnn_hidden_activation=None,
                  rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None,
                  rnn_weights_interval=None, rnn_bias_init=None, generate_n_steps=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
-        super(RNN_RBM, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        initial_parameters = locals()
+        initial_parameters.pop('self')
+        super(RNN_GSN, self).__init__(**initial_parameters)
         # all configuration parameters are now in self!
 
         ##################
@@ -186,9 +189,7 @@ class RNN_RBM(Model):
                                    mean=self.rnn_weights_mean,
                                    std=self.rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval,
-                                   # if identity
-                                   add_noise=identity_noise)
+                                   interval=self.rnn_weights_interval)
 
             # grab the bias vectors
             # rbm biases
