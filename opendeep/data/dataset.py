@@ -20,7 +20,7 @@ import shutil
 # third party libraries
 import numpy
 # internal imports
-from opendeep import sharedX
+from opendeep import dataset_shared
 from opendeep.utils.file_ops import mkdir_p, get_file_type, download_file
 import opendeep.utils.file_ops as files
 
@@ -41,8 +41,6 @@ def get_subset_strings(subset):
     else:
         return str(subset)
 
-# TODO: I don't think this is very efficient implementation, due to the iterators. Indexing directly is faster.
-# However, it is more flexible than indexing. Need to look into it further to optimize.
 class Dataset(object):
     '''
     Default interface for a dataset object - a bunch of sources for an iterator to grab data from
@@ -50,33 +48,17 @@ class Dataset(object):
     def __init__(self):
         pass
 
-    def getDataByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset values at the index (indices)
-        '''
-        log.critical('No getDataByIndices method implemented for %s!', str(type(self)))
+    def getSubset(self, subset):
+        """
+        This method returns the entire shared variable for the subset.
+
+        :param subset: the subset TRAIN, VALID, or TEST
+        :type subset: integer
+        :return: tuple of theano shared variable holding the data and labels (or None if no labels)
+        :rtype: shared variable
+        """
+        log.critical('No getSubset method implemented for %s!', str(type(self)))
         raise NotImplementedError()
-
-
-    def getLabelsByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data label values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset labels at the index (indices)
-        '''
-        log.critical('No getLabelsByIndices method implemented for %s!', str(type(self)))
-        raise NotImplementedError()
-
 
     def hasSubset(self, subset):
         '''
@@ -99,7 +81,6 @@ class Dataset(object):
         else:
             return False
 
-
     def getDataShape(self, subset):
         '''
         :return: tuple
@@ -118,11 +99,6 @@ class Dataset(object):
             log.error("No test shape implemented")
             raise NotImplementedError("No test shape implemented")
 
-
-    def get_example_shape(self):
-        return self.getDataShape(TRAIN)[1]
-
-
     def scaleMeanZeroVarianceOne(self):
         '''
         Scale the dataset input vectors X to have a mean of 0 and variance of 1
@@ -131,7 +107,6 @@ class Dataset(object):
         '''
         log.critical('No scaleMeanZeroVarianceOne method implemented for %s', str(type(self)))
         raise NotImplementedError()
-
 
     def scaleMinMax(self, min, max):
         '''
@@ -241,7 +216,6 @@ class FileDataset(Dataset):
 
             return dataset_location, file_type
 
-
     def uninstall(self):
         '''
         Method to delete dataset files from disk (if in file form)
@@ -260,7 +234,6 @@ class FileDataset(Dataset):
             log.debug('dataset_location was not valid. It was %s', str(self.dataset_location))
         log.info('Uninstallation (removal) successful!')
 
-
 class MemoryDataset(Dataset):
     '''
     Dataset object wrapper for something given in memory (numpy matrix, theano matrix)
@@ -273,10 +246,10 @@ class MemoryDataset(Dataset):
         # make sure the inputs are arrays
         train_X = numpy.array(train_X)
         self._train_shape = train_X.shape
-        self.train_X = sharedX(train_X)
+        self.train_X = dataset_shared(train_X, name='memory_train_x', borrow=True)
         if train_Y is not None:
             try:
-                self.train_Y = sharedX(numpy.array(train_Y))
+                self.train_Y = dataset_shared(numpy.array(train_Y), name='memory_train_y', borrow=True)
             except Exception as e:
                 log.exception("COULD NOT CONVERT train_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
@@ -284,12 +257,12 @@ class MemoryDataset(Dataset):
             try:
                 valid_X = numpy.array(valid_X)
                 self._valid_shape = valid_X.shape
-                self.valid_X = sharedX(valid_X)
+                self.valid_X = dataset_shared(valid_X, name='memory_valid_x', borrow=True)
             except Exception as e:
                 log.exception("COULD NOT CONVERT valid_X TO NUMPY ARRAY. EXCEPTION: %s", str(e))
         if valid_Y is not None:
             try:
-                self.valid_Y = sharedX(numpy.array(valid_Y))
+                self.valid_Y = dataset_shared(numpy.array(valid_Y), name='memory_valid_y', borrow=True)
             except Exception as e:
                 log.exception("COULD NOT CONVERT valid_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
@@ -297,52 +270,31 @@ class MemoryDataset(Dataset):
             try:
                 test_X = numpy.array(test_X)
                 self._test_shape = test_X.shape
-                self.test_X = sharedX(test_X)
+                self.test_X = dataset_shared(test_X, name='memory_test_x', borrow=True)
             except Exception as e:
                 log.exception("COULD NOT CONVERT test_X TO NUMPY ARRAY. EXCEPTION: %s", str(e))
         if test_Y is not None:
             try:
-                self.test_Y = sharedX(numpy.array(test_Y))
+                self.test_Y = dataset_shared(numpy.array(test_Y), name='memory_test_y', borrow=True)
             except Exception as e:
                 log.exception("COULD NOT CONVERT test_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
-    def getDataByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset values at the index (indices)
-        '''
+    def getSubset(self, subset):
+        y = None
         if subset is TRAIN:
-            return self.train_X.get_value(borrow=True)[indices]
+            if hasattr(self, 'train_Y'):
+                y = self.train_Y
+            return self.train_X, y
         elif subset is VALID and hasattr(self, 'valid_X') and self.valid_X:
-            return self.valid_X.get_value(borrow=True)[indices]
+            if hasattr(self, 'valid_Y'):
+                y = self.valid_Y
+            return self.valid_X, y
         elif subset is TEST and hasattr(self, 'test_X') and self.test_X:
-            return self.test_X.get_value(borrow=True)[indices]
+            if hasattr(self, 'test_Y'):
+                y = self.test_Y
+            return self.test_X, y
         else:
-            return None
-
-    def getLabelsByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data label values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset labels at the index (indices)
-        '''
-        if subset is TRAIN and hasattr(self, 'train_Y') and self.train_Y:
-            return self.train_Y.get_value(borrow=True)[indices]
-        elif subset is VALID and hasattr(self, 'valid_Y') and self.valid_Y:
-            return self.valid_Y.get_value(borrow=True)[indices]
-        elif subset is TEST and hasattr(self, 'test_Y') and self.test_Y:
-            return self.test_Y.get_value(borrow=True)[indices]
-        else:
-            return None
+            return None, None
 
     def getDataShape(self, subset):
         '''

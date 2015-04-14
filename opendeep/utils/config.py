@@ -15,6 +15,7 @@ import logging
 import collections
 import os
 import json
+import copy
 # third-party libraries
 # check if pyyaml is installed
 try:
@@ -40,7 +41,7 @@ def create_dictionary_like(input):
     Install with 'pip install pyyaml' if you want YAML-parsing capabilities.
     """
     if input is None:
-        log.warning('Config was None.')
+        log.debug('Input to create_dictionary_like was None.')
         return None
     # check if it is a dictionary-like object (implements collections.Mapping)
     elif isinstance(input, collections.Mapping):
@@ -81,9 +82,9 @@ def combine_config_and_defaults(config=None, defaults=None):
     :rtype: collections.Mapping
     """
     # make sure the config is like a dictionary
-    config_dict = create_dictionary_like(config)
+    config_dict = copy.deepcopy(create_dictionary_like(config))
     # make sure the defaults is like a dictionary
-    defaults_dict = create_dictionary_like(defaults)
+    defaults_dict = copy.deepcopy(create_dictionary_like(defaults))
     # override any default values with the config (after making sure they parsed correctly)
     if config_dict is not None and defaults_dict is not None:
         defaults_dict.update(config_dict)

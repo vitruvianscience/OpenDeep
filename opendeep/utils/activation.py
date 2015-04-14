@@ -129,6 +129,22 @@ _activations = {'sigmoid': sigmoid,
                 'tanh': tanh,
                 'linear': linear}
 
+def is_binary(activation):
+    """
+    returns if the activation function is binary
+
+    :param activation: the activation function to compare
+    :type activation: function
+
+    :return: boolean if it is binary (default to False)
+    :rtype: bool
+    """
+    binary = False
+    if activation == sigmoid or activation == softmax:
+        binary = True
+
+    return binary
+
 def get_activation_function(name):
     """
     This helper method returns the appropriate activation function given a string name. It looks up the appropriate

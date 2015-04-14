@@ -18,17 +18,12 @@ import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 from opendeep import sharedX
-from opendeep.optimization.stochastic_gradient_descent import SGD
-from opendeep.data.iterators.sequential import SequentialIterator
+from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
 
-# Default values to use for some training parameters
-_defaults = {'decay': 0.95,
-             'max_scaling': 1e5}
-
 # All RMSProp needs to do is implement the get_updates() method for stochastic gradient descent
-class RMSProp(SGD):
+class RMSProp(Optimizer):
     """
     From Pylearn2 (https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/training_algorithms/learning_rule.py)
 
@@ -48,49 +43,27 @@ class RMSProp(SGD):
     Restrict the RMSProp gradient scaling coefficient to values
     below `max_scaling`.
     """
-    def __init__(self, model, dataset, decay=None, max_scaling=None, iterator_class=SequentialIterator,
-                 config=None, defaults=_defaults, rng=None, n_epoch=None, batch_size=None, minimum_batch_size=None,
-                 save_frequency=None, early_stop_threshold=None, early_stop_length=None, learning_rate=None,
-                 flag_para_load=None):
-        if not decay:
-            if config:
-                decay = config.get('decay', defaults.get('decay'))
-            elif defaults:
-                decay = defaults.get('decay')
-            else:
-                log.error("RMSProp missing 'decay' parameter in config or defaults!")
-                raise AssertionError
-        assert decay >= 0.
-        assert decay < 1.
-        self.decay = sharedX(decay)
+    # Default values to use for some training parameters
+    _defaults = {'decay': 0.95,
+                 'max_scaling': 1e5}
 
-        if not max_scaling:
-            if config:
-                max_scaling = config.get('max_scaling', defaults.get('max_scaling'))
-            elif defaults:
-                max_scaling = defaults.get('max_scaling')
-            else:
-                log.error("RMSProp missing 'max_scaling' parameter in config or defaults!")
-                raise AssertionError
-        assert max_scaling > 0.
-        self.epsilon = 1. / max_scaling
+    def __init__(self, model, dataset,
+                 config=None, defaults=_defaults,
+                 n_epoch=None, batch_size=None, minimum_batch_size=None,
+                 save_frequency=None, early_stop_threshold=None, early_stop_length=None,
+                 learning_rate=None, lr_decay=None, lr_factor=None,
+                 decay=None, max_scaling=None):
+        # need to call the Optimizer constructor
+        super(RMSProp, self).__init__(model, dataset, config=config, defaults=defaults,
+                                      n_epoch=n_epoch, batch_size=batch_size, minimum_batch_size=minimum_batch_size,
+                                      save_frequency=save_frequency, early_stop_length=early_stop_length,
+                                      early_stop_threshold=early_stop_threshold, learning_rate=learning_rate,
+                                      lr_decay=lr_decay, lr_factor=lr_factor, decay=decay, max_scaling=max_scaling)
+
+        assert self.max_scaling > 0., "Max_scaling needs to be > 0."
+        self.epsilon = 1. / self.max_scaling
 
         self.mean_square_grads = OrderedDict()
-
-        # need to call the SGD constructor after parameters are extracted because the constructor calls get_updates()!
-        super(RMSProp, self).__init__(model=model,
-                                      dataset=dataset,
-                                      iterator_class=iterator_class,
-                                      config=config,
-                                      rng=rng,
-                                      n_epoch=n_epoch,
-                                      batch_size=batch_size,
-                                      minimum_batch_size=minimum_batch_size,
-                                      save_frequency=save_frequency,
-                                      early_stop_length=early_stop_length,
-                                      early_stop_threshold=early_stop_threshold,
-                                      learning_rate=learning_rate,
-                                      flag_para_load=flag_para_load)
 
     def get_updates(self, grads):
         """

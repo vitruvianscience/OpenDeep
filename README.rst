@@ -22,6 +22,24 @@ to create your own novel research, or write new models from scratch without worr
 .. _OpenDeep: http://www.opendeep.org/
 .. _Theano: http://deeplearning.net/software/theano/
 
+Quick example usage
+-------------------
+hello world with an MLP on the MNIST handwritten digit dataset::
+	
+  from opendeep.models.container import Prototype
+  from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+  from opendeep.optimization.adadelta import AdaDelta
+  from opendeep.data.standard_datasets.image.mnist import MNIST
+
+  mlp = Prototype()
+  mlp.add(BasicLayer(input_size=28*28, output_size=512, activation='rectifier', noise='dropout'))
+  mlp.add(BasicLayer(output_size=512, activation='rectifier', noise='dropout'))
+  mlp.add(SoftmaxLayer(output_size=10))
+
+  trainer = AdaDelta(model=mlp, dataset=MNIST())
+  trainer.train()
+
+
 Motivation
 ----------
 
@@ -34,7 +52,7 @@ Motivation
 
 Installation
 ------------
-Because OpenDeep is still in alpha, you have to install via setup.py.
+Because OpenDeep is still in alpha, you have to install via setup.py. Also, please make sure you have these dependencies installed first.
 
 Dependencies
 ^^^^^^^^^^^^
@@ -49,6 +67,8 @@ Dependencies
 
 * PyYAML_ (optional): used for YAML parsing of config files.
 
+* Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
+
 .. _installation instructions here: http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions
 
 .. _CUDA drivers: https://developer.nvidia.com/cuda-toolkit
@@ -62,6 +82,8 @@ Dependencies
 
 .. _PyYAML: http://pyyaml.org/
 
+.. _Bokeh: http://bokeh.pydata.org/en/latest/
+
 Install from source
 ^^^^^^^^^^^^^^^^^^^
 1) Navigate to your desired installation directory and download the github repository::
@@ -73,7 +95,7 @@ Install from source
     cd opendeep
     python setup.py develop
 
-Using develop instead of the normal <python setup.py install> allows you to update the repository files by pulling
+Using :code:`python setup.py develop` instead of the normal :code:`python setup.py install` allows you to update the repository files by pulling
 from git and have the whole package update! No need to reinstall.
 
 That's it! Now you should be able to import opendeep into python modules.

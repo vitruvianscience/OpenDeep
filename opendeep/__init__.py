@@ -51,6 +51,14 @@ def sharedX(value, name=None, borrow=False, dtype=None):
                          name=name,
                          borrow=borrow)
 
+def dataset_shared(value, name=None, borrow=False, dtype=None):
+    """
+    Transform value into a theano shared variable of type floatX. This is used for datasets, so might want to
+    use theano.tensor._shared instead of theano.shared
+    """
+    # TODO: look into using theano.tensor._shared instead? So it can bring portions to the GPU as needed?
+    return sharedX(value=value, name=name, borrow=borrow, dtype=dtype)
+
 def as_floatX(variable):
     """
     Casts a given variable into dtype `config.floatX`. Numpy ndarrays will

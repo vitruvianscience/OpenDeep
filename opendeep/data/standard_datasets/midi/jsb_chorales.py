@@ -18,7 +18,7 @@ import glob
 import numpy
 import theano
 # internal imports
-from opendeep import sharedX
+from opendeep import dataset_shared
 import opendeep.data.dataset as datasets
 from opendeep.data.dataset import FileDataset
 from opendeep.utils.midi import midiread
@@ -56,27 +56,19 @@ class JSBChorales(FileDataset):
         self.test_shapes = [test.shape for test in test_datasets]
         # put them into shared variables
         log.debug('Putting JSBChorales into theano shared variables')
-        # self.train = sharedX(numpy.concatenate(train_datasets), borrow=True)
-        # self.valid = sharedX(numpy.concatenate(valid_datasets), borrow=True)
-        # self.test = sharedX(numpy.concatenate(test_datasets), borrow=True)
-        self.train = numpy.concatenate(train_datasets)
-        self.valid = numpy.concatenate(valid_datasets)
-        self.test = numpy.concatenate(test_datasets)
+        self.train = dataset_shared(numpy.concatenate(train_datasets), name='jsb_train', borrow=True)
+        self.valid = dataset_shared(numpy.concatenate(valid_datasets), name='jsb_valid', borrow=True)
+        self.test  = dataset_shared(numpy.concatenate(test_datasets), name='jsb_test', borrow=True)
 
-    def getDataByIndices(self, indices, subset):
-        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
-            return None
+    def getSubset(self, subset):
         if subset is datasets.TRAIN:
-            return self.train[indices]#.eval()
+            return self.train, None
         elif subset is datasets.VALID:
-            return self.valid[indices]#.eval()
+            return self.valid, None
         elif subset is datasets.TEST:
-            return self.test[indices]#.eval()
-
-    def getLabelsByIndices(self, indices, subset):
-        # no labels
-        return None
+            return self.test, None
+        else:
+            return None, None
 
     def hasSubset(self, subset):
         if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:

@@ -28,6 +28,7 @@ from opendeep import function
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
 from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
+from opendeep.utils.file_ops import mkdir_p
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class Model(object):
     def __init__(self, config=None, defaults=None,
                  inputs_hook=None, hiddens_hook=None, params_hook=None,
                  output_size=None,
+                 outdir=None,
                  **kwargs):
         """
         This creates the model's combined configuration params from config and defaults into a self.args
@@ -61,7 +63,7 @@ class Model(object):
         inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
         hiddens_hook is a tuple of (shape, variable) that should replace the default model hidden representation
         (which means you need to adapt creating your computation graph to not care about the inputs and to instead
-        compute outputs directly from the hidden variable provided).
+        run outputs directly from the hidden variable provided).
         You can also accept a params_hook to share model parameters rather than instantiate a new set of parameters.
         ------------------
 
@@ -93,9 +95,12 @@ class Model(object):
 
         :param output_size: the dimensionality of the output for this model. This is required for stacking models
         automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
-        compute the size from Theano's graph, so it needs to be explicit. This parameter can be None if it is specified
+        run the size from Theano's graph, so it needs to be explicit. This parameter can be None if it is specified
         in the default or config dictionaries.
         :type output_size: int
+
+        :param outdir: the directory you want outputs (parameters, images, etc.) to save to.
+        :type outdir: string
 
         :param kwargs: this will be all the other left-over parameters passed to the class as a dictionary of
         {param: value}. We will use the kwargs to finally combine defaults, config, and passed parameters together
@@ -125,29 +130,45 @@ class Model(object):
         if output_size is not None or 'output_size' not in self.args:
             self.args['output_size'] = output_size
 
+        # set the overall default outdir to outputs/
+        if outdir is not None or 'outdir' not in self.args:
+            self.args['outdir'] = outdir
+        if self.args['outdir'] is None:
+            self.args['outdir'] = 'outputs/'
+
+        # Now create the directory for outputs of the model
+        # set up base path for the outputs of the model during training, etc.
+        mkdir_p(self.args['outdir'])
+
+
         # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
-        for arg, val in kwargs.iteritems():
+        for arg, val in kwargs.items():
             if (val is not None or str(arg) not in self.args) and str(arg) != 'kwargs':
                 self.args[str(arg)] = val
             # flatten kwargs if it was passed as a variable
             elif str(arg) == 'kwargs':
                 inner_kwargs = kwargs['kwargs']
-                for key, item in inner_kwargs.iteritems():
+                for key, item in inner_kwargs.items():
                     if item is not None or str(key) not in self.args:
                         self.args[str(key)] = item
 
         # Magic! Now self.args contains the combination of all the initialization variables, overridden like so:
         # defaults < config < kwargs (explicits passed to model's __init__)
 
-        # log the arguments.
-        log.debug("%s self.args: %s", str(type(self)), str(self.args))
-        # save the arguments.
-        self.save_args()
+        # Do a check if both input_size and inputs_hook are None (this should only happen in Prototype)
+        if self.args.get("input_size") is None and self.args.get('inputs_hook') is None:
+            log.warning("Both input_size and inputs_hook are None! Make sure this is only happening in a Prototype! "
+                        "Setting input_size to 1 for convenience to the Prototype.")
+            self.args['input_size'] = 1
 
         # Finally, to make things really easy, update the class 'self' with everything in self.args to make
         # all the parameters accessible via self.<param>
         self.__dict__.update(self.args)
 
+        # log the arguments.
+        log.debug("%s self.args: %s", str(type(self)), str(self.args))
+        # save the arguments.
+        self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
 
     ######################################################################
@@ -156,14 +177,14 @@ class Model(object):
     def get_inputs(self):
         """
         This should return the input(s) to the model's computation graph as a list. This only includes inputs for the
-        predict function, not any inputs used for supervised training.
+        run function, not any inputs used for supervised training.
 
         Note: This should normally return the same theano variable list that is used in the inputs= argument to the
-        f_predict function.
+        f_run function.
         ------------------
 
-        :return: Theano variables representing the input(s) to the model's 'predict' computation.
-        :rtype: List(theano variable)
+        :return: Theano variables representing the input(s) to the model's 'run' computation.
+        :rtype: theano variable or List(theano variable)
         """
         log.critical("%s does not have a get_inputs function!", str(type(self)))
         raise NotImplementedError("Please implement a get_inputs method for %s" % str(type(self)))
@@ -188,7 +209,7 @@ class Model(object):
     def get_outputs(self):
         """
         This method will return the model's output variable expression from the computational graph.
-        This should be what is given for the outputs= part of the 'f_predict' function from self.predict().
+        This should be what is given for the outputs= part of the 'f_run' function from self.run().
 
         This will be used for creating hooks to link models together,
         where these outputs can be strung as the inputs or hiddens to another model :)
@@ -207,13 +228,13 @@ class Model(object):
     #############################################
     # Methods for running the model on an input #
     #############################################
-    def predict(self, input):
+    def run(self, input):
         """
         This method will return the model's output (run through the function), given an input. In the case that
         input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
 
-        Try to avoid re-compiling the theano function created for predict - check a hasattr(self, 'f_predict') or
-        something similar first. I recommend creating your theano f_predict in a create_computation_graph method
+        Try to avoid re-compiling the theano function created for run - check a hasattr(self, 'f_run') or
+        something similar first. I recommend creating your theano f_run in a create_computation_graph method
         to be called after the class initializes.
         ------------------
 
@@ -223,18 +244,43 @@ class Model(object):
         :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
         :rtype: tensor
         """
-        # check if the predict function is already compiled, otherwise compile it!
-        if not hasattr(self, 'f_predict'):
-            log.debug("Compiling f_predict...")
+        # set any noise switches to zero
+        if len(self.get_noise_switch()) > 0:
+            vals = [switch.get_value() for switch in self.get_noise_switch()]
+            [switch.set_value(0.) for switch in self.get_noise_switch()]
+
+        # check if the run function is already compiled, otherwise compile it!
+        if not hasattr(self, 'f_run'):
+            log.debug("Compiling f_run...")
             t = time.time()
-            self.f_predict = function(inputs=self.get_inputs(),
-                                      outputs=self.get_outputs())
+            self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
+                                  outputs = self.get_outputs(),
+                                  updates = self.get_updates())
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
 
         # because we use the splat to account for multiple inputs to the function, make sure input is a list.
         input = raise_to_list(input)
-        # return the results of the predict function!
-        return self.f_predict(*input)
+        # return the results of the run function!
+        output =  self.f_run(*input)
+
+        # reset the noise switches
+        if len(self.get_noise_switch()) > 0:
+            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), vals)]
+
+        return output
+
+    def generate(self, initial=None):
+        """
+        This method starts generating samples from the model (if it is a generative model)
+
+        :param initial: the starting point for generation (if applicable)
+        :type initial: tensor
+
+        :return: the list of generations
+        :rtype: list
+        """
+        log.exception("Generate method not implemented for Model %s", str(type(self)))
+        raise NotImplementedError("Generate method not implemented for Model %s" % str(type(self)))
 
 
     #########################################
@@ -249,7 +295,7 @@ class Model(object):
         ------------------
 
         :return: Theano variables representing the target(s) to the model's computation.
-        :rtype: List(theano variable)
+        :rtype: theano variable or List(theano variable)
         """
         # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
         # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost
@@ -294,14 +340,14 @@ class Model(object):
         :param additional_cost: any additional cost to add to the gradient
         :type additional_cost: theano expression
 
-        :return: tuple of gradient with respect to inputs, and with respect to
+        :return: tuple of gradient with respect to params, and with respect to inputs
         :rtype:
         """
         # check if starting gradients was provided.
         # if there are known gradients to start, use those instead of the cost for this model
         if starting_gradient is not None:
             params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
-                                                                   end=self.get_inputs(),
+                                                                   end=raise_to_list(self.get_inputs()),
                                                                    start=starting_gradient,
                                                                    cost=additional_cost,
                                                                    details=False)
@@ -312,11 +358,11 @@ class Model(object):
             if additional_cost is not None:
                 cost = T.sum(cost, additional_cost)
             params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
-                                                                   end=self.get_inputs(),
+                                                                   end=raise_to_list(self.get_inputs()),
                                                                    cost=cost,
                                                                    details=False)
         return (OrderedDict(zip(self.get_params(), params_grad)),
-                OrderedDict(zip(self.get_inputs(), next_starting_grad)))
+                OrderedDict(zip(raise_to_list(self.get_inputs()), next_starting_grad)))
 
 
     def get_updates(self):
@@ -386,6 +432,17 @@ class Model(object):
         # By default, no learning rate scaling.
         return {}
 
+
+    def get_noise_switch(self):
+        """
+        This method returns a list of shared theano variables representing switches for adding noise in the model.
+        The variables should be set to either 0. or 1.
+        For a usage example, see the BasicLayer in opendeep.models.single_layer.basic package.
+
+        :return: list of shared variable
+        :rtype: list
+        """
+        return []
 
     #######################################
     # Methods to do with model parameters #
@@ -484,14 +541,15 @@ class Model(object):
         # By default, try to dump all the values from get_param_values into a pickle file.
         params = self.get_param_values()
 
-        param_file = os.path.realpath(param_file)
+        param_path = os.path.join(self.outdir, param_file)
+        param_file = os.path.realpath(param_path)
 
         # force extension to be .pkl if it isn't a pickle file
         _, extension = os.path.splitext(param_file)
         if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
             ''.join([param_file, '.pkl'])
 
-        log.debug('Saving %s parameters to %s...',
+        log.debug('Saving %s parameters to %s',
                   str(type(self)), str(param_file))
         # try to dump the param values
         with open(param_file, 'wb') as f:
@@ -523,7 +581,7 @@ class Model(object):
         # make sure it is a pickle file
         ftype = file_ops.get_file_type(param_file)
         if ftype == file_ops.PKL:
-            log.debug("loading model %s parameters from %s...",
+            log.debug("loading model %s parameters from %s",
                       str(type(self)), str(param_file))
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'r') as f:
@@ -550,14 +608,15 @@ class Model(object):
         :return: whether or not successful
         :rtype: bool
         """
-        args_file = os.path.realpath(args_file)
+        args_path = os.path.join(self.outdir, args_file)
+        args_file = os.path.realpath(args_path)
 
         # force extension to be .pkl if it isn't a pickle file
         _, extension = os.path.splitext(args_file)
         if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
             ''.join([args_file, '.pkl'])
 
-        log.debug('Saving %s configuration to %s...',
+        log.debug('Saving %s configuration to %s',
                   str(type(self)), str(args_file))
         # try to dump the param values
         with open(args_file, 'wb') as f:

@@ -22,13 +22,12 @@ from collections import OrderedDict
 import theano.tensor as T
 # internal references
 from opendeep import sharedX
-from opendeep.optimization.stochastic_gradient_descent import SGD
-from opendeep.data.iterators.sequential import SequentialIterator
+from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
 
 # All AdaDelta needs to do is implement the get_updates() method for stochastic gradient descent
-class AdaDelta(SGD):
+class AdaDelta(Optimizer):
     """
     From Pylearn2 (https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/training_algorithms/learning_rule.py)
     Implements the AdaDelta learning rule as described in:
@@ -43,35 +42,21 @@ class AdaDelta(SGD):
     defaults = {'decay': 0.95,
                 'learning_rate': 0.001}
 
-    def __init__(self, model, dataset, decay=None, iterator_class=SequentialIterator, config=None, defaults=defaults,
-                 rng=None, n_epoch=None, batch_size=None, minimum_batch_size=None, save_frequency=None,
-                 early_stop_threshold=None, early_stop_length=None, learning_rate=None, flag_para_load=None):
-        if not decay:
-            if config:
-                decay = config.get('decay', defaults.get('decay'))
-            elif defaults:
-                decay = defaults.get('decay')
-            else:
-                log.warning("AdaDelta missing 'decay' parameter in config or defaults!")
-                raise AssertionError
-        assert decay >= 0.
-        assert decay < 1.
-        self.decay = decay
-
+    def __init__(self, model, dataset,
+                 config=None, defaults=defaults,
+                 n_epoch=None, batch_size=None, minimum_batch_size=None,
+                 save_frequency=None, early_stop_threshold=None, early_stop_length=None,
+                 learning_rate=None, lr_decay=None, lr_factor=None,
+                 decay=None):
         # need to call the SGD constructor after parameters are extracted because the constructor calls get_updates()!
-        super(AdaDelta, self).__init__(model=model,
-                                       dataset=dataset,
-                                       iterator_class=iterator_class,
-                                       config=config,
-                                       rng=rng,
-                                       n_epoch=n_epoch,
-                                       batch_size=batch_size,
-                                       minimum_batch_size=minimum_batch_size,
-                                       save_frequency=save_frequency,
-                                       early_stop_length=early_stop_length,
-                                       early_stop_threshold=early_stop_threshold,
-                                       learning_rate=learning_rate,
-                                       flag_para_load=flag_para_load)
+        super(AdaDelta, self).__init__(model, dataset, config=config, defaults=defaults,
+                                       n_epoch=n_epoch, batch_size=batch_size, minimum_batch_size=minimum_batch_size,
+                                       save_frequency=save_frequency, early_stop_length=early_stop_length,
+                                       early_stop_threshold=early_stop_threshold, learning_rate=learning_rate,
+                                       lr_decay=lr_decay, lr_factor=lr_factor, decay=decay)
+
+        assert self.decay >= 0., "Decay needs to be >=0."
+        assert self.decay < 1., "Decay needs to be <1."
 
     def get_updates(self, grads):
         """

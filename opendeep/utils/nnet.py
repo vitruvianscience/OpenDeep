@@ -15,6 +15,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
+from functools import partial
 # third party libraries
 import numpy
 import theano
@@ -38,9 +39,57 @@ _uniform_interval = {
     # this is the default provided in other codebases
     'default': lambda shape: 1 / numpy.sqrt(shape[0]),
     # this is the default for the GSN code from Li Yao
-    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
+    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:]))),
+    # this is basically Xavier initialization: 1 / n_in
+    'default': lambda shape: 1 / numpy.sqrt(shape[0]),
 }
 default_interval = 'montreal'
+
+def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noise=None, rng=None, name="W", **kwargs):
+    """
+    This will initialize the weights from the method passed from weights_init with the arguments in kwargs
+
+    :param weights_init: string of the method for creating weights
+    :type weights_init: basestring
+
+    :param shape: tuple of the shape you want the weight matrix
+    :type shape: tuple or ndarray
+
+    :param mean: mean if using gaussian weights
+    :type mean: float
+
+    :param std: std if using gaussian weights
+    :type std: float
+
+    :param interval: +- interval to use for uniform weights
+    :type interval: float or string
+
+    :param rng: random number generator to use for sampling
+    :type rng: numpy or theano rng
+
+    :param name: name for the returned tensor
+    :type name: basestring
+
+    :return: theano tensor (shared variable) for the weights
+    :rtype: shared tensor
+    """
+    # make sure the weights_init is a string to the method to use
+    if isinstance(weights_init, basestring):
+        # if we are initializing weights from a normal distribution
+        if weights_init.lower() == 'gaussian':
+            return get_weights_gaussian(shape=shape, mean=mean, std=std, name=name, rng=rng)
+        # if we are initializing weights from a uniform distribution
+        elif weights_init.lower() == 'uniform':
+            return get_weights_uniform(shape=shape, interval=interval, name=name, rng=rng)
+        # if we are initializing an identity matrix
+        elif weights_init.lower() == 'identity':
+            return get_weights_identity(shape=shape, name=name, add_noise=add_noise)
+
+    # otherwise not implemented
+    log.error("Did not recognize weights_init %s! Pleas try gaussian, uniform, or identity" %
+              str(weights_init))
+    raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian, uniform, or identity" %
+                              str(weights_init))
 
 def get_weights_uniform(shape, interval=None, name="W", rng=None):
     """
@@ -130,6 +179,33 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
         val = cast_floatX(mean * numpy.ones(shape, dtype=theano.config.floatX))
 
     return theano.shared(value=val, name=name)
+
+def get_weights_identity(shape, name="W", add_noise=None):
+    """
+    This will return a weights matrix as close to the identity as possible. If a non-square shape, it will make
+    a matrix of the form (I 0)
+
+    Identity matrix for weights is useful for RNNs with ReLU! http://arxiv.org/abs/1504.00941
+
+    :param shape: tuple giving the shape information for the weight matrix
+    :type shape: Tuple
+
+    :param name: name to give the shared variable
+    :type name: basestring
+
+    :return: the theano shared variable with given shape
+    :rtype: shared tensor
+    """
+    weights = numpy.eye(N=shape[0], M=shape[1], k=0, dtype=theano.config.floatX)
+
+    if add_noise:
+        if isinstance(add_noise, partial):
+            weights = add_noise(input=weights)
+        else:
+            log.error("Add noise to identity weights was not a functools.partial object. Ignoring...")
+
+    return theano.shared(value=weights, name=name)
+
 
 def get_bias(shape, name="b", init_values=None):
     """

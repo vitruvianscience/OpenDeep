@@ -38,14 +38,12 @@ import theano.tensor as T
 import numpy
 # internal references
 from opendeep import sharedX
-from opendeep.optimization.stochastic_gradient_descent import SGD
-from opendeep.data.iterators.sequential import SequentialIterator
-from opendeep.utils.config import combine_config_and_defaults
+from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
 
 # All AdaSecant needs to do is implement the get_updates() method for stochastic gradient descent
-class AdaSecant(SGD):
+class AdaSecant(Optimizer):
     """
     Taken from https://github.com/caglar/adasecant_wshp_paper:
     Adasecant:
@@ -82,66 +80,44 @@ class AdaSecant(SGD):
     # Default values to use for some training parameters
     defaults = {'decay': 0.95,
                 'gamma_clip': 1.8,
+                'damping': 1e-7,
                 'grad_clip': None,
                 'start_var_reduction': 0,
                 'delta_clip': None,
                 'use_adagrad': False,
                 'skip_nan_inf': False,
+                'upper_bound_tau': 1e8,
+                'lower_bound_tau': 1.5,
                 'use_corrected_grad': True}
 
     def __init__(self, model, dataset,
-                 decay=None,
-                 gamma_clip=None,
-                 grad_clip=None,
-                 start_var_reduction=None,
-                 delta_clip=None,
-                 use_adagrad=None,
-                 skip_nan_inf=None,
-                 use_corrected_grad=None,
-                 config=None, defaults=defaults, iterator_class=SequentialIterator, rng=None, n_epoch=None,
-                 batch_size=None, minimum_batch_size=None, save_frequency=None, early_stop_threshold=None,
-                 early_stop_length=None, learning_rate=None, flag_para_load=None):
-
-        specific_args = combine_config_and_defaults(config, defaults)
-
-        decay = decay or specific_args.get('decay')
-
-        assert decay >= 0.
-        assert decay < 1.
-        self.decay = sharedX(decay, "decay")
-
-        self.start_var_reduction = start_var_reduction or specific_args.get('start_var_reduction')
-        self.delta_clip          = delta_clip or specific_args.get('delta_clip')
-        self.gamma_clip          = gamma_clip or specific_args.get('gamma_clip')
-        self.grad_clip           = grad_clip or specific_args.get('grad_clip')
-        self.use_corrected_grad  = use_corrected_grad or specific_args.get('use_corrected_grad')
-        self.use_adagrad         = use_adagrad or specific_args.get('use_adagrad')
-
-        self.damping             = 1e-7
+                 config=None, defaults=defaults,
+                 n_epoch=None, batch_size=None, minimum_batch_size=None,
+                 save_frequency=None, early_stop_threshold=None, early_stop_length=None,
+                 learning_rate=None, lr_decay=None, lr_factor=None,
+                 decay=None, gamma_clip=None, damping=None, grad_clip=None, start_var_reduction=None,
+                 delta_clip=None, use_adagrad=None, skip_nan_inf=None, upper_bound_tau=None,
+                 lower_bound_tau=None, use_corrected_grad=None):
+        # get everything together with the Optimizer class
+        super(AdaSecant, self).__init__(model, dataset, config=config, defaults=defaults,
+                                        n_epoch=n_epoch, batch_size=batch_size, minimum_batch_size=minimum_batch_size,
+                                        save_frequency=save_frequency, early_stop_length=early_stop_length,
+                                        early_stop_threshold=early_stop_threshold, learning_rate=learning_rate,
+                                        lr_decay=lr_decay, lr_factor=lr_factor, decay=decay, gamma_clip=gamma_clip,
+                                        damping=damping, grad_clip=grad_clip, start_var_reduction=start_var_reduction,
+                                        delta_clip=delta_clip, use_adagrad=use_adagrad, skip_nan_inf=skip_nan_inf,
+                                        upper_bound_tau=upper_bound_tau, lower_bound_tau=lower_bound_tau,
+                                        use_corrected_grad=use_corrected_grad)
 
         # We have to bound the tau to prevent it to
         # grow to an arbitrarily large number, oftenwise
         # that causes numerical instabilities for very deep
         # networks. Note that once tau become very large, it will keep,
         # increasing indefinitely.
-        self.skip_nan_inf = skip_nan_inf or specific_args.get('skip_nan_inf')
-        self.upper_bound_tau = 1e8
-        self.lower_bound_tau = 1.5
 
-        # need to call the SGD constructor after parameters are extracted because the constructor calls get_updates()!
-        super(AdaSecant, self).__init__(model=model,
-                                        dataset=dataset,
-                                        iterator_class=iterator_class,
-                                        config=config,
-                                        rng=rng,
-                                        n_epoch=n_epoch,
-                                        batch_size=batch_size,
-                                        minimum_batch_size=minimum_batch_size,
-                                        save_frequency=save_frequency,
-                                        early_stop_length=early_stop_length,
-                                        early_stop_threshold=early_stop_threshold,
-                                        learning_rate=learning_rate,
-                                        flag_para_load=flag_para_load)
+        assert self.decay >= 0., "Decay needs to be >=0."
+        assert self.decay < 1., "Decay needs to be <1."
+        self.decay = sharedX(self.decay, "decay")
 
     def get_updates(self, grads):
         """

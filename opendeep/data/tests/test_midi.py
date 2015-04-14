@@ -20,8 +20,6 @@ from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.data.standard_datasets.midi.piano_midi_de import PianoMidiDe
 from opendeep.data.dataset import TRAIN, VALID, TEST
 import opendeep.log.logger as logger
-from opendeep.data.iterators.sequential import SequentialIterator
-from opendeep.data.iterators.random import RandomIterator
 from opendeep.utils.misc import make_time_units_string
 
 
@@ -53,32 +51,6 @@ class TestMuse(unittest.TestCase):
         assert self.nottingham.train.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TRAIN)])
         assert self.nottingham.valid.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(VALID)])
         assert self.nottingham.test.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TEST)])
-
-    def testSequentialIterator(self):
-        # self.log.debug('TESTING MUSE SEQUENTIAL ITERATOR')
-        # i = 0
-        # for _, y in SequentialIterator(dataset=self.muse, batch_size=100, minimum_batch_size=1, subset=TRAIN):
-        #     i += 1
-        # print i
-        #
-        # i = 0
-        # for _, y in SequentialIterator(dataset=self.muse, batch_size=100, minimum_batch_size=100, subset=TRAIN):
-        #     i += 1
-        # print i
-
-        self.log.debug('TESTING NOTTINGHAM SEQUENTIAL ITERATOR')
-        i = 0
-        t = time.time()
-        for x, y in SequentialIterator(dataset=self.nottingham, batch_size=100, minimum_batch_size=1, subset=TRAIN):
-            print make_time_units_string(time.time()-t)
-            i += 1
-            t = time.time()
-        print i
-
-        i = 0
-        for x, y in SequentialIterator(dataset=self.nottingham, batch_size=100, minimum_batch_size=100, subset=TRAIN):
-            i += 1
-        print i
 
 
     def tearDown(self):

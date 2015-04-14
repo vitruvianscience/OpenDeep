@@ -17,7 +17,7 @@ import gzip
 # third party libraries
 import numpy
 # internal imports
-from opendeep import make_shared_variables
+from opendeep import dataset_shared
 import opendeep.data.dataset as datasets
 from opendeep.data.dataset import FileDataset
 from opendeep.utils import file_ops
@@ -30,7 +30,8 @@ class MNIST(FileDataset):
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets.
     '''
-    def __init__(self, binary=False, one_hot=False, dataset_dir='../../datasets'):
+    def __init__(self, binary=False, one_hot=False, concat_train_valid=True,
+                 dataset_dir='../../datasets', sequence_number=0, rng=None):
         # instantiate the Dataset class to install the dataset from the url
         log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
 
@@ -43,84 +44,63 @@ class MNIST(FileDataset):
         # self.file_type tells how to load the dataset
         # load the dataset into memory
         if self.file_type is file_ops.GZ:
-            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(
+            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = cPickle.load(
                 gzip.open(self.dataset_location, 'rb')
             )
         else:
-            (train_X, train_Y), (valid_X, valid_Y), (test_X, test_Y) = cPickle.load(
+            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = cPickle.load(
                 open(self.dataset_location, 'r')
             )
+
+        if concat_train_valid:
+            log.debug('Concatenating train and valid sets together...')
+            self.train_X = numpy.concatenate((self.train_X, self.valid_X))
+            self.train_Y = numpy.concatenate((self.train_Y, self.valid_Y))
+
+        # sequence the dataset
+        if sequence_number is not None:
+            self.sequence(sequence_number=sequence_number, rng=rng)
 
         # make optional binary
         if binary:
             _binary_cutoff = 0.5
             log.debug('Making MNIST X values binary with cutoff %s', str(_binary_cutoff))
-            train_X = (train_X > _binary_cutoff).astype('float32')
-            valid_X = (valid_X > _binary_cutoff).astype('float32')
-            test_X  = (test_X > _binary_cutoff).astype('float32')
+            self.train_X = (self.train_X > _binary_cutoff).astype('float32')
+            self.valid_X = (self.valid_X > _binary_cutoff).astype('float32')
+            self.test_X  = (self.test_X > _binary_cutoff).astype('float32')
 
         # make optional one-hot labels
         if one_hot:
-            train_Y = numpy_one_hot(train_Y, n_classes=10)
-            valid_Y = numpy_one_hot(valid_Y, n_classes=10)
-            test_Y  = numpy_one_hot(test_Y, n_classes=10)
+            self.train_Y = numpy_one_hot(self.train_Y, n_classes=10)
+            self.valid_Y = numpy_one_hot(self.valid_Y, n_classes=10)
+            self.test_Y  = numpy_one_hot(self.test_Y, n_classes=10)
 
-        log.debug('Concatenating train and valid sets together...')
-        train_X = numpy.concatenate((train_X, valid_X))
-        train_Y = numpy.concatenate((train_Y, valid_Y))
+        log.debug("loading datasets into shared variables")
+        self.train_X = dataset_shared(self.train_X, name='mnist_train_x', borrow=True)
+        self.train_Y = dataset_shared(self.train_Y, name='mnist_train_y', borrow=True)
 
-        self._train_shape = train_X.shape
-        self._valid_shape = valid_X.shape
-        self._test_shape  = test_X.shape
-        log.debug('Train shape is: %s', str(self._train_shape))
-        log.debug('Valid shape is: %s', str(self._valid_shape))
-        log.debug('Test shape is: %s', str(self._test_shape))
-        # transfer the datasets into theano shared variables
-        log.debug('Loading MNIST into theano shared variables')
-        (self.train_X, self.train_Y,
-         self.valid_X, self.valid_Y,
-         self.test_X, self.test_Y) = make_shared_variables((train_X, train_Y, valid_X, valid_Y, test_X, test_Y),
-                                                           borrow=True)
+        self.valid_X = dataset_shared(self.valid_X, name='mnist_valid_x', borrow=True)
+        self.valid_Y = dataset_shared(self.valid_Y, name='mnist_valid_y', borrow=True)
 
+        self.test_X = dataset_shared(self.test_X, name='mnist_test_x', borrow=True)
+        self.test_Y = dataset_shared(self.test_Y, name='mnist_test_y', borrow=True)
 
-    def getDataByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset values at the index (indices)
-        '''
+    def getSubset(self, subset):
+        y = None
         if subset is datasets.TRAIN:
-            # return self.train_X.get_value(borrow=True)[indices]
-            return self.train_X[indices].eval()
+            if hasattr(self, 'train_Y'):
+                y = self.train_Y
+            return self.train_X, y
         elif subset is datasets.VALID and hasattr(self, 'valid_X') and self.valid_X:
-            return self.valid_X[indices].eval()
+            if hasattr(self, 'valid_Y'):
+                y = self.valid_Y
+            return self.valid_X, y
         elif subset is datasets.TEST and hasattr(self, 'test_X') and self.test_X:
-            return self.test_X[indices].eval()
+            if hasattr(self, 'test_Y'):
+                y = self.test_Y
+            return self.test_X, y
         else:
-            return None
-
-    def getLabelsByIndices(self, indices, subset):
-        '''
-        This method is used by an iterator to return data label values at given indices.
-        :param indices: either integer or list of integers
-        The index (or indices) of values to return
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: array
-        The dataset labels at the index (indices)
-        '''
-        if subset is datasets.TRAIN and hasattr(self, 'train_Y') and self.train_Y:
-            return self.train_Y[indices].eval()
-        elif subset is datasets.VALID and hasattr(self, 'valid_Y') and self.valid_Y:
-            return self.valid_Y[indices].eval()
-        elif subset is datasets.TEST and hasattr(self, 'test_Y') and self.test_Y:
-            return self.test_Y[indices].eval()
-        else:
-            return None
+            return None, None
 
     def hasSubset(self, subset):
         '''
@@ -173,57 +153,44 @@ class MNIST(FileDataset):
             rng = numpy.random
             rng.seed(1)
 
-        def set_xy_indices(x, y, indices):
-            x.set_value(x.get_value(borrow=True)[indices])
-            y.set_value(y.get_value(borrow=True)[indices])
-
         # Find the order of MNIST data going from 0-9 repeating if the first dataset
         train_ordered_indices = None
         valid_ordered_indices = None
         test_ordered_indices  = None
-        if sequence_number == 1:
-            train_ordered_indices = sequence1_indices(self.train_Y.get_value(borrow=True))
-            valid_ordered_indices = sequence1_indices(self.valid_Y.get_value(borrow=True))
-            test_ordered_indices  = sequence1_indices(self.test_Y.get_value(borrow=True))
+        if sequence_number == 0:
+            pass
+        elif sequence_number == 1:
+            train_ordered_indices = sequence1_indices(self.train_Y)
+            valid_ordered_indices = sequence1_indices(self.valid_Y)
+            test_ordered_indices  = sequence1_indices(self.test_Y)
         elif sequence_number == 2:
-            train_ordered_indices = sequence2_indices(self.train_Y.get_value(borrow=True))
-            valid_ordered_indices = sequence2_indices(self.valid_Y.get_value(borrow=True))
-            test_ordered_indices  = sequence2_indices(self.test_Y.get_value(borrow=True))
+            train_ordered_indices = sequence2_indices(self.train_Y)
+            valid_ordered_indices = sequence2_indices(self.valid_Y)
+            test_ordered_indices  = sequence2_indices(self.test_Y)
         elif sequence_number == 3:
-            train_ordered_indices = sequence3_indices(self.train_Y.get_value(borrow=True))
-            valid_ordered_indices = sequence3_indices(self.valid_Y.get_value(borrow=True))
-            test_ordered_indices  = sequence3_indices(self.test_Y.get_value(borrow=True))
+            train_ordered_indices = sequence3_indices(self.train_Y)
+            valid_ordered_indices = sequence3_indices(self.valid_Y)
+            test_ordered_indices  = sequence3_indices(self.test_Y)
         elif sequence_number == 4:
-            train_ordered_indices = sequence4_indices(self.train_Y.get_value(borrow=True))
-            valid_ordered_indices = sequence4_indices(self.valid_Y.get_value(borrow=True))
-            test_ordered_indices  = sequence4_indices(self.test_Y.get_value(borrow=True))
+            train_ordered_indices = sequence4_indices(self.train_Y)
+            valid_ordered_indices = sequence4_indices(self.valid_Y)
+            test_ordered_indices  = sequence4_indices(self.test_Y)
+        else:
+            log.warning("MNIST sequence number %s not recognized, leaving dataset as-is.", str(sequence_number))
 
         # Put the data sets in order
-        if train_ordered_indices and valid_ordered_indices and test_ordered_indices:
-            set_xy_indices(self.train_X, self.train_Y, train_ordered_indices)
-            set_xy_indices(self.valid_X, self.valid_Y, valid_ordered_indices)
-            set_xy_indices(self.test_X, self.test_Y, test_ordered_indices)
-
-
-        ###############################################################################################################
-        # For testing one-hot encoding to see if it can learn sequences without having to worry about nonlinear input #
-        ###############################################################################################################
-        if one_hot:
-            # construct the numpy matrix of representations from y
-            train = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.train_Y.get_value(borrow=True)],
-                                dtype="float32")
-            self.train_X.set_value(train)
-            valid = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.valid_Y.get_value(borrow=True)],
-                                dtype="float32")
-            self.valid_X.set_value(valid)
-            test = numpy.array([[1 if i == y else 0 for i in range(10)] for y in self.test_Y.get_value(borrow=True)],
-                               dtype="float32")
-            self.test_X.set_value(test)
+        if train_ordered_indices is not None and valid_ordered_indices is not None and test_ordered_indices is not None:
+            self.train_X = self.train_X[train_ordered_indices]
+            self.train_Y = self.train_Y[train_ordered_indices]
+            self.valid_X = self.valid_X[valid_ordered_indices]
+            self.valid_Y = self.valid_Y[valid_ordered_indices]
+            self.test_X  = self.test_X[test_ordered_indices]
+            self.test_Y  = self.test_Y[test_ordered_indices]
 
         # re-set the sizes
-        self._train_shape = self.train_X.shape.eval()
-        self._valid_shape = self.valid_X.shape.eval()
-        self._test_shape = self.test_X.shape.eval()
+        self._train_shape = self.train_X.shape
+        self._valid_shape = self.valid_X.shape
+        self._test_shape = self.test_X.shape
         log.debug('Train shape is: %s', str(self._train_shape))
         log.debug('Valid shape is: %s', str(self._valid_shape))
         log.debug('Test shape is: %s', str(self._test_shape))

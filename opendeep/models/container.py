@@ -155,13 +155,13 @@ class Prototype(Model):
             log.warning("This container doesn't have any models! So no outputs to get...")
             return None
 
-    def predict(self, input):
+    def run(self, input):
         """
         This method will return the model's output (run through the function), given an input. In the case that
         input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
 
-        Try to avoid re-compiling the theano function created for predict - check a hasattr(self, 'f_predict') or
-        something similar first. I recommend creating your theano f_predict in a create_computation_graph method
+        Try to avoid re-compiling the theano function created for run - check a hasattr(self, 'f_run') or
+        something similar first. I recommend creating your theano f_run in a create_computation_graph method
         to be called after the class initializes.
         ------------------
 
@@ -174,18 +174,18 @@ class Prototype(Model):
         # make sure the input is raised to a list - we are going to splat it!
         input = raise_to_list(input)
         # first check if we already made an f_predict function
-        if hasattr(self, 'f_predict'):
-            return self.f_predict(*input)
+        if hasattr(self, 'f_run'):
+            return self.f_run(*input)
         # otherwise, compile it!
         else:
             inputs = self.get_inputs()
             outputs = self.get_outputs()
             updates = self.get_updates()
             t = time.time()
-            log.info("Compiling f_predict...")
-            self.f_predict = function(inputs=inputs, outputs=outputs, updates=updates, name="f_predict")
+            log.info("Compiling f_run...")
+            self.f_run = function(inputs=inputs, outputs=outputs, updates=updates, name="f_run")
             log.info("Compilation done! Took %s", make_time_units_string(time.time() - t))
-            return self.f_predict(*input)
+            return self.f_run(*input)
 
     def get_targets(self):
         """
@@ -328,6 +328,21 @@ class Prototype(Model):
         for model in self.models:
             lr_scalers.update(model.get_lr_scalers())
         return lr_scalers
+
+    def get_noise_switch(self):
+        """
+        This method returns a list of shared theano variables representing switches for adding noise in the model.
+        The variables should be set to either 0. or 1.
+        For a usage example, see the BasicLayer in opendeep.models.single_layer.basic package.
+
+        :return: list of shared variable
+        :rtype: list
+        """
+        # Return the noise switches going through each model in the list
+        noise_switches = []
+        for model in self.models:
+            noise_switches.extend(raise_to_list(model.get_noise_switch()))
+        return noise_switches
 
     def get_params(self):
         """
