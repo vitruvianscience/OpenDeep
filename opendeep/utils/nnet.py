@@ -39,9 +39,7 @@ _uniform_interval = {
     # this is the default provided in other codebases
     'default': lambda shape: 1 / numpy.sqrt(shape[0]),
     # this is the default for the GSN code from Li Yao
-    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:]))),
-    # this is basically Xavier initialization: 1 / n_in
-    'default': lambda shape: 1 / numpy.sqrt(shape[0]),
+    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
 }
 default_interval = 'montreal'
 

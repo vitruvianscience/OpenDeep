@@ -63,6 +63,8 @@ class SGD(Optimizer):
                                                          self.momentum,
                                                          self.momentum.get_value(),
                                                          self.momentum_factor)
+            else:
+                self.momentum_decay = False
         else:
             self.momentum = 1
 

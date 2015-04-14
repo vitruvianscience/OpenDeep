@@ -73,6 +73,7 @@ def run_midi(dataset):
                     batch_size=100,
                     minimum_batch_size=2,
                     learning_rate=.001,
+                    lr_decay=False,
                     save_frequency=10,
                     early_stop_length=200,
                     momentum=False,
@@ -118,6 +119,6 @@ def run_midi(dataset):
 if __name__ == '__main__':
     config_root_logger()
     run_midi('nottingham')
-    run_midi('jsb')
-    run_midi('piano_de')
-    run_midi('muse')
+    # run_midi('jsb')
+    # run_midi('piano_de')
+    # run_midi('muse')

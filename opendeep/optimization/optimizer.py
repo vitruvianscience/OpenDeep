@@ -129,6 +129,8 @@ class Optimizer(object):
                                                           self.learning_rate,
                                                           self.learning_rate.get_value(),
                                                           self.lr_factor)
+        else:
+            self.learning_rate_decay = False
 
     def get_batch_indices(self, data_lengths):
         batch_indices = []
@@ -314,7 +316,7 @@ class Optimizer(object):
             self.epoch_counter = 0
             if not continue_training:
                 # reset the learning rate
-                if hasattr(self, 'learning_rate_decay'):
+                if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
                     self.learning_rate_decay.reset()
                 # reset the other model decaying functions
                 for decay_param in self.model.get_decay_params():
@@ -428,9 +430,9 @@ class Optimizer(object):
 
         # ANNEAL!
         if not stop:
-            if hasattr(self, 'learning_rate_decay'):
+            if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
                 self.learning_rate_decay.decay()
-            if hasattr(self, 'momentum_decay'):
+            if hasattr(self, 'momentum_decay') and self.momentum_decay:
                 self.momentum_decay.decay()
             for decay_param in self.model.get_decay_params():
                 decay_param.decay()

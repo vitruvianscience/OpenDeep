@@ -39,12 +39,12 @@ def binary_crossentropy(output, target):
 
     :note: Use this cost for binary outputs, like MNIST.
     """
-    # return T.mean(T.nnet.binary_crossentropy(output, target))
+    return T.mean(T.nnet.binary_crossentropy(output, target))
     # The following definition came from the Conditional_nade project
-    L = - T.mean(target * T.log(output) +
-                 (1 - target) * T.log(1 - output), axis=1)
-    cost = T.mean(L)
-    return cost
+    # L = - T.mean(target * T.log(output) +
+    #              (1 - target) * T.log(1 - output), axis=1)
+    # cost = T.mean(L)
+    # return cost
 
 def categorical_crossentropy(output, target):
     """

@@ -20,7 +20,7 @@ class opendeep_install(install):
 
 setup(
     name='opendeep',
-    version='0.0.5a',
+    version='0.0.6a',
     description='A modular deep learning library built on Theano.',
     long_description=open('README.rst', 'rb').read().decode('utf8'),
     keywords='opendeep theano modular deep learning neural',
