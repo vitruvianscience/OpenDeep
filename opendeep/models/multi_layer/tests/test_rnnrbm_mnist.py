@@ -22,12 +22,12 @@ def run_sequence(sequence=0):
     mrg = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(2 ** 30))
     rnnrbm = RNN_RBM(input_size=28 * 28,
                      hidden_size=1000,
-                     recurrent_hidden_size=100,
+                     rnn_hidden_size=100,
                      k=15,
                      weights_init='uniform',
                      weights_interval=4 * numpy.sqrt(6. / (28 * 28 + 500)),
-                     recurrent_weights_init='gaussian',
-                     recurrent_weights_std=1e-4,
+                     rnn_weights_init='gaussian',
+                     rnn_weights_std=1e-4,
                      rng=rng,
                      mrg=mrg,
                      outdir=outdir)

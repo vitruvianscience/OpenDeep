@@ -56,12 +56,12 @@ def run_midi(dataset):
     mrg = RandomStreams(rng.randint(2 ** 30))
     rnnrbm = RNN_RBM(input_size=88,
                      hidden_size=150,
-                     recurrent_hidden_size=100,
+                     rnn_hidden_size=100,
                      k=15,
                      weights_init='gaussian',
                      weights_std=0.01,
-                     recurrent_weights_init='gaussian',
-                     recurrent_weights_std=0.0001,
+                     rnn_weights_init='gaussian',
+                     rnn_weights_std=0.0001,
                      rng=rng,
                      mrg=mrg,
                      outdir=outdir)
