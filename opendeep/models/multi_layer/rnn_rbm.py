@@ -186,9 +186,7 @@ class RNN_RBM(Model):
                                    mean=self.rnn_weights_mean,
                                    std=self.rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval,
-                                   # if identity
-                                   add_noise=identity_noise)
+                                   interval=self.rnn_weights_interval)
 
             # grab the bias vectors
             # rbm biases
