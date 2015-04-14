@@ -20,19 +20,19 @@ if __name__ == '__main__':
     log.info("Creating RBM!")
 
     # grab the MNIST dataset
-    mnist = MNIST()
+    mnist = MNIST(concat_train_valid=False)
     # create the RBM
     rng = numpy.random.RandomState(1234)
     mrg = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(2**30))
-    rbm = RBM(input_size=28*28, hidden_size=1000, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), rng=rng)
+    rbm = RBM(input_size=28*28, hidden_size=500, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), rng=rng)
     # rbm.load_params('rbm_trained.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
-    # optimizer = SGD(model=rbm, dataset=mnist, n_epoch=20, batch_size=100, learning_rate=0.1, lr_decay='exponential', lr_factor=1, nesterov_momentum=False)
-    optimizer = AdaDelta(model=rbm, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
+    optimizer = SGD(model=rbm, dataset=mnist, n_epoch=15, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False)
+    # optimizer = AdaDelta(model=rbm, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
     # perform training!
     optimizer.train()
     # test it on some images!
-    test_data = mnist.getSubset(TEST)
+    test_data = mnist.getSubset(TEST)[0]
     test_data = test_data[:25].eval()
     # use the run function!
     preds = rbm.run(test_data)
