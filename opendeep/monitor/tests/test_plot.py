@@ -5,21 +5,26 @@ __license__ = "Apache"
 __maintainer__ = "OpenDeep"
 __email__ = "opendeep-dev@googlegroups.com"
 
-import theano
-import theano.tensor as T
 import collections
 import time
-from collections import OrderedDict
-from opendeep.utils.plot import Plot
+import logging
+from theano.compat.python2x import OrderedDict
+
+import theano
+import theano.tensor as T
+
+from opendeep.monitor.plot import Plot
 from opendeep.utils.noise import add_uniform
 from opendeep.utils.statistics import get_stats
 from opendeep.utils.misc import make_time_units_string
+from opendeep.log.logger import config_root_logger
+
+log = logging.getLogger(__name__)
+
 
 def main():
-    var = theano.shared(T.zeros(shape=(88,100), dtype=theano.config.floatX).eval(), name='W')
-    updates = [(var, add_uniform(input=var, interval=.2))]
-
-    out = T.sum(var**2)
+    var = theano.shared(T.zeros(shape=(88, 100), dtype=theano.config.floatX).eval(), name='W')
+    updates = [(var, add_uniform(input=var, interval=.02))]
 
     stats = get_stats(var)
     stats.pop('l1')
@@ -29,7 +34,7 @@ def main():
     stats.pop('var')
     stats.pop('std')
     stats.pop('mean')
-    monitors = OrderedDict({var.name:stats})
+    monitors = OrderedDict({var.name: stats})
     # monitors.update(get_stats(var))
 
     # monitors = OrderedDict(get_stats(var))
@@ -45,25 +50,24 @@ def main():
 
 
 
-    plot = Plot(bokeh_doc_name='test_plots', monitors=monitors, start_server=False, open_browser=True)
+    plot = Plot(bokeh_doc_name='test_plots', channels=monitors, start_server=False, open_browser=True)
 
-    print 'compiling...'
+    log.debug('compiling...')
     f = theano.function(inputs=[], outputs=monitors_collapsed.values(), updates=updates)
-    print 'done'
+    log.debug('done')
 
     t1=time.time()
     for epoch in range(500):
         t=time.time()
-        print epoch
+        log.debug(epoch)
         vals = f()
         m = OrderedDict(zip(monitors_collapsed.keys(), vals))
         plot.update_plots(epoch, m)
-        print '-----', make_time_units_string(time.time()-t)
+        log.debug('----- '+make_time_units_string(time.time()-t))
 
-    print
-    print
-    print "TOTAL TIME ", make_time_units_string(time.time()-t1)
+    log.debug("TOTAL TIME "+make_time_units_string(time.time()-t1))
 
 
 if __name__ == '__main__':
+    config_root_logger()
     main()

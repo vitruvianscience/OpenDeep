@@ -60,14 +60,17 @@ if __name__ == '__main__':
     image.save('preds.png')
 
     # Construct image from the weight matrix
-    image = Image.fromarray(
-        tile_raster_images(
-            X=rbm.W.get_value(borrow=True).T,
-            img_shape=(28, 28),
-            tile_shape=closest_to_square_factors(rbm.hidden_size),
-            tile_spacing=(1, 1)
-        )
+    weights_img = tile_raster_images(
+        X=rbm.W.get_value(borrow=True).T,
+        img_shape=(28, 28),
+        tile_shape=closest_to_square_factors(rbm.hidden_size),
+        tile_spacing=(1, 1)
     )
+    print "~~~~~~~~"
+    print weights_img.ndim
+    print "!!!!!!!"
+
+    image = Image.fromarray(weights_img)
     image.save('weights.png')
 
 

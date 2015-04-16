@@ -132,7 +132,81 @@ class Optimizer(object):
         else:
             self.learning_rate_decay = False
 
+        self.noise_switches = raise_to_list(self.model.get_noise_switch())
+
+        ###############################################
+        # theano index variable to use on the dataset #
+        ###############################################
+        # index to a [mini]batch - both start and end
+        data_idx = T.iscalar('data_index')
+        data_end_idx = T.iscalar('data_end_index')
+        self.function_input = [data_idx, data_end_idx]
+        batch_slice = slice(data_idx, data_end_idx)
+
+        # compute number of minibatches for training, validation and testing
+        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
+        # could be a list of shared variables (like multiple sequences from files)
+        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
+        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
+        test_data_shapes = raise_to_list(self.dataset.getDataShape(TEST))
+
+        # train_batches is going to be lists of tuples that contain the start and end indices for train data.
+        # this is more useful in the case of datasets that are lists of sequences, so that the start and end
+        # indices can make sure a batch does not cross the sequence boundary on the concatenated data
+        train_data_lens = [shape[0] for shape in train_data_shapes]
+        self.train_batches = self.get_batch_indices(train_data_lens)
+
+        if valid_data_shapes is not None:
+            valid_data_lens = [shape[0] for shape in valid_data_shapes]
+            self.valid_batches = self.get_batch_indices(valid_data_lens)
+        else:
+            self.valid_batches = None
+        if test_data_shapes is not None:
+            test_data_lens = [shape[0] for shape in test_data_shapes]
+            self.test_batches = self.get_batch_indices(test_data_lens)
+        else:
+            self.test_batches = None
+
+        # create the givens for the input function as pairs of (input_variable: sliced_data)
+        self.train_givens = self.get_givens_subset(TRAIN, batch_slice)
+        self.valid_givens = self.get_givens_subset(VALID, batch_slice)
+        self.test_givens  = self.get_givens_subset(TEST, batch_slice)
+
+        # Now time to create the gradient updates for the model - make sure to handle the possible
+        # list of costs used for pretraining of certain parts of the model.
+        self.train_costs = raise_to_list(self.model.get_train_cost())
+        self.train_updates = []
+        self.gradients = []
+        for i, train_cost in enumerate(self.train_costs):
+            # Now create the training cost function for the model to use while training - update parameters
+            # gradient!
+            gradients, _ = self.model.get_gradient(cost=train_cost)
+            self.gradients.append(gradients)
+
+            # Calculate the optimizer updates each run
+            # This is where the magic happens for a lot of sub-implementations of SGD!
+            # It tells how to update the params each training epoch
+            gradient_updates = self.get_updates(gradients)
+
+            # Combine the updates from the model also if applicable
+            train_updates = self.model.get_updates()
+            if train_updates:
+                train_updates.update(gradient_updates)
+            else:
+                train_updates = gradient_updates
+            self.train_updates.append(train_updates)
+
     def get_batch_indices(self, data_lengths):
+        """
+        Computes the tuples of (start_index, end_index) that represent the appropriate slices of the concatenated
+        dataset with regards to the given data_lengths. This allows for lists of data lengths to represent sequences,
+        so that the concatenated batches returned do not overstep the start of a new sequence.
+
+        :param data_lengths: list of #examples for each dataset
+        :type data_lengths: list of ints
+        :return: list of tuples (start, end) representing the batch slice
+        :rtype: list of tuples of ints
+        """
         batch_indices = []
         start_idx = 0
         for len in raise_to_list(data_lengths):
@@ -152,6 +226,33 @@ class Optimizer(object):
             start_idx = end_idx
         return batch_indices
 
+    def get_givens_subset(self, subset, batch_slice):
+        """
+        This translates a batch slice of start and end indices into the actual data from the given subset
+
+        :param subset: the subset to use
+        :type subset: integer
+        :param batch_slice: symbolic slice to grab from the data
+        :type batch_slice: symbolic slice
+        :return: the givens to provide to a function: (input_variable: data[batch])
+        :rtype: OrderedDict
+        """
+        # translate the data_idx into the givens for the model
+        # first get the lists of input variables the model requires - inputs and targets
+        model_inputs = raise_to_list(self.model.get_inputs())
+        model_targets = raise_to_list(self.model.get_targets())
+        givens = None
+        if self.dataset.hasSubset(subset):
+            # grab the data and labels
+            data, labels = self.dataset.getSubset(subset)
+            # create the givens for the input function as pairs of (input_variable: sliced_data)
+            givens = OrderedDict(zip(model_inputs, [data[batch_slice]]))
+            # include labels as well if they are required by the model
+            if model_targets is not None and len(model_targets) > 0:
+                givens.update(OrderedDict(zip(model_targets, [labels[batch_slice]])))
+
+        return givens
+
     def get_updates(self, gradients):
         """
         This returns the parameter updates to use during training. It defaults to only using (annealed) learning rate.
@@ -167,11 +268,25 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def train(self, continue_training=False):
+    def get_lr_monitor(self):
+        """
+        returns a monitor dictionary to the optimizer's learning rate
+        """
+        return {'learning_rate': self.learning_rate}
+
+    def train(self, monitor_channels=None, plot=None, continue_training=False):
         """
         This method performs the training!!!
-        :param continue_training:
-        :type continue_training:
+
+        :param monitors: the monitor expressions/variables to compile and evaluate
+        :type monitors: list of opendeep.monitor.monitor.MonitorsChannel objects
+
+        :param plot: the Plot object to use if we want to graph the outputs (uses bokeh server)
+        :type plot: opendeep.monitor.plot.Plot object
+
+        :param continue_training: whether to continue training from a previous point
+        :type continue_training: boolean
+
         :return:
         :rtype:
         """
@@ -179,122 +294,56 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
-        ###############################################
-        # theano index variable to use on the dataset #
-        ###############################################
-        # index to a [mini]batch - both start and end
-        data_idx = T.iscalar('data_index')
-        data_end_idx = T.iscalar('data_end_index')
-        batch_slice = slice(data_idx, data_end_idx)
-
-        # compute number of minibatches for training, validation and testing
-        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
-        # could be a list of shared variables (like multiple sequences from files)
-        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
-        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
-        test_data_shapes  = raise_to_list(self.dataset.getDataShape(TEST))
-
-        # train_batches is going to be lists of tuples that contain the start and end indices for train data
-        train_data_lens = [shape[0] for shape in train_data_shapes]
-        self.train_batches = self.get_batch_indices(train_data_lens)
-
-        if valid_data_shapes is not None:
-            valid_data_lens = [shape[0] for shape in valid_data_shapes]
-            self.valid_batches = self.get_batch_indices(valid_data_lens)
-        else:
-            self.valid_batches = None
-        if test_data_shapes is not None:
-            test_data_lens = [shape[0] for shape in test_data_shapes]
-            self.test_batches = self.get_batch_indices(test_data_lens)
-        else:
-            self.test_batches = None
-
-        # translate the data_idx into the givens for the model
-        model_inputs = raise_to_list(self.model.get_inputs())
-        model_targets = raise_to_list(self.model.get_targets())
-
-        train_data, train_labels = self.dataset.getSubset(TRAIN)
-        train_givens = OrderedDict(zip(model_inputs, [train_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            train_givens.update(OrderedDict(zip(model_targets, [train_labels[batch_slice]])))
-
-        valid_data, valid_labels = self.dataset.getSubset(VALID)
-        valid_givens = OrderedDict(zip(model_inputs, [valid_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            valid_givens.update(OrderedDict(zip(model_targets, [valid_labels[batch_slice]])))
-
-        test_data, test_labels = self.dataset.getSubset(TEST)
-        test_givens = OrderedDict(zip(model_inputs, [test_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            test_givens.update(OrderedDict(zip(model_targets, [test_labels[batch_slice]])))
-
-        # Now time to create the training cost functions for the model - make sure to handle the possible
-        # list of costs used for pretraining of certain parts of the model.
-        train_costs = raise_to_list(self.model.get_train_cost())
+        #######################################
+        # compile train and monitor functions #
+        #######################################
         self.train_functions = []
-        for i, train_cost in enumerate(train_costs):
-            # Now create the training cost function for the model to use while training - update parameters
-            # gradient!
-            gradients, _ = self.model.get_gradient(cost=train_cost)
-
-            # Calculate the optimizer updates each run
-            # This is where the magic happens for a lot of sub-implementations of SGD, including AdaDelta!
-            # It tells how to update the params each training epoch
-            gradient_updates = self.get_updates(gradients)
-
-            # Combine the updates from the model also if applicable
-            train_updates = self.model.get_updates()
-            if train_updates:
-                train_updates.update(gradient_updates)
-            else:
-                train_updates = gradient_updates
-
+        for i, (train_updates, train_cost) in enumerate(zip([self.train_updates, self.train_costs])):
             # Compile the training function!
-            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_costs),
+            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(self.train_updates),
                      str(type(self.model)))
             t = time.time()
 
-            f_learn = function(inputs=[data_idx, data_end_idx],
+            f_learn = function(inputs=self.function_input,
                                updates=train_updates,
                                outputs=train_cost,
-                               givens=train_givens,
+                               givens=self.train_givens,
                                name='f_learn_%d' % i)
 
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
             self.train_functions.append(f_learn)
 
         # grab the expression(s) to use to monitor different model values during training
-        log.debug("Compiling monitor functions...")
-        monitor_t = time.time()
-        self.monitors = OrderedDict(self.model.get_monitors())
-        self.monitor_names = self.monitors.keys()
-        if len(self.monitors.keys()) > 0:
-            self.train_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
-                updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=train_givens,
-                name="train_monitor_function"
-            )
-        if len(self.monitors.keys()) > 0:
-            self.valid_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
-                updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=valid_givens,
-                name="valid_monitor_function"
-            )
-        if len(self.monitors.keys()) > 0:
-            self.test_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
-                updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=test_givens,
-                name="test_monitor_function"
-            )
+        # log.debug("Compiling monitor functions...")
+        # monitor_t = time.time()
+        # self.monitors = OrderedDict(self.model.get_monitors())
+        # self.monitor_names = self.monitors.keys()
+        # if len(self.monitors.keys()) > 0:
+        #     self.train_monitor_function = function(
+        #         inputs=self.function_input,
+        #         updates=self.model.get_updates(),
+        #         outputs=self.monitors.values(),
+        #         givens=train_givens,
+        #         name="train_monitor_function"
+        #     )
+        # if len(self.monitors.keys()) > 0:
+        #     self.valid_monitor_function = function(
+        #         inputs=self.function_input,
+        #         updates=self.model.get_updates(),
+        #         outputs=self.monitors.values(),
+        #         givens=valid_givens,
+        #         name="valid_monitor_function"
+        #     )
+        # if len(self.monitors.keys()) > 0:
+        #     self.test_monitor_function = function(
+        #         inputs=self.function_input,
+        #         updates=self.model.get_updates(),
+        #         outputs=self.monitors.values(),
+        #         givens=test_givens,
+        #         name="test_monitor_function"
+        #     )
         log.debug("Compilation done. Took %s", make_time_units_string(time.time() - monitor_t))
 
-        self.noise_switches = raise_to_list(self.model.get_noise_switch())
 
         ##################
         # start training #
@@ -355,10 +404,11 @@ class Optimizer(object):
         log.info('EPOCH %s', str(self.epoch_counter))
 
         # set the noise switches on for training function! (this is where things like dropout happen)
+        switch_vals = []
         if len(self.noise_switches) > 0:
             log.debug("Turning on %s noise switches", str(len(self.noise_switches)))
             switch_vals = [switch.get_value() for switch in self.noise_switches]
-            [switch.set_value(0.) for switch in self.noise_switches]
+            [switch.set_value(1.) for switch in self.noise_switches]
 
         # train
         train_costs = []
@@ -430,11 +480,8 @@ class Optimizer(object):
 
         # ANNEAL!
         if not stop:
-            if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
-                self.learning_rate_decay.decay()
-            if hasattr(self, 'momentum_decay') and self.momentum_decay:
-                self.momentum_decay.decay()
-            for decay_param in self.model.get_decay_params():
+            # perform the appropriate decay on the decay functions/parameters for this optimizer and model
+            for decay_param in self.get_decay_params():
                 decay_param.decay()
 
         # reset the switches
@@ -445,6 +492,20 @@ class Optimizer(object):
         return stop
 
     def call_monitors(self, monitors_dict, monitor_function, inputs):
+        """
+        calls the monitor funciton on the inputs, and stores its value to the appropriate dictionary.
+        """
         outs = monitor_function(*inputs)
         for i, out in enumerate(outs):
             monitors_dict[self.monitor_names[i]].append(out)
+
+    def get_decay_params(self):
+        """
+        returns a list of all the Decay objects to decay during training.
+        :return:
+        :rtype:
+        """
+        decay_params = self.model.get_decay_params()
+        if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
+            decay_params.extend(self.learning_rate_decay)
+        return decay_params

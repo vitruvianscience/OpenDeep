@@ -24,12 +24,13 @@ import warnings
 try:
     from bokeh.plotting import (curdoc, cursession, figure, output_server, push, show)
     from bokeh.models.renderers import GlyphRenderer
+    logging.getLogger("bokeh").setLevel(logging.INFO)
+    logging.getLogger("urllib3").setLevel(logging.INFO)
     BOKEH_AVAILABLE = True
 except ImportError:
     BOKEH_AVAILABLE = False
     warnings.warn("Bokeh is not available - plotting is disabled. Please pip install bokeh.")
 
-from opendeep.utils.misc import make_time_units_string
 
 log = logging.getLogger(__name__)
 
@@ -104,12 +105,12 @@ class Plot(object):
         'colors': colors
     }
 
-    def __init__(self, bokeh_doc_name, monitors, open_browser=False,
+    def __init__(self, bokeh_doc_name, channels, open_browser=False,
                  start_server=False, server_url='http://localhost:5006/',
                  colors=None, defaults=defaults, **kwargs):
         # Make sure Bokeh is available
         if BOKEH_AVAILABLE:
-            if not isinstance(monitors, collections.Mapping):
+            if not isinstance(channels, collections.Mapping):
                 log.error("Monitors needs to be a dictionary")
                 raise AssertionError("Monitors needs to be a dictionary")
 
@@ -118,9 +119,9 @@ class Plot(object):
             self.bokeh_doc_name = bokeh_doc_name
             self.server_url = server_url
             self.start_server(start_server_flag=start_server)
-            self.monitors = monitors
+            self.monitors = channels
 
-            # Create figures for each group of monitors
+            # Create figures for each group of channels
             self.figures = []
             self.figure_indices = {}
             for i, (monitor_group_name, monitor_group_val) in enumerate(self.monitors.items()):
@@ -151,7 +152,7 @@ class Plot(object):
                                  y_axis_label='value', name=key,
                                  line_color=self.colors[color_idx % len(self.colors)])
                         color_idx += 1
-                        renderer = fig.select(dict(name=key, type=GlyphRenderer))
+                        renderer = fig.select(dict(name=key))#, type=GlyphRenderer))
                         self.plots[key] = renderer[0].data_source
                     else:
                         self.plots[key].data['x'].append(epoch)

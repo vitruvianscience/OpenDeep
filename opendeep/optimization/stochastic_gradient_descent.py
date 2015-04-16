@@ -108,3 +108,12 @@ class SGD(Optimizer):
             updates[param] = param + inc
 
         return updates
+
+    def get_decay_params(self):
+        """
+        add the potential momentum decay param.
+        """
+        decay_params = super(SGD, self).get_decay_params()
+        if hasattr(self, 'momentum_decay') and self.momentum_decay:
+            decay_params.extend(self.momentum_decay)
+        return decay_params
