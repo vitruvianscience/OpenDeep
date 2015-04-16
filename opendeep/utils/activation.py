@@ -14,8 +14,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
-import six
 import theano.tensor as T
+import theano.compat.six as six
 # internal references
 from opendeep import cast32
 

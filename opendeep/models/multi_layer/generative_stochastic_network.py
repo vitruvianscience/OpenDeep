@@ -34,12 +34,12 @@ import os
 import time
 import logging
 # third-party libraries
-import six
 import numpy
 import numpy.random as rng
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
+import theano.compat.six as six
 import PIL
 # internal references
 from opendeep import cast32, function, sharedX

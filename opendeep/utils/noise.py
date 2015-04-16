@@ -16,10 +16,10 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 from functools import partial
 # third party libraries
-import six
 import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
+import theano.compat.six as six
 
 theano_random = RNG_MRG.MRG_RandomStreams(seed=23455)
 # set a fixed number initializing RandomSate for 2 purpose:

@@ -42,7 +42,7 @@ setup(
         'Intended Audience :: Developers'],
 
     dependency_links=['git+http://github.com/Theano/Theano.git#egg=Theano'],
-    install_requires=['numpy>=1.5', "Theano", "six"],
+    install_requires=['numpy>=1.5', "Theano"],
 
     packages=find_packages(),
     # If there are data files included in your packages that need to be

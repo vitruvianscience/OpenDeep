@@ -17,10 +17,10 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 from functools import partial
 # third party libraries
-import six
 import numpy
 import theano
 import theano.tensor as T
+import theano.compat.six as six
 # internal imports
 from opendeep import cast_floatX
 

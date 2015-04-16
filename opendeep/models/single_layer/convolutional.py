@@ -17,11 +17,11 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
-import six
 import numpy
 import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
+import theano.compat.six as six
 # internal references
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
