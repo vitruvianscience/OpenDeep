@@ -21,7 +21,7 @@ import copy
 try:
     import yaml
     has_pyyaml = True
-except ImportError, e:
+except ImportError as e:
     has_pyyaml = False
 
 log = logging.getLogger(__name__)

@@ -519,7 +519,7 @@ class Model(object):
         # for each parameter and value in order, set the value!
         try:
             set_shared_values(params, param_values, borrow=borrow)
-        except Exception, e:
+        except Exception as e:
             log.exception("%s had Exception %s",
                           str(type(self)), str(e))
             return False

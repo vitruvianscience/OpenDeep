@@ -34,7 +34,7 @@ log = logging.getLogger(__name__)
 has_cudnn = True
 try:
     from theano.sandbox.cuda import dnn
-except ImportError, e:
+except ImportError as e:
     has_cudnn = False
     log.warning("Could not import CuDNN from theano. For fast convolutions, "
                 "please install it like so: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html")
