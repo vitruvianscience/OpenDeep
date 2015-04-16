@@ -142,7 +142,8 @@ in just a few lines of code::
     # test the trained model and save some reconstruction images
     n_examples = 100
     # grab 100 test examples
-    test_xs = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
+    test_xs = mnist.getSubset(datasets.TEST)
+    test_xs = test_xs[:n_examples].eval()
     # test and save the images
     dae.create_reconstruction_image(test_xs)
 
