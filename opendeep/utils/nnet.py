@@ -17,6 +17,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 from functools import partial
 # third party libraries
+import six
 import numpy
 import theano
 import theano.tensor as T
@@ -72,7 +73,7 @@ def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noi
     :rtype: shared tensor
     """
     # make sure the weights_init is a string to the method to use
-    if isinstance(weights_init, basestring):
+    if isinstance(weights_init, six.string_types):
         # if we are initializing weights from a normal distribution
         if weights_init.lower() == 'gaussian':
             return get_weights_gaussian(shape=shape, mean=mean, std=std, name=name, rng=rng)
@@ -120,7 +121,7 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
         rng = numpy.random
     # If the interval parameter is a string, grab the appropriate formula from the function dictionary,
     # and apply the appropriate shape numbers to it.
-    if isinstance(interval, basestring):
+    if isinstance(interval, six.string_types):
         interval_func = _uniform_interval.get(interval)
         if interval_func is None:
             log.error('Could not find uniform interval formula %s, try one of %s instead.' %

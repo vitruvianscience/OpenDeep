@@ -17,6 +17,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
+import six
 import numpy
 import theano
 import theano.tensor as T
@@ -34,7 +35,7 @@ log = logging.getLogger(__name__)
 has_cudnn = True
 try:
     from theano.sandbox.cuda import dnn
-except ImportError, e:
+except ImportError as e:
     has_cudnn = False
     log.warning("Could not import CuDNN from theano. For fast convolutions, "
                 "please install it like so: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html")
@@ -95,7 +96,7 @@ class Conv1D(Model):
 
         # activation function!
         # if a string name was given, look up the correct function from our utils.
-        if isinstance(self.activation, basestring):
+        if isinstance(self.activation, six.string_types):
             activation_func = get_activation_function(self.activation)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
@@ -215,7 +216,7 @@ class Conv2D(Model):
 
         # activation function!
         # if a string name was given, look up the correct function from our utils.
-        if isinstance(self.activation, basestring):
+        if isinstance(self.activation, six.string_types):
             activation_func = get_activation_function(self.activation)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:
@@ -367,7 +368,7 @@ class ConvPoolLayer(Model):
         #######################
         # activation function!
         # if a string name was given, look up the correct function from our utils.
-        if isinstance(self.activation, basestring):
+        if isinstance(self.activation, six.string_types):
             self.activation_func = get_activation_function(self.activation)
         # otherwise, if a 'callable' was passed (i.e. custom function), use that directly.
         else:

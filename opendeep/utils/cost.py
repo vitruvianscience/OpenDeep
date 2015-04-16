@@ -17,6 +17,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
+import six
 import theano.tensor as T
 import numpy
 
@@ -173,7 +174,7 @@ def get_cost_function(name):
     if callable(name):
         return name
     # otherwise if it is a string name
-    elif isinstance(name, basestring):
+    elif isinstance(name, six.string_types):
         # standardize the input to be lowercase
         name = name.lower()
         # grab the appropriate activation function from the dictionary of functions
