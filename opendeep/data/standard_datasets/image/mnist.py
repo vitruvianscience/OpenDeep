@@ -12,7 +12,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
-import cPickle
 import gzip
 # third party libraries
 import numpy
@@ -22,6 +21,11 @@ import opendeep.data.dataset as datasets
 from opendeep.data.dataset import FileDataset
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +48,11 @@ class MNIST(FileDataset):
         # self.file_type tells how to load the dataset
         # load the dataset into memory
         if self.file_type is file_ops.GZ:
-            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = cPickle.load(
+            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
                 gzip.open(self.dataset_location, 'rb')
             )
         else:
-            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = cPickle.load(
+            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
                 open(self.dataset_location, 'r')
             )
 

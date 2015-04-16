@@ -17,7 +17,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 import os
-import cPickle as pickle
 import time
 # third party libraries
 import theano
@@ -29,6 +28,11 @@ from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
 from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
 from opendeep.utils.file_ops import mkdir_p
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 log = logging.getLogger(__name__)
 

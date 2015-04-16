@@ -34,6 +34,7 @@ import os
 import time
 import logging
 # third-party libraries
+import six
 import numpy
 import numpy.random as rng
 import theano.tensor as T
@@ -132,7 +133,7 @@ class GSN(Model):
             (_h, _w) = closest_to_square_factors(self.N_input)
             self.image_width  = self.args.get('width', _w)
             self.image_height = self.args.get('height', _h)
-        
+
         ##########################
         # Network specifications #
         ##########################
@@ -162,7 +163,7 @@ class GSN(Model):
         # hidden unit activation
         if callable(self.hidden_activation):
             log.debug('Using specified activation for hiddens')
-        elif isinstance(self.args.get('hidden_activation'), basestring):
+        elif isinstance(self.args.get('hidden_activation'), six.string_types):
             self.hidden_activation = get_activation_function(self.hidden_activation)
             log.debug('Using %s activation for hiddens', self.hidden_activation)
         else:
@@ -172,7 +173,7 @@ class GSN(Model):
         # Visible layer activation
         if callable(self.visible_activation):
             log.debug('Using specified activation for visible layer')
-        elif isinstance(self.visible_activation, basestring):
+        elif isinstance(self.visible_activation, six.string_types):
             self.visible_activation = get_activation_function(self.visible_activation)
             log.debug('Using %s activation for visible layer', self.visible_activation)
         else:
@@ -182,7 +183,7 @@ class GSN(Model):
         # Cost function
         if callable(self.cost_function):
             log.debug('Using specified cost function')
-        elif isinstance(self.args.get('cost_function'), basestring):
+        elif isinstance(self.args.get('cost_function'), six.string_types):
             self.cost_function = get_cost_function(self.cost_function)
             log.debug('Using %s cost function', self.cost_function)
         else:
@@ -332,7 +333,7 @@ class GSN(Model):
 
 
         self.monitors = OrderedDict([('noisy_recon_cost', self.show_cost), ('recon_cost', self.monitor)])
-        
+
 
         ############
         # Sampling #
@@ -340,12 +341,12 @@ class GSN(Model):
         # the input to the sampling function
         X_sample = T.fmatrix("X_sampling")
         self.network_state_input = [X_sample] + [T.fmatrix("H_sampling_"+str(i+1)) for i in range(self.layers)]
-       
+
         # "Output" state of the network (noisy)
         # initialized with input, then we apply updates
         self.network_state_output = [X_sample] + self.network_state_input[1:]
         visible_pX_chain = []
-    
+
         # ONE update
         log.debug("Performing one walkback in network state sampling.")
         GSN.update_layers(self.network_state_output,
@@ -386,7 +387,7 @@ class GSN(Model):
         # the sampling function, for creating lots of samples from the computational graph. (mostly for log-likelihood
         # or visualization)
         log.debug("f_sample...")
-        if self.layers == 1: 
+        if self.layers == 1:
             self.f_sample = function(inputs  = [X_sample],
                                      outputs = visible_pX_chain[-1],
                                      name    = 'gsn_f_sample_single_layer')
@@ -506,7 +507,7 @@ class GSN(Model):
         """
         return self.params
 
-    
+
     # def gen_10k_samples(self):
     #     log.info('Generating 10,000 samples')
     #     samples, _ = self.sample(self.test_X[0].get_value()[1:2], 10000, 1)

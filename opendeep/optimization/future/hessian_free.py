@@ -33,8 +33,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import numpy, sys
 import theano
 import theano.tensor as T
-import cPickle
 import os
+
+try:
+  import cPickle as pickle
+except ImportError:
+  import pickle
 
 from optimizer import Optimizer
 
@@ -95,7 +99,7 @@ train :
     v = [symbolic_types[len(i)]() for i in self.shapes]
     Gv = gauss_newton_product(costs[0], p, v, s)
 
-    coefficient = T.scalar()  # this is lambda*mu    
+    coefficient = T.scalar()  # this is lambda*mu
     if h is not None:  # structural damping with cross-entropy
       h_constant = symbolic_types[h.ndim]()  # T.Rop does not support `consider_constant` yet, so use `givens`
       structural_damping = coefficient * (-h_constant*T.log(h + 1e-10) - (1-h_constant)*T.log((1-h) + 1e-10)).sum() / h.shape[0]
@@ -253,12 +257,12 @@ train :
     first_iteration = 1
 
     if isinstance(save_progress, str) and os.path.isfile(save_progress):
-      save = cPickle.load(file(save_progress))
+      save = pickle.load(file(save_progress))
       self.cg_last_x, best, self.lambda_, first_iteration, init_p = save
       first_iteration += 1
       for i, j in zip(self.p, init_p): i.set_value(j)
       print '* recovered saved model'
-    
+
     try:
       for u in xrange(first_iteration, 1 + num_updates):
         print 'update %i/%i,' % (u, num_updates),
@@ -288,7 +292,7 @@ train :
           self.lambda_ *= 1.5
         elif rho > 0.75:
           self.lambda_ /= 1.5
-        
+
         if validation is not None and u % validation_frequency == 0:
           if hasattr(validation, 'iterate'):
             costs = numpy.mean([self.f_cost(*i) for i in validation.iterate()], axis=0)
@@ -302,17 +306,17 @@ train :
         if isinstance(save_progress, str):
           # do not save dataset states
           save = self.cg_last_x, best, self.lambda_, u, [i.get_value().copy() for i in self.p]
-          cPickle.dump(save, file(save_progress, 'wb'), cPickle.HIGHEST_PROTOCOL)
-        
+          pickle.dump(save, file(save_progress, 'wb'), pickle.HIGHEST_PROTOCOL)
+
         if u - best[0] > patience:
           print 'PATIENCE ELAPSED, BAILING OUT'
           break
-        
+
         print
         sys.stdout.flush()
     except KeyboardInterrupt:
       print 'Interrupted by user.'
-    
+
     if best[2] is None:
       best[2] = [i.get_value().copy() for i in self.p]
     return best[2]
@@ -348,9 +352,9 @@ class SequenceDataset:
       else:
         for i_step in xrange(0, len(data[0][i_sequence]) - minimum_size + 1, batch_size):
           self.items.append([data[i][i_sequence][i_step:i_step + batch_size] for i in xrange(len(data))])
-          
+
     self.shuffle()
-  
+
   def shuffle(self):
     numpy.random.shuffle(self.items)
 

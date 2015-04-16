@@ -16,6 +16,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 from functools import partial
 # third party libraries
+import six
 import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
@@ -40,7 +41,7 @@ def get_noise(name, *args, **kwargs):
         'uniform': add_uniform,
         'salt_and_pepper': salt_and_pepper
     }
-    if isinstance(name, basestring):
+    if isinstance(name, six.string_types):
         if name in noise_lookup:
             return partial(noise_lookup[name], *args, **kwargs)
         else:

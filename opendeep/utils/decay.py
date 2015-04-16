@@ -13,6 +13,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
+import six
 import numpy
 # internal references
 from opendeep import cast32
@@ -180,7 +181,7 @@ def get_decay_function(name, parameter, initial, reduction_factor):
         :raises: NotImplementedError
         """
     # make sure name is a string
-    if isinstance(name, basestring):
+    if isinstance(name, six.string_types):
         # standardize the input to be lowercase
         name = name.lower()
         # grab the appropriate activation function from the dictionary of decay functions
