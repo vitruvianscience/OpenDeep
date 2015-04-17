@@ -47,7 +47,7 @@ def main():
     weights_channel.add(Monitor(name="out_mean", expression=hiddens2_mean, train=True))
 
     # create our plot object to do live plotting!
-    plot = Plot(bokeh_doc_name="Monitor Tutorial", channels=[mlp_channel, weights_channel], open_browser=True)
+    plot = Plot(bokeh_doc_name="Monitor Tutorial", monitor_channels=[mlp_channel, weights_channel], open_browser=True)
 
     # use SGD optimizer
     optimizer = SGD(model=mlp,
