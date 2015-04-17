@@ -47,7 +47,7 @@ def main():
     train_collapsed = OrderedDict(collapse_channels(monitors, train=True))
     valid_collapsed = OrderedDict(collapse_channels(monitors, valid=True))
 
-    plot = Plot(bokeh_doc_name='test_plots', channels=monitors, start_server=False, open_browser=True)
+    plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, start_server=False, open_browser=True)
 
     log.debug('compiling...')
     f = theano.function(inputs=[], outputs=train_collapsed.values(), updates=updates)
@@ -60,7 +60,7 @@ def main():
         t=time.time()
         log.debug(epoch)
         vals = f()
-        m = zip(train_collapsed.keys(), vals)
+        m = OrderedDict(zip(train_collapsed.keys(), vals))
         plot.update_plots(epoch, m)
         log.debug('----- '+make_time_units_string(time.time()-t))
 
@@ -68,7 +68,7 @@ def main():
         t = time.time()
         log.debug(epoch)
         vals = f2()
-        m = zip(valid_collapsed.keys(), vals)
+        m = OrderedDict(zip(valid_collapsed.keys(), vals))
         plot.update_plots(epoch, m)
         log.debug('----- ' + make_time_units_string(time.time() - t))
 
