@@ -349,4 +349,3 @@ class AdaSecant(Optimizer):
                 updates[old_grad] = corrected_grad
 
         return updates
-

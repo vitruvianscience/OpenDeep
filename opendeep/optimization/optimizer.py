@@ -36,11 +36,14 @@ from theano.compat import six
 from opendeep import sharedX, function, trunc
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 from opendeep.models.model import Model
+from opendeep.monitor.monitor import collapse_channels
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import raise_to_list, make_time_units_string, get_shared_values, set_shared_values
 
 log = logging.getLogger(__name__)
+
+TRAIN_COST_KEY = 'train_cost'
 
 class Optimizer(object):
     '''
@@ -132,7 +135,81 @@ class Optimizer(object):
         else:
             self.learning_rate_decay = False
 
+        self.noise_switches = raise_to_list(self.model.get_noise_switch())
+
+        ###############################################
+        # theano index variable to use on the dataset #
+        ###############################################
+        # index to a [mini]batch - both start and end
+        data_idx = T.iscalar('data_index')
+        data_end_idx = T.iscalar('data_end_index')
+        self.function_input = [data_idx, data_end_idx]
+        batch_slice = slice(data_idx, data_end_idx)
+
+        # compute number of minibatches for training, validation and testing
+        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
+        # could be a list of shared variables (like multiple sequences from files)
+        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
+        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
+        test_data_shapes = raise_to_list(self.dataset.getDataShape(TEST))
+
+        # train_batches is going to be lists of tuples that contain the start and end indices for train data.
+        # this is more useful in the case of datasets that are lists of sequences, so that the start and end
+        # indices can make sure a batch does not cross the sequence boundary on the concatenated data
+        train_data_lens = [shape[0] for shape in train_data_shapes]
+        self.train_batches = self.get_batch_indices(train_data_lens)
+
+        if valid_data_shapes is not None:
+            valid_data_lens = [shape[0] for shape in valid_data_shapes]
+            self.valid_batches = self.get_batch_indices(valid_data_lens)
+        else:
+            self.valid_batches = None
+        if test_data_shapes is not None:
+            test_data_lens = [shape[0] for shape in test_data_shapes]
+            self.test_batches = self.get_batch_indices(test_data_lens)
+        else:
+            self.test_batches = None
+
+        # create the givens for the input function as pairs of (input_variable: sliced_data)
+        self.train_givens = self.get_givens_subset(TRAIN, batch_slice)
+        self.valid_givens = self.get_givens_subset(VALID, batch_slice)
+        self.test_givens  = self.get_givens_subset(TEST, batch_slice)
+
+        # Now time to create the gradient updates for the model - make sure to handle the possible
+        # list of costs used for pretraining of certain parts of the model.
+        self.train_costs = raise_to_list(self.model.get_train_cost())
+        self.train_updates = []
+        self.gradients = []
+        for i, train_cost in enumerate(self.train_costs):
+            # Now create the training cost function for the model to use while training - update parameters
+            # gradient!
+            gradients, _ = self.model.get_gradient(cost=train_cost)
+            self.gradients.append(gradients)
+
+            # Calculate the optimizer updates each run
+            # This is where the magic happens for a lot of sub-implementations of SGD!
+            # It tells how to update the params each training epoch
+            gradient_updates = self.get_updates(gradients)
+
+            # Combine the updates from the model also if applicable
+            train_updates = self.model.get_updates()
+            if train_updates:
+                train_updates.update(gradient_updates)
+            else:
+                train_updates = gradient_updates
+            self.train_updates.append(train_updates)
+
     def get_batch_indices(self, data_lengths):
+        """
+        Computes the tuples of (start_index, end_index) that represent the appropriate slices of the concatenated
+        dataset with regards to the given data_lengths. This allows for lists of data lengths to represent sequences,
+        so that the concatenated batches returned do not overstep the start of a new sequence.
+
+        :param data_lengths: list of #examples for each dataset
+        :type data_lengths: list of ints
+        :return: list of tuples (start, end) representing the batch slice
+        :rtype: list of tuples of ints
+        """
         batch_indices = []
         start_idx = 0
         for len in raise_to_list(data_lengths):
@@ -152,6 +229,33 @@ class Optimizer(object):
             start_idx = end_idx
         return batch_indices
 
+    def get_givens_subset(self, subset, batch_slice):
+        """
+        This translates a batch slice of start and end indices into the actual data from the given subset
+
+        :param subset: the subset to use
+        :type subset: integer
+        :param batch_slice: symbolic slice to grab from the data
+        :type batch_slice: symbolic slice
+        :return: the givens to provide to a function: (input_variable: data[batch])
+        :rtype: OrderedDict
+        """
+        # translate the data_idx into the givens for the model
+        # first get the lists of input variables the model requires - inputs and targets
+        model_inputs = raise_to_list(self.model.get_inputs())
+        model_targets = raise_to_list(self.model.get_targets())
+        givens = None
+        if self.dataset.hasSubset(subset):
+            # grab the data and labels
+            data, labels = self.dataset.getSubset(subset)
+            # create the givens for the input function as pairs of (input_variable: sliced_data)
+            givens = OrderedDict(zip(model_inputs, [data[batch_slice]]))
+            # include labels as well if they are required by the model
+            if model_targets is not None and len(model_targets) > 0:
+                givens.update(OrderedDict(zip(model_targets, [labels[batch_slice]])))
+
+        return givens
+
     def get_updates(self, gradients):
         """
         This returns the parameter updates to use during training. It defaults to only using (annealed) learning rate.
@@ -167,11 +271,25 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def train(self, continue_training=False):
+    def get_lr_monitor(self):
+        """
+        returns a monitor dictionary to the optimizer's learning rate
+        """
+        return {'learning_rate': self.learning_rate}
+
+    def train(self, monitor_channels=None, plot=None, continue_training=False):
         """
         This method performs the training!!!
-        :param continue_training:
-        :type continue_training:
+
+        :param monitor_channels: the list of channels containing monitor expressions/variables to compile and evaluate
+        :type monitor_channels: list of opendeep.monitor.monitor.MonitorsChannel objects
+
+        :param plot: the Plot object to use if we want to graph the outputs (uses bokeh server)
+        :type plot: opendeep.monitor.plot.Plot object
+
+        :param continue_training: whether to continue training from a previous point
+        :type continue_training: boolean
+
         :return:
         :rtype:
         """
@@ -179,122 +297,70 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
-        ###############################################
-        # theano index variable to use on the dataset #
-        ###############################################
-        # index to a [mini]batch - both start and end
-        data_idx = T.iscalar('data_index')
-        data_end_idx = T.iscalar('data_end_index')
-        batch_slice = slice(data_idx, data_end_idx)
+        # deal with the monitor channels if they were given (or take them from the plot)
+        if monitor_channels is None and plot is not None and len(plot.channels) > 0:
+            monitor_channels = plot.channels
+        self.train_monitors_dict = {}
+        self.valid_monitors_dict = {}
+        self.test_monitors_dict = {}
+        if monitor_channels:
+            self.train_monitors_dict = OrderedDict(collapse_channels(monitor_channels, train=True))
+            self.valid_monitors_dict = OrderedDict(collapse_channels(monitor_channels, valid=True))
+            self.test_monitors_dict  = OrderedDict(collapse_channels(monitor_channels, test=True))
 
-        # compute number of minibatches for training, validation and testing
-        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
-        # could be a list of shared variables (like multiple sequences from files)
-        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
-        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
-        test_data_shapes  = raise_to_list(self.dataset.getDataShape(TEST))
-
-        # train_batches is going to be lists of tuples that contain the start and end indices for train data
-        train_data_lens = [shape[0] for shape in train_data_shapes]
-        self.train_batches = self.get_batch_indices(train_data_lens)
-
-        if valid_data_shapes is not None:
-            valid_data_lens = [shape[0] for shape in valid_data_shapes]
-            self.valid_batches = self.get_batch_indices(valid_data_lens)
-        else:
-            self.valid_batches = None
-        if test_data_shapes is not None:
-            test_data_lens = [shape[0] for shape in test_data_shapes]
-            self.test_batches = self.get_batch_indices(test_data_lens)
-        else:
-            self.test_batches = None
-
-        # translate the data_idx into the givens for the model
-        model_inputs = raise_to_list(self.model.get_inputs())
-        model_targets = raise_to_list(self.model.get_targets())
-
-        train_data, train_labels = self.dataset.getSubset(TRAIN)
-        train_givens = OrderedDict(zip(model_inputs, [train_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            train_givens.update(OrderedDict(zip(model_targets, [train_labels[batch_slice]])))
-
-        valid_data, valid_labels = self.dataset.getSubset(VALID)
-        valid_givens = OrderedDict(zip(model_inputs, [valid_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            valid_givens.update(OrderedDict(zip(model_targets, [valid_labels[batch_slice]])))
-
-        test_data, test_labels = self.dataset.getSubset(TEST)
-        test_givens = OrderedDict(zip(model_inputs, [test_data[batch_slice]]))
-        if model_targets is not None and len(model_targets) > 0:
-            test_givens.update(OrderedDict(zip(model_targets, [test_labels[batch_slice]])))
-
-        # Now time to create the training cost functions for the model - make sure to handle the possible
-        # list of costs used for pretraining of certain parts of the model.
-        train_costs = raise_to_list(self.model.get_train_cost())
+        #######################################
+        # compile train and monitor functions #
+        #######################################
         self.train_functions = []
-        for i, train_cost in enumerate(train_costs):
-            # Now create the training cost function for the model to use while training - update parameters
-            # gradient!
-            gradients, _ = self.model.get_gradient(cost=train_cost)
-
-            # Calculate the optimizer updates each run
-            # This is where the magic happens for a lot of sub-implementations of SGD, including AdaDelta!
-            # It tells how to update the params each training epoch
-            gradient_updates = self.get_updates(gradients)
-
-            # Combine the updates from the model also if applicable
-            train_updates = self.model.get_updates()
-            if train_updates:
-                train_updates.update(gradient_updates)
-            else:
-                train_updates = gradient_updates
-
+        for i in range(len(self.train_costs)):
+            train_updates = self.train_updates[i]
+            train_cost = self.train_costs[i]
             # Compile the training function!
-            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_costs),
+            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(self.train_updates),
                      str(type(self.model)))
             t = time.time()
 
-            f_learn = function(inputs=[data_idx, data_end_idx],
+            f_learn = function(inputs=self.function_input,
                                updates=train_updates,
-                               outputs=train_cost,
-                               givens=train_givens,
+                               outputs=[train_cost] + self.train_monitors_dict.values(),
+                               givens=self.train_givens,
                                name='f_learn_%d' % i)
 
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
             self.train_functions.append(f_learn)
 
-        # grab the expression(s) to use to monitor different model values during training
+        # figure out if we want valid and test
+        self.valid_flag = self.dataset.hasSubset(VALID) and len(self.valid_monitors_dict) > 0
+        self.test_flag = self.dataset.hasSubset(TEST) and len(self.test_monitors_dict) > 0
+        # Now compile the monitor functions!
         log.debug("Compiling monitor functions...")
         monitor_t = time.time()
-        self.monitors = OrderedDict(self.model.get_monitors())
-        self.monitor_names = self.monitors.keys()
-        if len(self.monitors.keys()) > 0:
-            self.train_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
-                updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=train_givens,
-                name="train_monitor_function"
-            )
-        if len(self.monitors.keys()) > 0:
+        # valid monitors
+        if self.valid_flag:
             self.valid_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
+                inputs=self.function_input,
                 updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=valid_givens,
-                name="valid_monitor_function"
+                outputs=self.valid_monitors_dict.values(),
+                givens=self.valid_givens,
+                name='valid_monitor_function'
             )
-        if len(self.monitors.keys()) > 0:
+        else:
+            self.valid_monitor_function = None
+
+        # test monitors
+        if self.test_flag:
             self.test_monitor_function = function(
-                inputs=[data_idx, data_end_idx],
+                inputs=self.function_input,
                 updates=self.model.get_updates(),
-                outputs=self.monitors.values(),
-                givens=test_givens,
-                name="test_monitor_function"
+                outputs=self.test_monitors_dict.values(),
+                givens=self.test_givens,
+                name='test_monitor_function'
             )
+        else:
+            self.test_monitor_function = None
+
         log.debug("Compilation done. Took %s", make_time_units_string(time.time() - monitor_t))
 
-        self.noise_switches = raise_to_list(self.model.get_noise_switch())
 
         ##################
         # start training #
@@ -331,7 +397,7 @@ class Optimizer(object):
 
             while not self.STOP:
                 try:
-                    self.STOP = self._perform_one_epoch(train_function)
+                    self.STOP = self._perform_one_epoch(train_function, plot)
                 except KeyboardInterrupt:
                     log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
                     self.STOP = True
@@ -349,53 +415,80 @@ class Optimizer(object):
                  str(type(self.model)), make_time_units_string(time.time() - start_time))
 
 
-    def _perform_one_epoch(self, f_learn):
+    def _perform_one_epoch(self, f_learn, plot=None):
         self.epoch_counter += 1
         t = time.time()
         log.info('EPOCH %s', str(self.epoch_counter))
 
         # set the noise switches on for training function! (this is where things like dropout happen)
-        if len(self.noise_switches) > 0:
+        switch_vals = []
+        if len(self.noise_switches) > 0 and (self.valid_flag or self.test_flag or self.epoch_counter == 1):
             log.debug("Turning on %s noise switches", str(len(self.noise_switches)))
             switch_vals = [switch.get_value() for switch in self.noise_switches]
-            [switch.set_value(0.) for switch in self.noise_switches]
+            [switch.set_value(1.) for switch in self.noise_switches]
 
         # train
         train_costs = []
-        train_monitors = {key: [] for key in self.monitors.keys()}
+        train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
         for batch_start, batch_end in self.train_batches:
-            train_costs.append(f_learn(batch_start, batch_end))
-            self.call_monitors(monitor_function=self.train_monitor_function,
-                               monitors_dict=train_monitors,
-                               inputs=[batch_start, batch_end])
-        log.info('Train cost: %s', trunc(numpy.mean(train_costs, 0)))
-        if len(self.monitors.keys()) > 0:
-            log.info('Train monitors: %s',
-                     str({key: numpy.mean(value, 0) for key, value in train_monitors.items()}))
+            _outs = raise_to_list(f_learn(batch_start, batch_end))
+            train_costs.append(_outs[0])
+            # handle any user defined monitors
+            if len(train_monitors) > 0:
+                current_monitors = zip(self.train_monitors_dict.keys(), _outs[1:])
+                for name, val in current_monitors:
+                    train_monitors[name].append(val)
 
+        # get the mean values for the batches
+        mean_train = numpy.mean(train_costs, 0)
+        current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in train_monitors.items()}
+        # log the mean values!
+        log.info('Train cost: %s', trunc(mean_train))
+        if len(current_mean_monitors) > 0:
+            log.info('Train monitors: %s', str(current_mean_monitors))
+        # if there is a plot, also send them over!
+        if plot:
+            current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
+            plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         # set the noise switches off for valid and test sets! we assume unseen data is noisy anyway :)
-        if len(self.noise_switches) > 0:
+        if len(self.noise_switches) > 0 and (self.valid_flag or self.test_flag):
             log.debug("Turning off %s noise switches", str(len(self.noise_switches)))
             [switch.set_value(0.) for switch in self.noise_switches]
+
         # valid
-        if self.dataset.hasSubset(VALID) and len(self.monitors.keys()) > 0:
-            valid_monitors = {key: [] for key in self.monitors.keys()}
+        if self.valid_flag:
+            valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
             for batch_start, batch_end in self.valid_batches:
-                self.call_monitors(monitor_function=self.valid_monitor_function,
-                                   monitors_dict=valid_monitors,
-                                   inputs=[batch_start, batch_end])
-            log.info('Valid monitors: %s',
-                     str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
+                _outs = raise_to_list(self.valid_monitor_function(batch_start, batch_end))
+                current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    valid_monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in valid_monitors.items()}
+            # log the mean values!
+            log.info('Valid monitors: %s', str(current_mean_monitors))
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         #test
-        if self.dataset.hasSubset(TEST) and len(self.monitors.keys()) > 0:
-            test_monitors = {key: [] for key in self.monitors.keys()}
+        if self.test_flag:
+            test_monitors = {key: [] for key in self.test_monitors_dict.keys()}
             for batch_start, batch_end in self.test_batches:
-                self.call_monitors(monitor_function=self.test_monitor_function,
-                                   monitors_dict=test_monitors,
-                                   inputs=[batch_start, batch_end])
-            log.info('Test monitors: %s', str({key: numpy.mean(value, 0) for key, value in test_monitors.items()}))
+                _outs = raise_to_list(self.test_monitor_function(batch_start, batch_end))
+                current_monitors = zip(self.test_monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    test_monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in test_monitors.items()}
+            # log the mean values!
+            log.info('Test monitors: %s', str(current_mean_monitors))
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         # check for early stopping on train costs
         cost = numpy.sum(train_costs)
@@ -430,11 +523,8 @@ class Optimizer(object):
 
         # ANNEAL!
         if not stop:
-            if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
-                self.learning_rate_decay.decay()
-            if hasattr(self, 'momentum_decay') and self.momentum_decay:
-                self.momentum_decay.decay()
-            for decay_param in self.model.get_decay_params():
+            # perform the appropriate decay on the decay functions/parameters for this optimizer and model
+            for decay_param in self.get_decay_params():
                 decay_param.decay()
 
         # reset the switches
@@ -444,7 +534,13 @@ class Optimizer(object):
         # return whether or not to stop this epoch
         return stop
 
-    def call_monitors(self, monitors_dict, monitor_function, inputs):
-        outs = monitor_function(*inputs)
-        for i, out in enumerate(outs):
-            monitors_dict[self.monitor_names[i]].append(out)
+    def get_decay_params(self):
+        """
+        returns a list of all the Decay objects to decay during training.
+        :return:
+        :rtype:
+        """
+        decay_params = self.model.get_decay_params()
+        if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
+            decay_params.append(self.learning_rate_decay)
+        return decay_params

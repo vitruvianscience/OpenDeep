@@ -32,7 +32,7 @@ class Prototype(Model):
 
     You can use an Optimizer with the container as you would a Model - makes training easy :)
     """
-    def __init__(self, config=None, layers=None):
+    def __init__(self, config=None, layers=None, outdir='outputs/prototype/'):
         """
         During initialization, use the optional config provided to pre-set up the model. This is used
         for repeatable experiments.
@@ -41,7 +41,7 @@ class Prototype(Model):
         :type config: a dictionary-like object or filename to JSON/YAML file.
         """
         # initialize superclass (model) with the config
-        super(Prototype, self).__init__(config=config)
+        super(Prototype, self).__init__(config=config, outdir=outdir)
 
         # TODO: add ability to create the models list from the input config.
 

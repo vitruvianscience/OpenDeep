@@ -36,6 +36,8 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+OUTDIR_DEFAULT = 'outputs/'
+
 class Model(object):
     """
     The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
@@ -137,12 +139,15 @@ class Model(object):
         # set the overall default outdir to outputs/
         if outdir is not None or 'outdir' not in self.args:
             self.args['outdir'] = outdir
+        else:
+            self.args['outdir'] = None
         if self.args['outdir'] is None:
-            self.args['outdir'] = 'outputs/'
+            self.args['outdir'] = OUTDIR_DEFAULT
 
         # Now create the directory for outputs of the model
         # set up base path for the outputs of the model during training, etc.
-        mkdir_p(self.args['outdir'])
+        if self.args['outdir']:
+            mkdir_p(self.args['outdir'])
 
 
         # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
@@ -542,31 +547,37 @@ class Model(object):
         :return: whether or not successful
         :rtype: Boolean
         """
-        # By default, try to dump all the values from get_param_values into a pickle file.
-        params = self.get_param_values()
+        if not hasattr(self, 'outdir'):
+            self.outdir = OUTDIR_DEFAULT
+        # make sure outdir was not set to false (no saving or outputs)
+        if self.outdir:
+            # By default, try to dump all the values from get_param_values into a pickle file.
+            params = self.get_param_values()
 
-        param_path = os.path.join(self.outdir, param_file)
-        param_file = os.path.realpath(param_path)
+            param_path = os.path.join(self.outdir, param_file)
+            param_file = os.path.realpath(param_path)
 
-        # force extension to be .pkl if it isn't a pickle file
-        _, extension = os.path.splitext(param_file)
-        if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
-            ''.join([param_file, '.pkl'])
+            # force extension to be .pkl if it isn't a pickle file
+            _, extension = os.path.splitext(param_file)
+            if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
+                ''.join([param_file, '.pkl'])
 
-        log.debug('Saving %s parameters to %s',
-                  str(type(self)), str(param_file))
-        # try to dump the param values
-        with open(param_file, 'wb') as f:
-            try:
-                pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
-            except Exception as e:
-                log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                              str(type(self)), str(param_file), str(e))
-                return False
-            finally:
-                f.close()
+            log.debug('Saving %s parameters to %s',
+                      str(type(self)), str(param_file))
+            # try to dump the param values
+            with open(param_file, 'wb') as f:
+                try:
+                    pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
+                except Exception as e:
+                    log.exception("Some issue saving model %s parameters to %s! Exception: %s",
+                                  str(type(self)), str(param_file), str(e))
+                    return False
+                finally:
+                    f.close()
 
-        return True
+            return True
+        else:
+            return False
 
 
     def load_params(self, param_file):
@@ -612,25 +623,31 @@ class Model(object):
         :return: whether or not successful
         :rtype: bool
         """
-        args_path = os.path.join(self.outdir, args_file)
-        args_file = os.path.realpath(args_path)
+        if not hasattr(self, 'outdir'):
+            self.outdir = OUTDIR_DEFAULT
+        # make sure outdir is not set to False (no outputs/saving)
+        if self.outdir:
+            args_path = os.path.join(self.outdir, args_file)
+            args_file = os.path.realpath(args_path)
 
-        # force extension to be .pkl if it isn't a pickle file
-        _, extension = os.path.splitext(args_file)
-        if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
-            ''.join([args_file, '.pkl'])
+            # force extension to be .pkl if it isn't a pickle file
+            _, extension = os.path.splitext(args_file)
+            if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
+                ''.join([args_file, '.pkl'])
 
-        log.debug('Saving %s configuration to %s',
-                  str(type(self)), str(args_file))
-        # try to dump the param values
-        with open(args_file, 'wb') as f:
-            try:
-                pickle.dump(self.args, f, protocol=pickle.HIGHEST_PROTOCOL)
-            except Exception as e:
-                log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                              str(type(self)), str(args_file), str(e))
-                return False
-            finally:
-                f.close()
+            log.debug('Saving %s configuration to %s',
+                      str(type(self)), str(args_file))
+            # try to dump the param values
+            with open(args_file, 'wb') as f:
+                try:
+                    pickle.dump(self.args, f, protocol=pickle.HIGHEST_PROTOCOL)
+                except Exception as e:
+                    log.exception("Some issue saving model %s parameters to %s! Exception: %s",
+                                  str(type(self)), str(args_file), str(e))
+                    return False
+                finally:
+                    f.close()
 
-        return True
+            return True
+        else:
+            return False

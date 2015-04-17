@@ -108,3 +108,14 @@ class SGD(Optimizer):
             updates[param] = param + inc
 
         return updates
+
+    def get_decay_params(self):
+        """
+        returns a list of all the Decay objects to decay during training.
+        :return:
+        :rtype:
+        """
+        decay_params = super(SGD, self).get_decay_params()
+        if hasattr(self, 'momentum_decay') and self.momentum_decay:
+            decay_params.append(self.momentum_decay)
+        return decay_params
