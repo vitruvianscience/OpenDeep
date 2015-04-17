@@ -109,14 +109,14 @@ class Plot(object):
         'colors': colors
     }
 
-    def __init__(self, bokeh_doc_name, channels=[], open_browser=False,
+    def __init__(self, bokeh_doc_name, monitor_channels=[], open_browser=False,
                  start_server=False, server_url='http://localhost:5006/',
                  colors=None, defaults=defaults):
         # Make sure Bokeh is available
         if BOKEH_AVAILABLE:
-            channels = raise_to_list(channels)
+            monitor_channels = raise_to_list(monitor_channels)
 
-            self.channels = channels
+            self.channels = monitor_channels
             self.plots = {}
             self.colors = colors or defaults['colors']
             self.bokeh_doc_name = bokeh_doc_name
