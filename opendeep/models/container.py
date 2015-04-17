@@ -32,7 +32,7 @@ class Prototype(Model):
 
     You can use an Optimizer with the container as you would a Model - makes training easy :)
     """
-    def __init__(self, config=None, layers=None, outdir=None):
+    def __init__(self, config=None, layers=None, outdir='outputs/prototype/'):
         """
         During initialization, use the optional config provided to pre-set up the model. This is used
         for repeatable experiments.

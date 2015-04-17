@@ -36,6 +36,8 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+OUTDIR_DEFAULT = 'outputs/'
+
 class Model(object):
     """
     The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
@@ -137,8 +139,10 @@ class Model(object):
         # set the overall default outdir to outputs/
         if outdir is not None or 'outdir' not in self.args:
             self.args['outdir'] = outdir
+        else:
+            self.args['outdir'] = None
         if self.args['outdir'] is None:
-            self.args['outdir'] = 'outputs/'
+            self.args['outdir'] = OUTDIR_DEFAULT
 
         # Now create the directory for outputs of the model
         # set up base path for the outputs of the model during training, etc.
@@ -543,6 +547,8 @@ class Model(object):
         :return: whether or not successful
         :rtype: Boolean
         """
+        if not hasattr(self, 'outdir'):
+            self.outdir = OUTDIR_DEFAULT
         # make sure outdir was not set to false (no saving or outputs)
         if self.outdir:
             # By default, try to dump all the values from get_param_values into a pickle file.
@@ -617,6 +623,8 @@ class Model(object):
         :return: whether or not successful
         :rtype: bool
         """
+        if not hasattr(self, 'outdir'):
+            self.outdir = OUTDIR_DEFAULT
         # make sure outdir is not set to False (no outputs/saving)
         if self.outdir:
             args_path = os.path.join(self.outdir, args_file)

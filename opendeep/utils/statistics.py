@@ -15,6 +15,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 # third party libraries
 import theano.tensor as T
+# internal imports
+from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +40,12 @@ def get_stats(input, stat=None):
         'l2': input.norm(L=2),
         #'num_nonzero': T.sum(T.nonzero(input)),
     }
-    if isinstance(stat, basestring):
-        if stat in stats:
-            return {stat: stats[stat]}
-    return stats
+    stat_list = raise_to_list(stat)
+    compiled_stats = {}
+    if stat_list is None:
+        return stats
+
+    for stat in stat_list:
+        if isinstance(stat, basestring) and stat in stats:
+            compiled_stats.update({stat: stats[stat]})
+    return compiled_stats

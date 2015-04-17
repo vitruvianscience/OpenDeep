@@ -33,6 +33,7 @@ except ImportError:
 # internal imports
 from opendeep.monitor.monitor import MonitorsChannel, COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER
 from opendeep.utils.misc import raise_to_list
+from opendeep.optimization.optimizer import TRAIN_COST_KEY
 
 
 log = logging.getLogger(__name__)
@@ -108,13 +109,14 @@ class Plot(object):
         'colors': colors
     }
 
-    def __init__(self, bokeh_doc_name, channels, open_browser=False,
+    def __init__(self, bokeh_doc_name, channels=[], open_browser=False,
                  start_server=False, server_url='http://localhost:5006/',
-                 colors=None, defaults=defaults, **kwargs):
+                 colors=None, defaults=defaults):
         # Make sure Bokeh is available
         if BOKEH_AVAILABLE:
             channels = raise_to_list(channels)
 
+            self.channels = channels
             self.plots = {}
             self.colors = colors or defaults['colors']
             self.bokeh_doc_name = bokeh_doc_name
@@ -125,7 +127,16 @@ class Plot(object):
             self.figures = []
             self.figure_indices = {}
             self.figure_color_indices = []
-            for i, channel in enumerate(channels):
+
+            # add a potential plot for train_cost
+            self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, TRAIN_COST_KEY),
+                                       logo=None,
+                                       toolbar_location='right'))
+            self.figure_color_indices.append(0)
+            self.figure_indices[TRAIN_COST_KEY] = 0
+
+            for i, channel in enumerate(self.channels):
+                idx = i+1  # offset by 1 because of the train_cost figure
                 assert isinstance(channel, MonitorsChannel), "Need channels to be type MonitorsChannel. Found %s" % \
                     str(type(channel))
                 # create the figure
@@ -135,19 +146,19 @@ class Plot(object):
                 self.figure_color_indices.append(0)
                 # for each monitor in this channel, assign this figure to the monitor (and train/valid/test variants)
                 for monitor in channel.monitors:
-                    self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = i
+                    self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = idx
                     if monitor.train_flag:
                         self.figure_indices[
                             COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
-                        ] = i
+                        ] = idx
                     if monitor.valid_flag:
                         self.figure_indices[
                             COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
-                        ] = i
+                        ] = idx
                     if monitor.test_flag:
                         self.figure_indices[
                             COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
-                        ] = i
+                        ] = idx
 
             log.debug("Figure indices for monitors: %s" % str(self.figure_indices))
 
@@ -156,14 +167,18 @@ class Plot(object):
 
     def update_plots(self, epoch, monitors):
         if BOKEH_AVAILABLE:
-            for key, value in monitors:
+            for key, value in monitors.items():
                 if key in self.figure_indices:
                     if key not in self.plots:
                         # grab the correct figure by its index for the key (same with the color)
                         fig = self.figures[self.figure_indices[key]]
                         color_idx = self.figure_color_indices[self.figure_indices[key]]
                         # split the channel from the monitor name
-                        name = key.split(COLLAPSE_SEPARATOR, 1)[1]
+                        name = key.split(COLLAPSE_SEPARATOR, 1)
+                        if len(name) > 1:
+                            name = name[1]
+                        else:
+                            name = name[0]
                         # create a new line
                         fig.line([epoch], [value], legend=name,
                                  x_axis_label='iterations',

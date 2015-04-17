@@ -43,6 +43,8 @@ from opendeep.utils.misc import raise_to_list, make_time_units_string, get_share
 
 log = logging.getLogger(__name__)
 
+TRAIN_COST_KEY = 'train_cost'
+
 class Optimizer(object):
     '''
     Default interface for an optimizer implementation - this provides the necessary parameter updates when
@@ -295,20 +297,24 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
-        # deal with the monitor channels if they were given
-        train_monitors_dict = {}
-        valid_monitors_dict = {}
-        test_monitors_dict = {}
+        # deal with the monitor channels if they were given (or take them from the plot)
+        if monitor_channels is None and plot is not None and len(plot.channels) > 0:
+            monitor_channels = plot.channels
+        self.train_monitors_dict = {}
+        self.valid_monitors_dict = {}
+        self.test_monitors_dict = {}
         if monitor_channels:
-            train_monitors_dict = OrderedDict(collapse_channels(monitor_channels, train=True))
-            valid_monitors_dict = OrderedDict(collapse_channels(monitor_channels, valid=True))
-            test_monitors_dict  = OrderedDict(collapse_channels(monitor_channels, test=True))
+            self.train_monitors_dict = OrderedDict(collapse_channels(monitor_channels, train=True))
+            self.valid_monitors_dict = OrderedDict(collapse_channels(monitor_channels, valid=True))
+            self.test_monitors_dict  = OrderedDict(collapse_channels(monitor_channels, test=True))
 
         #######################################
         # compile train and monitor functions #
         #######################################
         self.train_functions = []
-        for i, (train_updates, train_cost) in enumerate(zip([self.train_updates, self.train_costs])):
+        for i in range(len(self.train_costs)):
+            train_updates = self.train_updates[i]
+            train_cost = self.train_costs[i]
             # Compile the training function!
             log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(self.train_updates),
                      str(type(self.model)))
@@ -316,42 +322,43 @@ class Optimizer(object):
 
             f_learn = function(inputs=self.function_input,
                                updates=train_updates,
-                               outputs=[train_cost] + train_monitors_dict.values(),
+                               outputs=[train_cost] + self.train_monitors_dict.values(),
                                givens=self.train_givens,
                                name='f_learn_%d' % i)
 
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
             self.train_functions.append(f_learn)
 
-        # grab the expression(s) to use to monitor different model values during training
-        # log.debug("Compiling monitor functions...")
-        # monitor_t = time.time()
-        # self.monitors = OrderedDict(self.model.get_monitors())
-        # self.monitor_names = self.monitors.keys()
-        # if len(self.monitors.keys()) > 0:
-        #     self.train_monitor_function = function(
-        #         inputs=self.function_input,
-        #         updates=self.model.get_updates(),
-        #         outputs=self.monitors.values(),
-        #         givens=train_givens,
-        #         name="train_monitor_function"
-        #     )
-        # if len(self.monitors.keys()) > 0:
-        #     self.valid_monitor_function = function(
-        #         inputs=self.function_input,
-        #         updates=self.model.get_updates(),
-        #         outputs=self.monitors.values(),
-        #         givens=valid_givens,
-        #         name="valid_monitor_function"
-        #     )
-        # if len(self.monitors.keys()) > 0:
-        #     self.test_monitor_function = function(
-        #         inputs=self.function_input,
-        #         updates=self.model.get_updates(),
-        #         outputs=self.monitors.values(),
-        #         givens=test_givens,
-        #         name="test_monitor_function"
-        #     )
+        # figure out if we want valid and test
+        self.valid_flag = self.dataset.hasSubset(VALID) and len(self.valid_monitors_dict) > 0
+        self.test_flag = self.dataset.hasSubset(TEST) and len(self.test_monitors_dict) > 0
+        # Now compile the monitor functions!
+        log.debug("Compiling monitor functions...")
+        monitor_t = time.time()
+        # valid monitors
+        if self.valid_flag:
+            self.valid_monitor_function = function(
+                inputs=self.function_input,
+                updates=self.model.get_updates(),
+                outputs=self.valid_monitors_dict.values(),
+                givens=self.valid_givens,
+                name='valid_monitor_function'
+            )
+        else:
+            self.valid_monitor_function = None
+
+        # test monitors
+        if self.test_flag:
+            self.test_monitor_function = function(
+                inputs=self.function_input,
+                updates=self.model.get_updates(),
+                outputs=self.test_monitors_dict.values(),
+                givens=self.test_givens,
+                name='test_monitor_function'
+            )
+        else:
+            self.test_monitor_function = None
+
         log.debug("Compilation done. Took %s", make_time_units_string(time.time() - monitor_t))
 
 
@@ -390,7 +397,7 @@ class Optimizer(object):
 
             while not self.STOP:
                 try:
-                    self.STOP = self._perform_one_epoch(train_function)
+                    self.STOP = self._perform_one_epoch(train_function, plot)
                 except KeyboardInterrupt:
                     log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
                     self.STOP = True
@@ -408,54 +415,80 @@ class Optimizer(object):
                  str(type(self.model)), make_time_units_string(time.time() - start_time))
 
 
-    def _perform_one_epoch(self, f_learn):
+    def _perform_one_epoch(self, f_learn, plot=None):
         self.epoch_counter += 1
         t = time.time()
         log.info('EPOCH %s', str(self.epoch_counter))
 
         # set the noise switches on for training function! (this is where things like dropout happen)
         switch_vals = []
-        if len(self.noise_switches) > 0:
+        if len(self.noise_switches) > 0 and (self.valid_flag or self.test_flag or self.epoch_counter == 1):
             log.debug("Turning on %s noise switches", str(len(self.noise_switches)))
             switch_vals = [switch.get_value() for switch in self.noise_switches]
             [switch.set_value(1.) for switch in self.noise_switches]
 
         # train
         train_costs = []
-        train_monitors = {key: [] for key in self.monitors.keys()}
+        train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
         for batch_start, batch_end in self.train_batches:
-            train_costs.append(f_learn(batch_start, batch_end))
-            self.call_monitors(monitor_function=self.train_monitor_function,
-                               monitors_dict=train_monitors,
-                               inputs=[batch_start, batch_end])
-        log.info('Train cost: %s', trunc(numpy.mean(train_costs, 0)))
-        if len(self.monitors.keys()) > 0:
-            log.info('Train monitors: %s',
-                     str({key: numpy.mean(value, 0) for key, value in train_monitors.items()}))
+            _outs = raise_to_list(f_learn(batch_start, batch_end))
+            train_costs.append(_outs[0])
+            # handle any user defined monitors
+            if len(train_monitors) > 0:
+                current_monitors = zip(self.train_monitors_dict.keys(), _outs[1:])
+                for name, val in current_monitors:
+                    train_monitors[name].append(val)
 
+        # get the mean values for the batches
+        mean_train = numpy.mean(train_costs, 0)
+        current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in train_monitors.items()}
+        # log the mean values!
+        log.info('Train cost: %s', trunc(mean_train))
+        if len(current_mean_monitors) > 0:
+            log.info('Train monitors: %s', str(current_mean_monitors))
+        # if there is a plot, also send them over!
+        if plot:
+            current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
+            plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         # set the noise switches off for valid and test sets! we assume unseen data is noisy anyway :)
-        if len(self.noise_switches) > 0:
+        if len(self.noise_switches) > 0 and (self.valid_flag or self.test_flag):
             log.debug("Turning off %s noise switches", str(len(self.noise_switches)))
             [switch.set_value(0.) for switch in self.noise_switches]
+
         # valid
-        if self.dataset.hasSubset(VALID) and len(self.monitors.keys()) > 0:
-            valid_monitors = {key: [] for key in self.monitors.keys()}
+        if self.valid_flag:
+            valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
             for batch_start, batch_end in self.valid_batches:
-                self.call_monitors(monitor_function=self.valid_monitor_function,
-                                   monitors_dict=valid_monitors,
-                                   inputs=[batch_start, batch_end])
-            log.info('Valid monitors: %s',
-                     str({key: numpy.mean(value, 0) for key, value in valid_monitors.items()}))
+                _outs = raise_to_list(self.valid_monitor_function(batch_start, batch_end))
+                current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    valid_monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in valid_monitors.items()}
+            # log the mean values!
+            log.info('Valid monitors: %s', str(current_mean_monitors))
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         #test
-        if self.dataset.hasSubset(TEST) and len(self.monitors.keys()) > 0:
-            test_monitors = {key: [] for key in self.monitors.keys()}
+        if self.test_flag:
+            test_monitors = {key: [] for key in self.test_monitors_dict.keys()}
             for batch_start, batch_end in self.test_batches:
-                self.call_monitors(monitor_function=self.test_monitor_function,
-                                   monitors_dict=test_monitors,
-                                   inputs=[batch_start, batch_end])
-            log.info('Test monitors: %s', str({key: numpy.mean(value, 0) for key, value in test_monitors.items()}))
+                _outs = raise_to_list(self.test_monitor_function(batch_start, batch_end))
+                current_monitors = zip(self.test_monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    test_monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in test_monitors.items()}
+            # log the mean values!
+            log.info('Test monitors: %s', str(current_mean_monitors))
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         # check for early stopping on train costs
         cost = numpy.sum(train_costs)
@@ -501,14 +534,6 @@ class Optimizer(object):
         # return whether or not to stop this epoch
         return stop
 
-    def call_monitors(self, monitors_dict, monitor_function, inputs):
-        """
-        calls the monitor funciton on the inputs, and stores its value to the appropriate dictionary.
-        """
-        outs = monitor_function(*inputs)
-        for i, out in enumerate(outs):
-            monitors_dict[self.monitor_names[i]].append(out)
-
     def get_decay_params(self):
         """
         returns a list of all the Decay objects to decay during training.
@@ -517,5 +542,5 @@ class Optimizer(object):
         """
         decay_params = self.model.get_decay_params()
         if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
-            decay_params.extend(self.learning_rate_decay)
+            decay_params.append(self.learning_rate_decay)
         return decay_params

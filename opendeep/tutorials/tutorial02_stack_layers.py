@@ -29,13 +29,14 @@ def create_mlp():
     optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
     optimizer.train()
 
-    test_data = mnist.getSubset(TEST)
+    test_data, test_labels = mnist.getSubset(TEST)
     test_data = test_data[:25].eval()
+    test_labels = test_labels[:25].eval()
     # use the predict function!
     preds = mlp.run(test_data)
     log.info('-------')
     log.info("predicted: %s",str(preds))
-    log.info("actual:    %s",str(test_data.astype('int32')))
+    log.info("actual:    %s",str(test_labels.astype('int32')))
 
 if __name__ == '__main__':
     config_root_logger()

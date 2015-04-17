@@ -34,7 +34,7 @@ class MNIST(FileDataset):
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets.
     '''
-    def __init__(self, binary=False, one_hot=False, concat_train_valid=True,
+    def __init__(self, binary=False, one_hot=False, concat_train_valid=False,
                  dataset_dir='../../datasets', sequence_number=0, rng=None):
         # instantiate the Dataset class to install the dataset from the url
         log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))

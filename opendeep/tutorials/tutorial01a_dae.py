@@ -80,7 +80,7 @@ if __name__ == '__main__':
     optimizer.train()
 
     # test it on some images!
-    test_data = mnist.getSubset(TEST)
+    test_data, _ = mnist.getSubset(TEST)
     test_data = test_data[:25].eval()
     corrupted_test = salt_and_pepper(test_data, 0.4).eval()
     # use the predict function!
