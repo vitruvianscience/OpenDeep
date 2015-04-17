@@ -21,6 +21,9 @@ from opendeep.utils.misc import raise_to_list
 log = logging.getLogger(__name__)
 
 COLLAPSE_SEPARATOR = "/"
+TRAIN_MARKER = 'train'
+VALID_MARKER = 'valid'
+TEST_MARKER = 'test'
 
 class MonitorsChannel(object):
     """
@@ -170,12 +173,31 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
         # make sure it is the right type
         assert isinstance(channel, MonitorsChannel), "Need input monitor_channels to be MonitorsChannel! Found %s" % \
             str(type(channel))
-        # grab the appropriate monitors
-        monitors = channel.get_monitors(train, valid, test)
-        # collapse their names with the channel name
-        names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors]
-        # create the list of tuples
-        collapsed = zip(names, [monitor.expression for monitor in monitors])
+        # grab the channel's monitors
+        monitors = channel.monitors
+        # if flags are all None, just grab one copy of all the monitors.
+        if train is None and valid is None and test is None:
+            # collapse their names with the channel name
+            names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors]
+            expressions = [monitor.expression for monitor in monitors]
+
+        else:
+            # collapse their names with the channel name and the train/valid/test ending
+            names = []
+            expressions = []
+            for monitor in monitors:
+                if monitor.train_flag and train:
+                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER]))
+                    expressions.append(monitor.expression)
+                if monitor.valid_flag and valid:
+                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER]))
+                    expressions.append(monitor.expression)
+                if monitor.test_flag and test:
+                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER]))
+                    expressions.append(monitor.expression)
+
+        # extend the list of tuples
+        collapsed.extend(zip(names, expressions))
 
     return collapsed
 

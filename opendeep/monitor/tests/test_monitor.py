@@ -35,7 +35,7 @@ def main():
     std = stats.pop('std')
     mean = stats.pop('mean')
 
-    mean_monitor = Monitor('mean', mean)
+    mean_monitor = Monitor('mean', mean, train=True, valid=True)
     var_monitor = Monitor('var', var)
 
     w_channel = MonitorsChannel('W', monitors=mean_monitor)
@@ -44,22 +44,33 @@ def main():
 
     monitors = [w_channel, stat_channel]
 
-    all_collapsed = OrderedDict(collapse_channels(monitors))
+    train_collapsed = OrderedDict(collapse_channels(monitors, train=True))
+    valid_collapsed = OrderedDict(collapse_channels(monitors, valid=True))
 
     plot = Plot(bokeh_doc_name='test_plots', channels=monitors, start_server=False, open_browser=True)
 
     log.debug('compiling...')
-    f = theano.function(inputs=[], outputs=all_collapsed.values(), updates=updates)
+    f = theano.function(inputs=[], outputs=train_collapsed.values(), updates=updates)
+    f2 = theano.function(inputs=[], outputs=valid_collapsed.values(), updates=updates)
     log.debug('done')
 
     t1=time.time()
-    for epoch in range(500):
+
+    for epoch in range(100):
         t=time.time()
         log.debug(epoch)
         vals = f()
-        m = values_dict_from_collapsed(all_collapsed.keys(), vals)
+        m = zip(train_collapsed.keys(), vals)
         plot.update_plots(epoch, m)
         log.debug('----- '+make_time_units_string(time.time()-t))
+
+    for epoch in range(100):
+        t = time.time()
+        log.debug(epoch)
+        vals = f2()
+        m = zip(valid_collapsed.keys(), vals)
+        plot.update_plots(epoch, m)
+        log.debug('----- ' + make_time_units_string(time.time() - t))
 
     log.debug("TOTAL TIME "+make_time_units_string(time.time()-t1))
 

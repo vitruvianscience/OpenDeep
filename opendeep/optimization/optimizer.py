@@ -36,6 +36,7 @@ from theano.compat import six
 from opendeep import sharedX, function, trunc
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 from opendeep.models.model import Model
+from opendeep.monitor.monitor import collapse_channels
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import raise_to_list, make_time_units_string, get_shared_values, set_shared_values
@@ -278,8 +279,8 @@ class Optimizer(object):
         """
         This method performs the training!!!
 
-        :param monitors: the monitor expressions/variables to compile and evaluate
-        :type monitors: list of opendeep.monitor.monitor.MonitorsChannel objects
+        :param monitor_channels: the list of channels containing monitor expressions/variables to compile and evaluate
+        :type monitor_channels: list of opendeep.monitor.monitor.MonitorsChannel objects
 
         :param plot: the Plot object to use if we want to graph the outputs (uses bokeh server)
         :type plot: opendeep.monitor.plot.Plot object
@@ -294,6 +295,15 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
+        # deal with the monitor channels if they were given
+        train_monitors_dict = {}
+        valid_monitors_dict = {}
+        test_monitors_dict = {}
+        if monitor_channels:
+            train_monitors_dict = OrderedDict(collapse_channels(monitor_channels, train=True))
+            valid_monitors_dict = OrderedDict(collapse_channels(monitor_channels, valid=True))
+            test_monitors_dict  = OrderedDict(collapse_channels(monitor_channels, test=True))
+
         #######################################
         # compile train and monitor functions #
         #######################################
@@ -306,7 +316,7 @@ class Optimizer(object):
 
             f_learn = function(inputs=self.function_input,
                                updates=train_updates,
-                               outputs=train_cost,
+                               outputs=[train_cost] + train_monitors_dict.values(),
                                givens=self.train_givens,
                                name='f_learn_%d' % i)
 

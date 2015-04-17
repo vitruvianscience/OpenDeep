@@ -30,6 +30,9 @@ try:
 except ImportError:
     BOKEH_AVAILABLE = False
     warnings.warn("Bokeh is not available - plotting is disabled. Please pip install bokeh.")
+# internal imports
+from opendeep.monitor.monitor import MonitorsChannel, COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER
+from opendeep.utils.misc import raise_to_list
 
 
 log = logging.getLogger(__name__)
@@ -110,49 +113,67 @@ class Plot(object):
                  colors=None, defaults=defaults, **kwargs):
         # Make sure Bokeh is available
         if BOKEH_AVAILABLE:
-            if not isinstance(channels, collections.Mapping):
-                log.error("Monitors needs to be a dictionary")
-                raise AssertionError("Monitors needs to be a dictionary")
+            channels = raise_to_list(channels)
 
             self.plots = {}
             self.colors = colors or defaults['colors']
             self.bokeh_doc_name = bokeh_doc_name
             self.server_url = server_url
             self.start_server(start_server_flag=start_server)
-            self.monitors = channels
 
             # Create figures for each group of channels
             self.figures = []
             self.figure_indices = {}
-            for i, (monitor_group_name, monitor_group_val) in enumerate(self.monitors.items()):
-                self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, monitor_group_name),
+            self.figure_color_indices = []
+            for i, channel in enumerate(channels):
+                assert isinstance(channel, MonitorsChannel), "Need channels to be type MonitorsChannel. Found %s" % \
+                    str(type(channel))
+                # create the figure
+                self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, channel.name),
                                            logo=None,
                                            toolbar_location='right'))
-                if not isinstance(monitor_group_val, collections.Mapping):
-                    self.figure_indices[monitor_group_name] = i
-                else:
-                    for monitor_name in monitor_group_val.keys():
-                        monitor_name = '_'.join([monitor_group_name, monitor_name])
-                        self.figure_indices[monitor_name] = i
+                self.figure_color_indices.append(0)
+                # for each monitor in this channel, assign this figure to the monitor (and train/valid/test variants)
+                for monitor in channel.monitors:
+                    self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = i
+                    if monitor.train_flag:
+                        self.figure_indices[
+                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
+                        ] = i
+                    if monitor.valid_flag:
+                        self.figure_indices[
+                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
+                        ] = i
+                    if monitor.test_flag:
+                        self.figure_indices[
+                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
+                        ] = i
 
-            print self.figure_indices
+            log.debug("Figure indices for monitors: %s" % str(self.figure_indices))
 
             if open_browser:
                 show(self.figures)
 
-    def update_plots(self, epoch, monitors_dict):
+    def update_plots(self, epoch, monitors):
         if BOKEH_AVAILABLE:
-            color_idx = 0
-            for key, value in monitors_dict.items():
+            for key, value in monitors:
                 if key in self.figure_indices:
                     if key not in self.plots:
+                        # grab the correct figure by its index for the key (same with the color)
                         fig = self.figures[self.figure_indices[key]]
-                        fig.line([epoch], [value], legend=key,
+                        color_idx = self.figure_color_indices[self.figure_indices[key]]
+                        # split the channel from the monitor name
+                        name = key.split(COLLAPSE_SEPARATOR, 1)[1]
+                        # create a new line
+                        fig.line([epoch], [value], legend=name,
                                  x_axis_label='iterations',
-                                 y_axis_label='value', name=key,
+                                 y_axis_label='value', name=name,
                                  line_color=self.colors[color_idx % len(self.colors)])
                         color_idx += 1
-                        renderer = fig.select(dict(name=key))#, type=GlyphRenderer))
+                        # set the color index back in the figure list
+                        self.figure_color_indices[self.figure_indices[key]] = color_idx
+                        # grab the render object and put it in the plots dictionary
+                        renderer = fig.select(dict(name=name))
                         self.plots[key] = renderer[0].data_source
                     else:
                         self.plots[key].data['x'].append(epoch)
