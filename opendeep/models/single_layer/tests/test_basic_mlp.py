@@ -28,12 +28,14 @@ if __name__ == '__main__':
     # perform training!
     optimizer.train()
     # test it on some images!
-    test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
+    test_data, test_labels = mnist.getSubset(subset=TEST)
+    test_data = test_data[:25].eval()
+    test_labels = test_labels[:25].eval()
     # use the run function!
     preds = mlp.run(test_data)
     print '-------'
     print preds
-    print mnist.getLabelsByIndices(indices=range(25), subset=TEST).astype('int32')
+    print test_labels.astype('int32')
     print
     print
     del mnist
