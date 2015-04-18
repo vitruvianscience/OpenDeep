@@ -1,7 +1,7 @@
 """
 Please refer to the following tutorial in the documentation at www.opendeep.org
 
-Tutorial: Live Plotting and Monitoring
+Guide: Live Plotting and Monitoring
 """
 # standard libraries
 import logging
@@ -56,6 +56,7 @@ def main():
                     save_frequency=100,
                     batch_size=600,
                     learning_rate=.01,
+                    lr_decay=False,
                     momentum=.9,
                     nesterov_momentum=True)
 
