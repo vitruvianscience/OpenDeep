@@ -2,7 +2,7 @@
 .. module:: rnn_gsn
 
 This module provides the RNN-GSN.
-<link to my paper when it is on arxiv>
+TODO: <link to my paper when it is on arxiv>
 """
 
 __authors__ = "Markus Beissinger"
@@ -71,7 +71,7 @@ class RNN_GSN(Model):
                  rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None,
                  rnn_weights_interval=None, rnn_bias_init=None, generate_n_steps=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
-        initial_parameters = locals()
+        initial_parameters = locals().copy()
         initial_parameters.pop('self')
         super(RNN_GSN, self).__init__(**initial_parameters)
         # all configuration parameters are now in self!

@@ -40,6 +40,7 @@ class DenoisingAutoencoder(GSN):
                 "hidden_activation": 'tanh',
                 "input_sampling": True,
                 "mrg": RNG_MRG.MRG_RandomStreams(1),
+                "tied_weights": True,
                 "weights_init": "uniform",  # how to initialize weights
                 'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
                 'weights_mean': 0,  # mean for gaussian weights init
@@ -55,8 +56,9 @@ class DenoisingAutoencoder(GSN):
                 "hidden_add_noise_sigma": 2,
                 "input_salt_and_pepper": 0.4,
                 # data parameters
-                "is_image": True,
                 "vis_init": False,
+                "image_width": None,
+                "image_height": None,
                 'outdir': 'outputs/dae/'  # the output directory for this model's outputs
                 }
 
@@ -66,13 +68,13 @@ class DenoisingAutoencoder(GSN):
                  visible_activation=None, hidden_activation=None,
                  walkbacks=None,
                  input_sampling=None, mrg=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 tied_weights=None, weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
                  bias_init=None,
                  cost_function=None,
                  add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
                  noise_decay=None, noise_annealing=None,
                  outdir=None,
-                 is_image=None,
+                 image_width=None, image_height=None,
                  vis_init=None):
         # init Model
         # force the model to have one layer - DAE is a specific GSN with a single hidden layer

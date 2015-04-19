@@ -140,8 +140,7 @@ class Model(object):
         # set the overall default outdir to outputs/
         if outdir is not None or 'outdir' not in self.args:
             self.args['outdir'] = outdir
-        else:
-            self.args['outdir'] = None
+
         if self.args['outdir'] is None:
             self.args['outdir'] = OUTDIR_DEFAULT
 

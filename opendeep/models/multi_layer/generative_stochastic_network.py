@@ -41,12 +41,12 @@ import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
 import PIL
 # internal references
-from opendeep import cast32, function, sharedX
+from opendeep import cast_floatX, function, sharedX
 from opendeep.models.model import Model
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils.cost import get_cost_function
-from opendeep.utils.misc import closest_to_square_factors, make_time_units_string
+from opendeep.utils.misc import closest_to_square_factors, make_time_units_string, raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import salt_and_pepper, add_gaussian
 from opendeep.utils.image import tile_raster_images
@@ -64,6 +64,7 @@ _defaults = {# gsn parameters
             "hidden_activation": 'tanh',  # activation for hidden layers
             "input_sampling": True,  # whether to sample at each walkback step - makes it like Gibbs sampling.
             "mrg": RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
+            "tied_weights": True,  # whether to tie the weights between layers (use transpose from higher to lower)
             "weights_init": "uniform",  # how to initialize weights
             'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
             'weights_mean': 0,  # mean for gaussian weights init
@@ -80,7 +81,8 @@ _defaults = {# gsn parameters
             "input_salt_and_pepper": 0.4,  # the salt and pepper value for inputs corruption
             # data parameters
             "outdir": 'outputs/gsn/',  # base directory to output various files
-            "is_image": True,  # whether the input should be treated as an image
+            "image_width": None,  # if the input is an image, its width
+            "image_height": None,  # if the input is an image, its height
             "vis_init": False}
 
 class GSN(Model):
@@ -94,16 +96,16 @@ class GSN(Model):
                  visible_activation=None,
                  hidden_activation=None,
                  input_sampling=None, mrg=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 tied_weights=None, weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
                  bias_init=None,
                  cost_function=None,
                  noise_decay=None, noise_annealing=None,
                  add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
                  outdir=None,
-                 is_image=None,
+                 image_width=None, image_height=None,
                  vis_init=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
-        initial_parameters = locals()
+        initial_parameters = locals().copy()
         initial_parameters.pop('self')
         super(GSN, self).__init__(**initial_parameters)
         # configs can now be accessed through self! huzzah!
@@ -121,17 +123,17 @@ class GSN(Model):
             # otherwise grab shape from inputs_hook that was given
             self.N_input = self.inputs_hook[0]
 
-        # if the input should be thought of as an image, either use the specified width and height,
+        # when the input should be thought of as an image, either use the specified width and height,
         # or try to make as square as possible.
-        if self.is_image:
+        if self.image_height is None and self.image_width is None:
             (_h, _w) = closest_to_square_factors(self.N_input)
-            self.image_width  = self.args.get('width', _w)
-            self.image_height = self.args.get('height', _h)
+            self.image_width  = _w
+            self.image_height = _h
         
         ##########################
         # Network specifications #
         ##########################
-        # generally, walkbacks should be 2*layers
+        # generally, walkbacks should be at least 2*layers
         if self.layers % 2 == 0:
             if self.walkbacks < 2*self.layers:
                 log.warning('Not enough walkbacks for the layers! Layers is %s and walkbacks is %s. '
@@ -143,9 +145,9 @@ class GSN(Model):
                             'Generaly want 2X walkbacks to layers',
                             str(self.layers), str(self.walkbacks))
 
-        self.noise_annealing        = cast32(self.noise_annealing)  # noise schedule parameter
-        self.hidden_add_noise_sigma = sharedX(cast32(self.hidden_add_noise_sigma))
-        self.input_salt_and_pepper  = sharedX(cast32(self.input_salt_and_pepper))
+        self.noise_annealing        = cast_floatX(self.noise_annealing)  # noise schedule parameter
+        self.hidden_add_noise_sigma = sharedX(cast_floatX(self.hidden_add_noise_sigma))
+        self.input_salt_and_pepper  = sharedX(cast_floatX(self.input_salt_and_pepper))
 
         # determine the sizes of each layer in a list.
         #  layer sizes, from h0 to hK (h0 is the visible layer)
@@ -176,22 +178,50 @@ class GSN(Model):
         ###############
         # Parameters! #
         ###############
-        # initialize a list of weights and biases based on layer_sizes for the GSN
-        self.weights_list = [get_weights(weights_init=self.weights_init,
-                                         shape=(self.layer_sizes[i], self.layer_sizes[i+1]),
-                                         name="W_{0!s}_{1!s}".format(i, i+1),
-                                         # if gaussian
-                                         mean=self.weights_mean,
-                                         std=self.weights_std,
-                                         # if uniform
-                                         interval=self.weights_interval)
-                             for i in range(self.layers)]
-
-        # initialize each layer bias to 0's.
-        self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
-                                   name='b_' + str(i),
-                                   init_values=self.bias_init)
-                          for i in range(self.layers + 1)]
+        # make sure to deal with params_hook!
+        if self.params_hook is not None:
+            # if tied weights, expect layers*2 + 1 params
+            if self.tied_weights:
+                assert len(self.params_hook) == 2*self.layers + 1, \
+                    "Tied weights: expected {0!s} params, found {1!s}!".format(2*self.layers+1, len(self.params_hook))
+                self.weights_list = self.params_hook[:self.layers]
+                self.bias_list = self.params_hook[self.layers:]
+            # if untied weights, expect layers*3 + 1 params
+            else:
+                assert len(self.params_hook) == 3*self.layers + 1, \
+                    "Untied weights: expected {0!s} params, found {1!s}!".format(3*self.layers+1, len(self.params_hook))
+                self.weights_list = self.params_hook[:2*self.layers]
+                self.bias_list = self.params_hook[2*self.layers:]
+        # otherwise, construct our params
+        else:
+            # initialize a list of weights and biases based on layer_sizes for the GSN
+            self.weights_list = [get_weights(weights_init=self.weights_init,
+                                             shape=(self.layer_sizes[i], self.layer_sizes[i+1]),
+                                             name="W_{0!s}_{1!s}".format(i, i+1),
+                                             # if gaussian
+                                             mean=self.weights_mean,
+                                             std=self.weights_std,
+                                             # if uniform
+                                             interval=self.weights_interval)
+                                 for i in range(self.layers)]
+            # add more weights if we aren't tying weights between layers (need to add for higher-lower layers now)
+            if not self.tied_weights:
+                self.weights_list.extend(
+                    [get_weights(weights_init=self.weights_init,
+                                 shape=(self.layer_sizes[i+1], self.layer_sizes[i]),
+                                 name="W_{0!s}_{1!s}".format(i+1, i),
+                                 # if gaussian
+                                 mean=self.weights_mean,
+                                 std=self.weights_std,
+                                 # if uniform
+                                 interval=self.weights_interval)
+                     for i in reversed(range(self.layers))]
+                )
+            # initialize each layer bias to 0's.
+            self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
+                                       name='b_' + str(i),
+                                       init_values=self.bias_init)
+                              for i in range(self.layers+1)]
 
         # build the params of the model into a list
         self.params = self.weights_list + self.bias_list
@@ -270,18 +300,7 @@ class GSN(Model):
     
         # ONE update
         log.debug("Performing one walkback in network state sampling.")
-        GSN.update_layers(self.network_state_output,
-                          self.weights_list,
-                          self.bias_list,
-                          visible_pX_chain,
-                          True,
-                          self.noiseless_h1,
-                          self.hidden_add_noise_sigma,
-                          self.input_salt_and_pepper,
-                          self.input_sampling,
-                          self.mrg,
-                          self.visible_activation,
-                          self.hidden_activation)
+        self.update_layers(self.network_state_output, visible_pX_chain, add_noise=True, reverse=False)
 
         #####################################################
         #     Create the run and monitor functions      #
@@ -339,8 +358,12 @@ class GSN(Model):
         if hiddens is None:
             # init hiddens with zeros
             hiddens = [X_init]
-            for w in self.weights_list:
-                hiddens.append(T.zeros_like(T.dot(hiddens[-1], w)))
+            if self.tied_weights:
+                for w in self.weights_list:
+                    hiddens.append(T.zeros_like(T.dot(hiddens[-1], w)))
+            else:
+                for w in self.weights_list[:self.layers]:
+                    hiddens.append(T.zeros_like(T.dot(hiddens[-1], w)))
 
         # The layer update scheme
         log.info("Building the GSN graph : %s updates", str(self.walkbacks))
@@ -388,20 +411,33 @@ class GSN(Model):
         # Compute the dot product, whatever layer
         # If the visible layer X
         if layer_idx == 0:
-            log.debug('using ' + str(self.weights_list[layer_idx]) + '.T')
-            hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + self.bias_list[layer_idx]
+            if self.tied_weights:
+                log.debug('using ' + str(self.weights_list[layer_idx]) + '.T')
+                hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + \
+                                     self.bias_list[layer_idx]
+            else:
+                log.debug('using ' + str(self.weights_list[-(layer_idx+1)]))
+                hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[-(layer_idx+1)]) + \
+                                     self.bias_list[layer_idx]
         # If the top layer
         elif layer_idx == len(hiddens) - 1:
             log.debug('using ' + str(self.weights_list[layer_idx-1]))
             hiddens[layer_idx] = T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + self.bias_list[layer_idx]
         # Otherwise in-between layers
         else:
-            log.debug("using %s and %s.T", str(self.weights_list[layer_idx-1]), str(self.weights_list[layer_idx]))
-            # next layer        :   hiddens[layer_idx+1], assigned weights : W_i
-            # previous layer    :   hiddens[layer_idx-1], assigned weights : W_(layer_idx-1)
-            hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + \
-                         T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + \
-                         self.bias_list[layer_idx]
+            if self.tied_weights:
+                log.debug("using %s and %s.T", str(self.weights_list[layer_idx-1]), str(self.weights_list[layer_idx]))
+                # next layer        :   hiddens[layer_idx+1], assigned weights : W_i
+                # previous layer    :   hiddens[layer_idx-1], assigned weights : W_(layer_idx-1)
+                hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[layer_idx].T) + \
+                                     T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + \
+                                     self.bias_list[layer_idx]
+            else:
+                log.debug("using %s and %s",
+                          str(self.weights_list[layer_idx-1]), str(self.weights_list[-(layer_idx+1)]))
+                hiddens[layer_idx] = T.dot(hiddens[layer_idx+1], self.weights_list[-(layer_idx+1)]) + \
+                                     T.dot(hiddens[layer_idx-1], self.weights_list[layer_idx-1]) + \
+                                     self.bias_list[layer_idx]
 
         # Add pre-activation noise if NOT input layer
         if layer_idx == 1 and self.noiseless_h1:
@@ -547,28 +583,25 @@ class GSN(Model):
     #               ' to sample '+str(n_samples*2)+' numbers')
 
     def create_reconstruction_image(self, input_data):
-        if self.is_image:
-            n_examples = len(input_data)
-            xs_test = input_data
-            noisy_xs_test = self.f_noise(input_data)
-            reconstructed = self.run(noisy_xs_test)
-            # Concatenate stuff
-            width, height = closest_to_square_factors(n_examples)
-            stacked = numpy.vstack(
-                [numpy.vstack([xs_test[i * width: (i + 1) * width],
-                               noisy_xs_test[i * width: (i + 1) * width],
-                               reconstructed[i * width: (i + 1) * width]])
-                 for i in range(height)])
-            number_reconstruction = PIL.Image.fromarray(
-                tile_raster_images(stacked, (self.image_height, self.image_width), (height, 3*width))
-            )
+        n_examples = len(input_data)
+        xs_test = input_data
+        noisy_xs_test = self.f_noise(input_data)
+        reconstructed = self.run(noisy_xs_test)
+        # Concatenate stuff
+        width, height = closest_to_square_factors(n_examples)
+        stacked = numpy.vstack(
+            [numpy.vstack([xs_test[i * width: (i + 1) * width],
+                           noisy_xs_test[i * width: (i + 1) * width],
+                           reconstructed[i * width: (i + 1) * width]])
+             for i in range(height)])
+        number_reconstruction = PIL.Image.fromarray(
+            tile_raster_images(stacked, (self.image_height, self.image_width), (height, 3*width))
+        )
 
-            save_path = os.path.join(self.outdir, 'reconstruction.png')
-            save_path = os.path.realpath(save_path)
-            number_reconstruction.save(save_path)
-            log.info("saved output image to %s", save_path)
-        else:
-            log.warning("Asked to create reconstruction image for something that isn't an image. Ignoring...")
+        save_path = os.path.join(self.outdir, 'reconstruction.png')
+        save_path = os.path.realpath(save_path)
+        number_reconstruction.save(save_path)
+        log.info("saved output image to %s", save_path)
 
     def pack_hiddens(self, hiddens_list):
         '''
@@ -602,13 +635,27 @@ class GSN(Model):
         :rtype: List(theano tensor)
         '''
         h_list = [T.zeros_like(self.X)]
-        for idx, w in enumerate(self.weights_list):
-            # we only care about the odd layers
-            # (where h0 is the input layer - which makes it even here in the hidden layer space)
-            if (idx % 2) != 0:
-                h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
-            else:
-                h_list.append((hiddens_tensor.T[(idx/2)*self.layer_sizes[idx] : (idx/2+1)*self.layer_sizes[idx+1]]).T)
+        if self.tied_weights:
+            for idx, w in enumerate(self.weights_list):
+                # we only care about the odd layers
+                # (where h0 is the input layer - which makes it even here in the hidden layer space)
+                if (idx % 2) != 0:
+                    h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
+                else:
+                    h_list.append(
+                        (hiddens_tensor.T[(idx/2)*self.layer_sizes[idx] : (idx/2 + 1)*self.layer_sizes[idx+1]]).T
+                    )
+        else:
+            for idx, w in enumerate(self.weights_list[:self.layers]):
+                # we only care about the odd layers
+                # (where h0 is the input layer - which makes it even here in the hidden layer space)
+                if (idx % 2) != 0:
+                    h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
+                else:
+                    h_list.append(
+                        (hiddens_tensor.T[
+                         (idx/2) * self.layer_sizes[idx]: (idx/2 + 1) * self.layer_sizes[idx+1]]).T
+                    )
 
         return h_list
 
@@ -626,6 +673,8 @@ class GSN(Model):
 
     def run(self, input):
         if hasattr(self, 'f_run'):
+            # because we use the splat to account for multiple inputs to the function, make sure input is a list.
+            input = raise_to_list(input)
             return self.f_run(*input)
         else:
             log.warning("No f_run for the GSN (this is most likely the case when a hiddens_hook was provided.")

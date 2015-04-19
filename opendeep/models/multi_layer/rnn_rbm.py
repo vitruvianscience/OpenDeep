@@ -319,10 +319,9 @@ class RNN_RBM(Model):
             #############################################################################
             # set the W, bv, and bh values (make sure same order as saved in RBM class) #
             #############################################################################
-            # TODO: Switch back to correct order after testing mnist rnn-rbm
             self.W.set_value(loaded_params[0])
-            self.bv.set_value(loaded_params[2])
-            self.bh.set_value(loaded_params[1])
+            self.bv.set_value(loaded_params[1])
+            self.bh.set_value(loaded_params[2])
             return True
         # if get_file_type didn't return pkl or none, it wasn't a pickle file
         elif ftype:

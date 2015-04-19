@@ -9,8 +9,8 @@ from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.optimization.adadelta import AdaDelta
-from opendeep.data.iterators.sequential import SequentialIterator
 from opendeep.utils.image import tile_raster_images
+from opendeep.monitor.monitor import Monitor, MonitorsChannel
 
 log = logging.getLogger(__name__)
 
@@ -41,23 +41,27 @@ def main():
     log.info("Creating a new GSN")
 
     mnist = MNIST()
-    # config = {"outdir": '../../../../outputs/gsn/mnist/'}
-    config = {"outdir": '../../single_layer/tests/outputs/gsn/'}
-    gsn = GSN(config=config, dataset=mnist, layers=3, walkbacks=5, hidden_size=1000, input_size=28*28)
+    config = {"outdir": 'outputs/gsn/mnist/'}
+    gsn = GSN(config=config, layers=3, walkbacks=5, hidden_size=1000, input_size=28*28, tied_weights=True)
+
+    recon_cost_channel = MonitorsChannel(name='cost')
+    recon_cost_channel.add(Monitor('recon_cost', gsn.get_monitors()['recon_cost'], test=True))
+    recon_cost_channel.add(Monitor('noisy_recon_cost', gsn.get_monitors()['noisy_recon_cost'], test=True))
 
     # Load initial weights and biases from file
     # params_to_load = '../../../outputs/gsn/mnist/trained_epoch_395.pkl'
     # gsn.load_params(params_to_load)
 
-    # optimizer = SGD(model=gsn, dataset=mnist, iterator_class=SequentialIterator, config=_train_args)
-    optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
-    optimizer.train()
+    optimizer = SGD(model=gsn, dataset=mnist, config=_train_args)
+    # optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
+    optimizer.train(monitor_channels=recon_cost_channel)
 
     # Save some reconstruction output images
     import opendeep.data.dataset as datasets
     n_examples = 100
-    xs_test = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
-    noisy_xs_test = gsn.f_noise(mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST))
+    xs_test, _ = mnist.getSubset(datasets.TEST)
+    xs_test = xs_test[:n_examples].eval()
+    noisy_xs_test = gsn.f_noise(xs_test)
     reconstructed = gsn.run(noisy_xs_test)
     # Concatenate stuff
     stacked = numpy.vstack(

@@ -137,68 +137,6 @@ class Optimizer(object):
 
         self.noise_switches = raise_to_list(self.model.get_noise_switch())
 
-        ###############################################
-        # theano index variable to use on the dataset #
-        ###############################################
-        # index to a [mini]batch - both start and end
-        data_idx = T.iscalar('data_index')
-        data_end_idx = T.iscalar('data_end_index')
-        self.function_input = [data_idx, data_end_idx]
-        batch_slice = slice(data_idx, data_end_idx)
-
-        # compute number of minibatches for training, validation and testing
-        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
-        # could be a list of shared variables (like multiple sequences from files)
-        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
-        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
-        test_data_shapes = raise_to_list(self.dataset.getDataShape(TEST))
-
-        # train_batches is going to be lists of tuples that contain the start and end indices for train data.
-        # this is more useful in the case of datasets that are lists of sequences, so that the start and end
-        # indices can make sure a batch does not cross the sequence boundary on the concatenated data
-        train_data_lens = [shape[0] for shape in train_data_shapes]
-        self.train_batches = self.get_batch_indices(train_data_lens)
-
-        if valid_data_shapes is not None:
-            valid_data_lens = [shape[0] for shape in valid_data_shapes]
-            self.valid_batches = self.get_batch_indices(valid_data_lens)
-        else:
-            self.valid_batches = None
-        if test_data_shapes is not None:
-            test_data_lens = [shape[0] for shape in test_data_shapes]
-            self.test_batches = self.get_batch_indices(test_data_lens)
-        else:
-            self.test_batches = None
-
-        # create the givens for the input function as pairs of (input_variable: sliced_data)
-        self.train_givens = self.get_givens_subset(TRAIN, batch_slice)
-        self.valid_givens = self.get_givens_subset(VALID, batch_slice)
-        self.test_givens  = self.get_givens_subset(TEST, batch_slice)
-
-        # Now time to create the gradient updates for the model - make sure to handle the possible
-        # list of costs used for pretraining of certain parts of the model.
-        self.train_costs = raise_to_list(self.model.get_train_cost())
-        self.train_updates = []
-        self.gradients = []
-        for i, train_cost in enumerate(self.train_costs):
-            # Now create the training cost function for the model to use while training - update parameters
-            # gradient!
-            gradients, _ = self.model.get_gradient(cost=train_cost)
-            self.gradients.append(gradients)
-
-            # Calculate the optimizer updates each run
-            # This is where the magic happens for a lot of sub-implementations of SGD!
-            # It tells how to update the params each training epoch
-            gradient_updates = self.get_updates(gradients)
-
-            # Combine the updates from the model also if applicable
-            train_updates = self.model.get_updates()
-            if train_updates:
-                train_updates.update(gradient_updates)
-            else:
-                train_updates = gradient_updates
-            self.train_updates.append(train_updates)
-
     def get_batch_indices(self, data_lengths):
         """
         Computes the tuples of (start_index, end_index) that represent the appropriate slices of the concatenated
@@ -293,6 +231,68 @@ class Optimizer(object):
         :return:
         :rtype:
         """
+        ###############################################
+        # theano index variable to use on the dataset #
+        ###############################################
+        # index to a [mini]batch - both start and end
+        data_idx = T.iscalar('data_index')
+        data_end_idx = T.iscalar('data_end_index')
+        self.function_input = [data_idx, data_end_idx]
+        batch_slice = slice(data_idx, data_end_idx)
+
+        # compute number of minibatches for training, validation and testing
+        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
+        # could be a list of shared variables (like multiple sequences from files)
+        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
+        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
+        test_data_shapes = raise_to_list(self.dataset.getDataShape(TEST))
+
+        # train_batches is going to be lists of tuples that contain the start and end indices for train data.
+        # this is more useful in the case of datasets that are lists of sequences, so that the start and end
+        # indices can make sure a batch does not cross the sequence boundary on the concatenated data
+        train_data_lens = [shape[0] for shape in train_data_shapes]
+        self.train_batches = self.get_batch_indices(train_data_lens)
+
+        if valid_data_shapes is not None:
+            valid_data_lens = [shape[0] for shape in valid_data_shapes]
+            self.valid_batches = self.get_batch_indices(valid_data_lens)
+        else:
+            self.valid_batches = None
+        if test_data_shapes is not None:
+            test_data_lens = [shape[0] for shape in test_data_shapes]
+            self.test_batches = self.get_batch_indices(test_data_lens)
+        else:
+            self.test_batches = None
+
+        # create the givens for the input function as pairs of (input_variable: sliced_data)
+        self.train_givens = self.get_givens_subset(TRAIN, batch_slice)
+        self.valid_givens = self.get_givens_subset(VALID, batch_slice)
+        self.test_givens = self.get_givens_subset(TEST, batch_slice)
+
+        # Now time to create the gradient updates for the model - make sure to handle the possible
+        # list of costs used for pretraining of certain parts of the model.
+        self.train_costs = raise_to_list(self.model.get_train_cost())
+        self.train_updates = []
+        self.gradients = []
+        for i, train_cost in enumerate(self.train_costs):
+            # Now create the training cost function for the model to use while training - update parameters
+            # gradient!
+            gradients, _ = self.model.get_gradient(cost=train_cost)
+            self.gradients.append(gradients)
+
+            # Calculate the optimizer updates each run
+            # This is where the magic happens for a lot of sub-implementations of SGD!
+            # It tells how to update the params each training epoch
+            gradient_updates = self.get_updates(gradients)
+
+            # Combine the updates from the model also if applicable
+            train_updates = self.model.get_updates()
+            if train_updates:
+                train_updates.update(gradient_updates)
+            else:
+                train_updates = gradient_updates
+            self.train_updates.append(train_updates)
+
         # grab the model parameters to use during training
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
@@ -381,11 +381,8 @@ class Optimizer(object):
             self.STOP = False
             self.epoch_counter = 0
             if not continue_training:
-                # reset the learning rate
-                if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
-                    self.learning_rate_decay.reset()
-                # reset the other model decaying functions
-                for decay_param in self.model.get_decay_params():
+                # reset any decay params
+                for decay_param in self.get_decay_params():
                     decay_param.reset()
 
             self.times = []

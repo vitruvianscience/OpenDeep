@@ -27,8 +27,8 @@ if __name__ == '__main__':
     rbm = RBM(input_size=28*28, hidden_size=500, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), rng=rng)
     # rbm.load_params('rbm_trained.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = SGD(model=rbm, dataset=mnist, n_epoch=15, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False)
-    # optimizer = AdaDelta(model=rbm, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
+    # optimizer = SGD(model=rbm, dataset=mnist, n_epoch=15, batch_size=30, learning_rate=0.1, lr_decay=False, nesterov_momentum=False)
+    optimizer = AdaDelta(model=rbm, dataset=mnist, n_epoch=200, batch_size=50, learning_rate=1e-6)
     # perform training!
     optimizer.train()
     # test it on some images!
@@ -46,7 +46,7 @@ if __name__ == '__main__':
             tile_spacing=(1, 1)
         )
     )
-    image.save('test.png')
+    image.save('rbm_test.png')
 
     # Construct image from the preds matrix
     image = Image.fromarray(
@@ -57,7 +57,7 @@ if __name__ == '__main__':
             tile_spacing=(1, 1)
         )
     )
-    image.save('preds.png')
+    image.save('rbm_preds.png')
 
     # Construct image from the weight matrix
     image = Image.fromarray(
@@ -68,10 +68,9 @@ if __name__ == '__main__':
             tile_spacing=(1, 1)
         )
     )
-    image.save('weights.png')
+    image.save('rbm_weights.png')
 
 
-    print "done!"
     del mnist
     del rbm
     del optimizer

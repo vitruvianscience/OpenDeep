@@ -16,7 +16,7 @@ import logging
 import numpy
 import theano.compat.six as six
 # internal references
-from opendeep import cast32
+from opendeep import cast_floatX
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class DecayFunction(object):
 
         self.param = param
         self.initial = initial
-        self.param.set_value(cast32(self.initial))
+        self.param.set_value(cast_floatX(self.initial))
         self.reduction_factor = reduction_factor
 
     def decay(self):
@@ -101,7 +101,7 @@ class Linear(DecayFunction):
 
     def decay(self):
         new_value = self.param.get_value() - self.reduction_factor
-        self.param.set_value(cast32(numpy.max([0, new_value])))
+        self.param.set_value(cast_floatX(numpy.max([0, new_value])))
 
     def simulate(self, initial_value, reduction_factor, epoch):
         new_value = initial_value - reduction_factor*epoch
@@ -121,7 +121,7 @@ class Exponential(DecayFunction):
 
     def decay(self):
         new_value = self.param.get_value()*self.reduction_factor
-        self.param.set_value(cast32(new_value))
+        self.param.set_value(cast_floatX(new_value))
 
     def simulate(self, initial_value, reduction_factor, epoch):
         new_value = initial_value*pow(reduction_factor, epoch)
@@ -142,7 +142,7 @@ class Montreal(DecayFunction):
 
     def decay(self):
         new_value = self.initial / (1 + self.reduction_factor*self.epoch)
-        self.param.set_value(cast32(new_value))
+        self.param.set_value(cast_floatX(new_value))
         self.epoch += 1
 
     def simulate(self, initial, reduction_factor, epoch):

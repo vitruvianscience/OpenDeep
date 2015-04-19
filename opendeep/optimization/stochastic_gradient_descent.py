@@ -67,6 +67,7 @@ class SGD(Optimizer):
                 self.momentum_decay = False
         else:
             self.momentum = 1
+            self.momentum_decay = False
 
     def get_updates(self, grads):
         """
