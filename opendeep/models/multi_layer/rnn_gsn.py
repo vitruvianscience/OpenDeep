@@ -28,6 +28,7 @@ from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils import file_ops
+from opendeep.utils.cost import get_cost_function
 
 log = logging.getLogger(__name__)
 
@@ -35,9 +36,8 @@ class RNN_GSN(Model):
     default = {
             # recurrent parameters
             'rnn_hidden_size': None,
-            'rnn_hidden_activation': 'tanh',  # type of activation to use for recurrent hidden activation
-            'rnn_weights_init': 'gaussian',  # how to initialize weights
-            'rnn_weights_noise': None,  # if the weights are 'identity', what noise to add
+            'rnn_hidden_activation': 'relu',  # type of activation to use for recurrent hidden activation
+            'rnn_weights_init': 'identity',  # how to initialize weights
             'rnn_weights_mean': 0,  # mean for gaussian weights init
             'rnn_weights_std': 0.005,  # standard deviation for gaussian weights init
             'rnn_weights_interval': 'montreal',  # how to initialize from uniform
@@ -46,30 +46,51 @@ class RNN_GSN(Model):
             # gsn parameters
             "layers": 3,  # number of hidden layers to use
             "walkbacks": 5,  # number of walkbacks (generally 2*layers) - need enough to propagate to visible layer
-            "input_size": None,  # number of input units - please specify for your dataset!
+            "input_size": None,  # number of input features - please specify for your dataset!
             "hidden_size": 1500,  # number of hidden units in each layer
             "visible_activation": 'sigmoid',  # activation for visible layer - make appropriate for input data type.
             "hidden_activation": 'tanh',  # activation for hidden layers
             "input_sampling": True,  # whether to sample at each walkback step - makes it like Gibbs sampling.
             "mrg": RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
+            "tied_weights": True,  # whether to tie the weights between layers (use transpose from higher to lower)
             "weights_init": "uniform",  # how to initialize weights
             'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
             'weights_mean': 0,  # mean for gaussian weights init
             'weights_std': 0.005,  # standard deviation for gaussian weights init
             'bias_init': 0.0,  # how to initialize the bias parameter
-            # general parameters
-            'input_size': None,
-            'mrg': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
-            'rng': numpy.random.RandomState(1),  #default random number generator from Numpy
-            'outdir': 'outputs/rnngsn/',  # the output directory for this model's outputs
+            # train param
+            "cost_function": 'binary_crossentropy',  # the cost function for training; make appropriate for input type.
+            # noise parameters
+            "noise_decay": 'exponential',  # noise schedule algorithm
+            "noise_annealing": 1.0,  # no noise schedule by default
+            "add_noise": True,  # whether to add noise throughout the network's hidden layers
+            "noiseless_h1": True,  # whether to keep the first hidden layer uncorrupted
+            "hidden_add_noise_sigma": 2,  # sigma value for adding the gaussian hidden layer noise
+            "input_salt_and_pepper": 0.4,  # the salt and pepper value for inputs corruption
+            # data parameters
+            "outdir": 'outputs/rnngsn/',  # base directory to output various files
+            "image_width": None,  # if the input is an image, its width
+            "image_height": None,  # if the input is an image, its height
+            "vis_init": False
     }
 
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, config=None, defaults=default,
-                 input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
-                 mrg=None, rng=None, outdir=None, rnn_hidden_size=None, rnn_hidden_activation=None,
-                 rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None,
-                 rnn_weights_interval=None, rnn_bias_init=None, generate_n_steps=None):
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 config=None, defaults=default,
+                 input_size=None, hidden_size=None,
+                 layers=None, walkbacks=None,
+                 visible_activation=None, hidden_activation=None,
+                 input_sampling=None, mrg=None,
+                 tied_weights=None, weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
+                 bias_init=None,
+                 cost_function=None,
+                 noise_decay=None, noise_annealing=None,
+                 add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
+                 outdir=None,
+                 image_width=None, image_height=None,
+                 vis_init=None,
+                 rnn_hidden_size=None, rnn_hidden_activation=None,
+                 rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None, rnn_weights_interval=None,
+                 rnn_bias_init=None, generate_n_steps=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
@@ -81,24 +102,23 @@ class RNN_GSN(Model):
         ##################
         # grab info from the inputs_hook, hiddens_hook, or from parameters
         if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
-            raise NotImplementedError("Inputs_hook not implemented yet for RNN_RBM")
+            raise NotImplementedError("Inputs_hook not implemented yet for RNN-GSN")
         else:
             # make the input a symbolic matrix - a sequence of inputs
-            self.input = T.fmatrix('Vs')
+            self.input = T.matrix('Xs')
 
         # set an initial value for the recurrent hiddens
         self.u0 = T.zeros((self.rnn_hidden_size,))
 
         # make a symbolic vector for the initial recurrent hiddens value to use during generation for the model
-        self.generate_u0 = T.fvector("generate_u0")
+        self.generate_u0 = T.vector("generate_u0")
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
         self.hidden_size = self.hidden_size or self.input_size
 
         # deal with hiddens_hook
         if self.hiddens_hook is not None:
-            raise NotImplementedError("Hiddnes_hook not implemented yet for RNN_RBM")
-
+            raise NotImplementedError("Hiddens_hook not implemented yet for RNN-GSN")
 
         # other specifications
         # visible activation function!
@@ -115,99 +135,123 @@ class RNN_GSN(Model):
         # hidden activation function!
         self.hidden_activation_func = get_activation_function(self.hidden_activation)
 
-        # make sure the sampling functions are appropriate for the activation functions.
-        if is_binary(self.hidden_activation_func):
-            self.hidden_sampling = self.mrg.binomial
-        else:
-            # TODO: implement non-binary activation
-            log.error("Non-binary hidden activation not supported yet!")
-            raise NotImplementedError("Non-binary hidden activation not supported yet!")
-
         # recurrent hidden activation function!
         self.rnn_hidden_activation_func = get_activation_function(self.rnn_hidden_activation)
 
+        # Cost function
+        self.cost_function = get_cost_function(self.cost_function)
+
         # symbolic scalar for how many recurrent steps to use during generation from the model
         self.n_steps = T.iscalar("generate_n_steps")
+
+        # determine the sizes of each layer in a list.
+        # layer sizes, from h0 to hK (h0 is the visible layer)
+        self.layer_sizes = [self.input_size] + [self.hidden_size] * self.layers
 
         ####################################################
         # parameters - make sure to deal with params_hook! #
         ####################################################
         if self.params_hook is not None:
-            # make sure the params_hook has W (weights matrix) and bh, bv (bias vectors)
-            assert len(self.params_hook) == 8, \
-                "Expected 8 params (W, bv, bh, Wuh, Wuv, Wvu, Wuu, bu) for RBM, found {0!s}!".format(
-                    len(self.params_hook)
-                )
-            self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu = self.params_hook
+            # if tied weights, expect (layers*2 + 1) params for GSN and (int(layers+1)/int(2) + 3) for RNN
+            if self.tied_weights:
+                expected_num = (2*self.layers + 1) + (int(self.layers+1)/2 + 3)
+                assert len(self.params_hook) == expected_num, \
+                    "Tied weights: expected {0!s} params, found {1!s}!".format(expected_num, len(self.params_hook))
+                gsn_len = (2*self.layers + 1)
+                self.weights_list = self.params_hook[:self.layers]
+                self.bias_list = self.params_hook[self.layers:gsn_len]
+
+            # if untied weights, expect layers*3 + 1 params
+            else:
+                expected_num = (3*self.layers + 1) + (int(self.layers + 1)/2 + 3)
+                assert len(self.params_hook) == expected_num, \
+                    "Untied weights: expected {0!s} params, found {1!s}!".format(expected_num, len(self.params_hook))
+                gsn_len = (3*self.layers + 1)
+                self.weights_list = self.params_hook[:2*self.layers]
+                self.bias_list = self.params_hook[2*self.layers:gsn_len]
+
+            rnn_len = gsn_len + int(self.layers + 1) / 2
+            self.recurrent_to_gsn_weights_list = self.params_hook[gsn_len:rnn_len]
+            self.W_u_u = self.params_hook[rnn_len:rnn_len + 1]
+            self.W_x_u = self.params_hook[rnn_len + 1:rnn_len + 2]
+            self.recurrent_bias = self.params_hook[rnn_len + 2:rnn_len + 3]
+
+        # otherwise, construct our params
         else:
-            # RBM weight params
-            self.W = get_weights(weights_init=self.weights_init,
-                                 shape=(self.input_size, self.hidden_size),
-                                 name="W",
-                                 rng=self.rng,
+            # initialize a list of weights and biases based on layer_sizes for the GSN
+            self.weights_list = [get_weights(weights_init=self.weights_init,
+                                             shape=(self.layer_sizes[i], self.layer_sizes[i + 1]),
+                                             name="W_{0!s}_{1!s}".format(i, i + 1),
+                                             # if gaussian
+                                             mean=self.weights_mean,
+                                             std=self.weights_std,
+                                             # if uniform
+                                             interval=self.weights_interval)
+                                 for i in range(self.layers)]
+            # add more weights if we aren't tying weights between layers (need to add for higher-lower layers now)
+            if not self.tied_weights:
+                self.weights_list.extend(
+                    [get_weights(weights_init=self.weights_init,
+                                 shape=(self.layer_sizes[i + 1], self.layer_sizes[i]),
+                                 name="W_{0!s}_{1!s}".format(i + 1, i),
                                  # if gaussian
                                  mean=self.weights_mean,
                                  std=self.weights_std,
                                  # if uniform
                                  interval=self.weights_interval)
-            # RNN weight params
-            self.Wuh = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.hidden_size),
-                                   name="Wuh",
-                                   rng=self.rng,
-                                   # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
-                                   # if uniform
-                                   interval=self.rnn_weights_interval)
+                     for i in reversed(range(self.layers))]
+                )
+            # initialize each layer bias to 0's.
+            self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
+                                       name='b_' + str(i),
+                                       init_values=self.bias_init)
+                              for i in range(self.layers + 1)]
 
-            self.Wuv = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.input_size),
-                                   name="Wuv",
-                                   rng=self.rng,
-                                   # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
-                                   # if uniform
-                                   interval=self.rnn_weights_interval)
+            self.recurrent_to_gsn_weights_list = [
+                get_weights(weights_init=self.rnn_weights_init,
+                            shape=(self.rnn_hidden_size, self.layer_sizes[layer]),
+                            name="W_u_h{0!s}".format(layer),
+                            # if gaussian
+                            mean=self.rnn_weights_mean,
+                            std=self.rnn_weights_std,
+                            # if uniform
+                            interval=self.rnn_weights_interval)
+                for layer in range(self.layers + 1) if layer % 2 != 0
+            ]
+            self.W_u_u = get_weights(weights_init=self.rnn_weights_init,
+                                     shape=(self.rnn_hidden_size, self.rnn_hidden_size),
+                                     name="W_u_u",
+                                     # if gaussian
+                                     mean=self.rnn_weights_mean,
+                                     std=self.rnn_weights_std,
+                                     #if uniform
+                                     interval=self.rnn_weights_interval)
+            self.W_x_u = get_weights(weights_init=self.rnn_weights_init,
+                                     shape=(self.input_size, self.rnn_hidden_size),
+                                     name="W_x_u",
+                                     # if gaussian
+                                     mean=self.rnn_weights_mean,
+                                     std=self.rnn_weights_std,
+                                     # if uniform
+                                     interval=self.rnn_weights_interval)
+            self.recurrent_bias = get_bias(shape=(self.rnn_hidden_size,),
+                                           name="b_u",
+                                           init_values=self.rnn_bias_init)
 
-            self.Wvu = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.input_size, self.rnn_hidden_size),
-                                   name="Wvu",
-                                   rng=self.rng,
-                                   # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
-                                   # if uniform
-                                   interval=self.rnn_weights_interval)
+        # build the params of the model into a list
+        self.gsn_params = self.weights_list + self.bias_list
+        self.params = self.gsn_params + \
+                      self.recurrent_to_gsn_weights_list + \
+                      [self.W_u_u, self.W_x_u, self.recurrent_bias]
+        log.debug("rnn-gsn params: %s", str(self.params))
 
-            self.Wuu = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.rnn_hidden_size),
-                                   name="Wuu",
-                                   rng=self.rng,
-                                   # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
-                                   # if uniform
-                                   interval=self.rnn_weights_interval)
+        # Create the RNN-GSN graph!
+        self.x_sample, self.cost, self.monitors, self.updates_train, self.x_ts, self.updates_generate, self.u_t = \
+            self.build_rnngsn()
 
-            # grab the bias vectors
-            # rbm biases
-            self.bv = get_bias(shape=self.input_size, name="bv", init_values=self.bias_init)
-            self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=self.bias_init)
-            # rnn bias
-            self.bu = get_bias(shape=self.rnn_hidden_size, name="bu", init_values=self.rnn_bias_init)
+        log.info("Initialized an RNN-GSN!")
 
-        # Finally have the parameters
-        self.params = [self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
-
-        # Create the RNN-RBM graph!
-        self.v_sample, self.cost, self.monitors, self.updates_train, self.v_ts, self.updates_generate, self.u_t = \
-            self.build_rnnrbm()
-
-        log.info("Initialized an RNN-RBM!")
-
-    def build_rnnrbm(self):
+    def build_rnngsn(self):
         """
         Creates the updates and other return variables for the computation graph
 
@@ -220,90 +264,110 @@ class RNN_GSN(Model):
         :rtype: List
         """
         # For training, the deterministic recurrence is used to compute all the
-        # {bv_t, bh_t, 1 <= t <= T} given v. Conditional RBMs can then be trained
+        # {h_t, 1 <= t <= T} given Xs. Conditional GSNs can then be trained
         # in batches using those parameters.
-        (u_ts, bv_ts, bh_ts), updates_train = theano.scan(fn=lambda v_t, u_tm1: self.recurrence(v_t, u_tm1),
-                                                       sequences=self.input,
-                                                       outputs_info=[self.u0, None, None],
-                                                       name="rnnrbm_computation_scan")
+        (u, h_ts), updates_train = theano.scan(fn=lambda x_t, u_tm1: self.recurrent_step(x_t, u_tm1),
+                                              sequences=self.input,
+                                              outputs_info=[self.u0, None],
+                                              name="rnngsn_computation_scan")
 
-        rbm = RBM(inputs_hook=(self.input_size, self.input),
-                  params_hook=(self.W, bv_ts[:], bh_ts[:]),
-                  k=self.k,
-                  outdir=self.outdir,
-                  mrg=self.mrg,
-                  rng=self.rng)
-        v_sample    = rbm.get_outputs()
-        cost        = rbm.get_train_cost()
-        monitors    = rbm.get_monitors()
-        updates_rbm = rbm.get_updates()
+        h_list = [T.zeros_like(self.input)]
+        for layer, w in enumerate(self.weights_list[:self.layers]):
+            if layer % 2 != 0:
+                h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
+            else:
+                h_list.append((h_ts.T[(layer/2) * self.hidden_size:(layer/2 + 1) * self.hidden_size]).T)
 
-        # make another chain to determine frame-level accuracy/error
-        rbm = RBM(inputs_hook=(self.input_size, self.input[:-1]),
-                  params_hook=(self.W, bv_ts[1:], bh_ts[1:]),
-                  k=self.k,
-                  outdir=self.outdir,
-                  mrg=self.mrg,
-                  rng=self.rng)
+        gsn = GSN(inputs_hook           = (self.input_size, self.input),
+                  hiddens_hook          = (self.hidden_size, GSN.pack_hiddens(h_list)),
+                  params_hook           = self.weights_list+self.bias_list,
+                  layers                = self.layers,
+                  walkbacks             = self.walkbacks,
+                  visible_activation    = self.visible_activation_func,
+                  hidden_activation     = self.hidden_activation_func,
+                  input_sampling        = self.input_sampling,
+                  mrg                   = self.mrg,
+                  tied_weights          = self.tied_weights,
+                  cost_function         = self.cost_function,
+                  noise_decay           = self.noise_decay,
+                  noise_annealing       = self.noise_annealing,
+                  add_noise             = self.add_noise,
+                  noiseless_h1          = self.noiseless_h1,
+                  hidden_add_noise_sigma= self.hidden_add_noise_sigma,
+                  input_salt_and_pepper = self.input_salt_and_pepper,
+                  outdir                = os.path.join(self.outdir, 'gsn_noisy/'),
+                  image_width           = self.image_width,
+                  image_height          = self.image_height,
+                  vis_init              = self.vis_init)
 
-        v_prediction    = rbm.get_outputs()
-        updates_predict = rbm.get_updates()
-
-        frame_level_mse = T.mean(T.sqr(v_sample[1:] - v_prediction), axis=0)
-        frame_level_error = T.mean(frame_level_mse)
-        # add the frame-level error to the monitors
-        monitors['frame_error'] = frame_level_error
-
-        updates_train.update(updates_rbm)
-        updates_train.update(updates_predict)
+        cost = gsn.get_train_cost()
+        monitors = gsn.get_monitors()  # frame-level error would be the 'mse' monitor from GSN
+        x_sample_recon = gsn.get_outputs()
 
         # symbolic loop for sequence generation
-        (v_ts, u_ts), updates_generate = theano.scan(lambda u_tm1, *_: self.recurrence(None, u_tm1),
+        (x_ts, u_ts), updates_generate = theano.scan(lambda u_tm1: self.recurrent_step(None, u_tm1),
                                                      outputs_info=[None, self.generate_u0],
-                                                     non_sequences=self.params,
                                                      n_steps=self.n_steps,
-                                                     name="rnnrbm_generate_scan")
+                                                     name="rnngsn_generate_scan")
 
-        return v_sample, cost, monitors, updates_train, v_ts, updates_generate, u_ts[-1]
+        return x_sample_recon, cost, monitors, updates_train, x_ts, updates_generate, u_ts[-1]
 
-    def recurrence(self, v_t, u_tm1):
+    def recurrent_step(self, x_t, u_tm1):
         """
-        The single recurrent step for the model
-
-        :param v_t: the visible layer at time t
-        :type v_t: tensor
-
-        :param u_tm1: the recurrent hidden layer at time t-1
-        :type u_tm1: tensor
-
-        :return: tuple of current v_t and updates if generating from model, otherwise, current u_t and rbm bias params
-        :rtype: tuple
+        performs one timestep for recurrence
+        :param x_t: the input at time t
+        :type x_t: theano tensor
+        :param u_tm1: the previous time recurrent hiddens
+        :type u_tm1: theano tensor
         """
-        # generate the current rbm bias params
-        bv_t = self.bv + T.dot(u_tm1, self.Wuv)
-        bh_t = self.bh + T.dot(u_tm1, self.Wuh)
-        # if we should be generating from the recurrent model
-        generate = v_t is None
-        updates = None
+        # If `x_t` is given, deterministic recurrence to compute the u_t. Otherwise, first generate.
+        # Make current guess for hiddens based on U
+        h_list = []
+        for i in range(self.layers):
+            if i % 2 == 0:
+                log.debug("Using {0!s} and {1!s}".format(
+                    self.recurrent_to_gsn_weights_list[(i+1) / 2], self.bias_list[i+1]))
+                h = T.dot(u_tm1, self.recurrent_to_gsn_weights_list[(i+1) / 2]) + self.bias_list[i+1]
+                h = self.hidden_activation_func(h)
+                h_list.append(h)
+        h_t = T.concatenate(h_list, axis=0)
+
+        generate = x_t is None
         if generate:
-            rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
-                      params_hook=(self.W, bv_t, bh_t),
-                      k=self.k,
-                      outdir=self.outdir,
+            h_list_generate = [T.shape_padleft(h) for h in h_list]
+            # create a GSN to generate x_t
+            gsn = GSN(inputs_hook=(self.input_size, self.input),
+                      hiddens_hook=(self.hidden_size, T.concatenate(h_list_generate, axis=1)),
+                      params_hook=self.weights_list + self.bias_list,
+                      layers=self.layers,
+                      walkbacks=self.walkbacks,
+                      visible_activation=self.visible_activation_func,
+                      hidden_activation=self.hidden_activation_func,
+                      input_sampling=self.input_sampling,
                       mrg=self.mrg,
-                      rng=self.rng)
-            v_t = rbm.get_outputs()
-            updates = rbm.get_updates()
+                      tied_weights=self.tied_weights,
+                      cost_function=self.cost_function,
+                      noise_decay=self.noise_decay,
+                      noise_annealing=self.noise_annealing,
+                      add_noise=self.add_noise,
+                      noiseless_h1=self.noiseless_h1,
+                      hidden_add_noise_sigma=self.hidden_add_noise_sigma,
+                      input_salt_and_pepper=self.input_salt_and_pepper,
+                      outdir=os.path.join(self.outdir, 'gsn_generate/'),
+                      image_width=self.image_width,
+                      image_height=self.image_height,
+                      vis_init=self.vis_init)
+            x_t = gsn.get_outputs().flatten()
 
-        # update recurrent hiddens
-        u_t = T.tanh(self.bu + T.dot(v_t, self.Wvu) + T.dot(u_tm1, self.Wuu))
-        return ([v_t, u_t], updates) if generate else (u_t, bv_t, bh_t)
+        ua_t = T.dot(x_t, self.W_x_u) + T.dot(u_tm1, self.W_u_u) + self.recurrent_bias
+        u_t = self.rnn_hidden_activation_func(ua_t)
+        return [x_t, u_t] if generate else [u_t, h_t]
 
-    def load_rbm_params(self, param_file):
+    def load_gsn_params(self, param_file):
         """
-        Loads the parameters for the RBM only from param_file - used if the RBM was pre-trained
+        Loads the parameters for the GSN only from param_file - used if the GSN was pre-trained
 
-        :param param_file: location of rbm parameters
+        :param param_file: location of GSN parameters
         :type param_file: string
 
         :return: whether successful
@@ -319,13 +383,11 @@ class RNN_GSN(Model):
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'r') as f:
                 loaded_params = pickle.load(f)
-            #############################################################################
-            # set the W, bv, and bh values (make sure same order as saved in RBM class) #
-            #############################################################################
-            # TODO: Switch back to correct order after testing mnist rnn-rbm
-            self.W.set_value(loaded_params[0])
-            self.bv.set_value(loaded_params[2])
-            self.bh.set_value(loaded_params[1])
+            # set the GSN parameters
+            for i, weight in enumerate(self.weights_list):
+                weight.set_value(loaded_params[i])
+            for i, bias in enumerate(self.bias_list):
+                bias.set_value(loaded_params[i+len(self.weights_list)])
             return True
         # if get_file_type didn't return pkl or none, it wasn't a pickle file
         elif ftype:
@@ -343,7 +405,7 @@ class RNN_GSN(Model):
         return self.input
 
     def get_outputs(self):
-        return self.v_sample
+        return self.x_sample
 
     def generate(self, initial=None, n_steps=None):
         """
@@ -360,9 +422,11 @@ class RNN_GSN(Model):
         """
         # compile the generate function!
         if not hasattr(self, 'f_generate'):
-            self.f_generate = function(inputs=[self. generate_u0, self.n_steps],
-                                       outputs=[self.v_ts, self.u_t],
+            log.debug("compiling f_generate...")
+            self.f_generate = function(inputs=[self.generate_u0, self.n_steps],
+                                       outputs=[self.x_ts, self.u_t],
                                        updates=self.updates_generate)
+            log.debug("compilation done!")
 
         initial = initial or self.u0.eval()
         n_steps = n_steps or self.generate_n_steps
@@ -380,5 +444,5 @@ class RNN_GSN(Model):
     def get_params(self):
         return self.params
 
-    def save_args(self, args_file="rnnrbm_config.pkl"):
-        super(RNN_RBM, self).save_args(args_file)
+    def save_args(self, args_file="rnngsn_config.pkl"):
+        super(RNN_GSN, self).save_args(args_file)

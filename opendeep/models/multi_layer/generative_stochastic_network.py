@@ -35,7 +35,7 @@ import time
 import logging
 # third-party libraries
 import numpy
-import numpy.random as rng
+import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
@@ -58,7 +58,7 @@ log = logging.getLogger(__name__)
 _defaults = {# gsn parameters
             "layers": 3,  # number of hidden layers to use
             "walkbacks": 5,  # number of walkbacks (generally 2*layers) - need enough to propagate to visible layer
-            "input_size": None,  # number of input units - please specify for your dataset!
+            "input_size": None,  # number of input features - please specify for your dataset!
             "hidden_size": 1500,  # number of hidden units in each layer
             "visible_activation": 'sigmoid',  # activation for visible layer - make appropriate for input data type.
             "hidden_activation": 'tanh',  # activation for hidden layers
@@ -113,7 +113,6 @@ class GSN(Model):
         # variables from the dataset that are used for initialization and image reconstruction
         if self.inputs_hook is None:
             # if no inputs_hook given, look for the dimensionality of the input from the 'input_size' parameter.
-            self.N_input = self.input_size
             if self.input_size is None:
                 log.critical("Please specify input_size.")
                 raise AssertionError("Please specify input_size.")
@@ -121,14 +120,23 @@ class GSN(Model):
             assert len(self.inputs_hook) == 2, "inputs_hook was expected (shape, input) tuple. " \
                                                "Found length %s instead" % str(len(self.inputs_hook))
             # otherwise grab shape from inputs_hook that was given
-            self.N_input = self.inputs_hook[0]
+            self.input_size = self.inputs_hook[0]
 
         # when the input should be thought of as an image, either use the specified width and height,
         # or try to make as square as possible.
         if self.image_height is None and self.image_width is None:
-            (_h, _w) = closest_to_square_factors(self.N_input)
+            (_h, _w) = closest_to_square_factors(self.input_size)
             self.image_width  = _w
             self.image_height = _h
+
+        ############################
+        # Theano variables and RNG #
+        ############################
+        if self.inputs_hook is None:
+            self.X = T.matrix('X')
+        else:
+            # inputs_hook is a (shape, input) tuple
+            self.X = self.inputs_hook[1]
         
         ##########################
         # Network specifications #
@@ -149,9 +157,25 @@ class GSN(Model):
         self.hidden_add_noise_sigma = sharedX(cast_floatX(self.hidden_add_noise_sigma))
         self.input_salt_and_pepper  = sharedX(cast_floatX(self.input_salt_and_pepper))
 
+        # if there was a hiddens_hook, unpack the hidden layers in the tensor
+        if self.hiddens_hook is not None:
+            self.hidden_size = self.hiddens_hook[0]
+            self.hiddens_flag = True
+        else:
+            self.hiddens_flag = False
+
         # determine the sizes of each layer in a list.
         #  layer sizes, from h0 to hK (h0 is the visible layer)
-        self.layer_sizes = [self.N_input] + [self.hidden_size] * self.layers
+        hidden_size = list(raise_to_list(self.hidden_size))
+        if len(hidden_size) == 1:
+            self.layer_sizes = [self.input_size] + [self.hidden_size] * self.layers
+        else:
+            assert len(hidden_size) == self.layers, "Hiddens sizes and number of hidden layers mismatch." + \
+                                                    "Hiddens %d and layers %d" % (len(hidden_size), self.layers)
+            self.layer_sizes = [self.input_size] + list(self.hidden_size)
+
+        if self.hiddens_hook is not None:
+            self.hiddens = self.unpack_hiddens(self.hiddens_hook[1])
 
         #########################
         # Activation functions! #
@@ -160,20 +184,16 @@ class GSN(Model):
         self.hidden_activation = get_activation_function(self.hidden_activation)
         # Visible layer activation
         self.visible_activation = get_activation_function(self.visible_activation)
+        # make sure the sampling functions are appropriate for the activation functions.
+        if is_binary(self.visible_activation):
+            self.visible_sampling = self.mrg.binomial
+        else:
+            # TODO: implement non-binary activation
+            log.error("Non-binary visible activation not supported yet!")
+            raise NotImplementedError("Non-binary visible activation not supported yet!")
+
         # Cost function
         self.cost_function = get_cost_function(self.cost_function)
-
-        ############################
-        # Theano variables and RNG #
-        ############################
-        if self.inputs_hook is None:
-            self.X = T.matrix('X')
-        else:
-            # inputs_hook is a (shape, input) tuple
-            self.X = self.inputs_hook[1]
-
-        # initialize and seed rng
-        rng.seed(1)
 
         ###############
         # Parameters! #
@@ -236,31 +256,24 @@ class GSN(Model):
         #################
         log.debug("Building GSN graphs...")
 
-        # if there was a hiddens_hook, unpack the hidden layers in the tensor
-        if self.hiddens_hook is not None:
-            hiddens = self.unpack_hiddens(self.hiddens_hook[1])
-            hiddens_flag = True
-        else:
-            hiddens_flag = False
-
         # GSN for training - with noise
-        add_noise = True
+        add_noise = self.add_noise
         # if there is no hiddens_hook, build the GSN normally using the input X
-        if not hiddens_flag:
+        if not self.hiddens_flag:
             p_X_chain, _ = self.build_gsn(add_noise=add_noise)
 
         # if there is a hiddens_hook, we want to change the order layers are updated and make this purely
         # generative from the hiddens
         else:
-            p_X_chain, _,  = self.build_gsn(hiddens=hiddens, add_noise=add_noise, reverse=True)
+            p_X_chain, _,  = self.build_gsn(hiddens=self.hiddens, add_noise=add_noise, reverse=True)
 
         # GSN for prediction - same as above but no noise
         add_noise = False
         # deal with hiddens_hook exactly as above.
-        if not hiddens_flag:
+        if not self.hiddens_flag:
             p_X_chain_recon, recon_hiddens = self.build_gsn(add_noise=add_noise)
         else:
-            p_X_chain_recon, recon_hiddens = self.build_gsn(hiddens=hiddens, add_noise=add_noise, reverse=True)
+            p_X_chain_recon, recon_hiddens = self.build_gsn(hiddens=self.hiddens, add_noise=add_noise, reverse=True)
 
         ####################
         # Costs and output #
@@ -282,9 +295,16 @@ class GSN(Model):
         # the last walkback from the non-noisy graph.
         hiddens    = recon_hiddens
 
+        train_mse = T.mean(T.sqr(p_X_chain[-1] - self.X), axis=0)
+        train_mse = T.mean(train_mse)
 
-        monitors = OrderedDict([('noisy_recon_cost', self.show_cost), ('recon_cost', self.monitor)])
-        
+        mse = T.mean(T.sqr(p_X_chain_recon[-1] - self.X), axis=0)
+        mse = T.mean(mse)
+
+        monitors = OrderedDict([('noisy_recon_cost', self.show_cost),
+                                ('recon_cost', self.monitor),
+                                ('mse', mse),
+                                ('train_mse', train_mse)])
 
         ############
         # Sampling #
@@ -309,7 +329,7 @@ class GSN(Model):
         t = time.time()
 
         # doesn't make sense to have this if there is a hiddens_hook
-        if not hiddens_flag:
+        if not self.hiddens_flag:
             # THIS IS THE MAIN PREDICT FUNCTION - takes in a real matrix and produces the output from the non-noisy
             # computation graph
             log.debug("f_run...")
@@ -477,7 +497,9 @@ class GSN(Model):
                     log.error("Non-binary visible activation sampling not yet supported.")
                     raise NotImplementedError("Non-binary visible activation sampling not yet supported.")
                 log.debug('Sampling from input')
-                sampled = self.mrg.binomial(p=hiddens[layer_idx], size=hiddens[layer_idx].shape, dtype='float32')
+                sampled = self.visible_sampling(p=hiddens[layer_idx],
+                                                size=hiddens[layer_idx].shape,
+                                                dtype=theano.config.floatX)
             else:
                 log.debug('>>NO input sampling')
                 sampled = hiddens[layer_idx]
@@ -487,102 +509,89 @@ class GSN(Model):
             # set input layer
             hiddens[layer_idx] = sampled
 
-    # def gen_10k_samples(self):
-    #     log.info('Generating 10,000 samples')
-    #     samples, _ = self.sample(self.test_X[0].get_value()[1:2], 10000, 1)
-    #     f_samples = 'samples.npy'
-    #     numpy.save(f_samples, samples)
-    #     log.debug('saved digits')
-    #
-    # def sample(self, initial, n_samples=400, k=1):
-    #     log.debug("Starting sampling...")
-    #     def sample_some_numbers_single_layer(n_samples):
-    #         x0 = initial
-    #         samples = [x0]
-    #         x = self.f_noise(x0)
-    #         for _ in xrange(n_samples-1):
-    #             x = self.f_sample(x)
-    #             samples.append(x)
-    #             x = rng.binomial(n=1, p=x, size=x.shape).astype('float32')
-    #             x = self.f_noise(x)
-    #
-    #         log.debug("Sampling done.")
-    #         return numpy.vstack(samples), None
-    #
-    #     def sampling_wrapper(NSI):
-    #         # * is the "splat" operator: It takes a list as input, and expands it into actual
-    #         # positional arguments in the function call.
-    #         out = self.f_sample(*NSI)
-    #         NSO = out[:len(self.network_state_output)]
-    #         vis_pX_chain = out[len(self.network_state_output):]
-    #         return NSO, vis_pX_chain
-    #
-    #     def sample_some_numbers(n_samples):
-    #         # The network's initial state
-    #         init_vis       = initial
-    #         noisy_init_vis = self.f_noise(init_vis)
-    #
-    #         network_state  = [[noisy_init_vis] + [numpy.zeros((initial.shape[0],self.hidden_size), dtype='float32')
-    #                           for _ in self.bias_list[1:]]]
-    #
-    #         visible_chain  = [init_vis]
-    #         noisy_h0_chain = [noisy_init_vis]
-    #         sampled_h = []
-    #
-    #         times = []
-    #         for i in xrange(n_samples-1):
-    #             _t = time.time()
-    #
-    #             # feed the last state into the network, run new state, and obtain visible units expectation chain
-    #             net_state_out, vis_pX_chain = sampling_wrapper(network_state[-1])
-    #
-    #             # append to the visible chain
-    #             visible_chain += vis_pX_chain
-    #
-    #             # append state output to the network state chain
-    #             network_state.append(net_state_out)
-    #
-    #             noisy_h0_chain.append(net_state_out[0])
-    #
-    #             if i%k == 0:
-    #                 sampled_h.append(T.stack(net_state_out[1:]))
-    #                 if i == k:
-    #                     log.debug("About "+make_time_units_string(numpy.mean(times)*(n_samples-1-i))+" remaining...")
-    #
-    #             times.append(time.time() - _t)
-    #
-    #         log.DEBUG("Sampling done.")
-    #         return numpy.vstack(visible_chain), sampled_h
-    #
-    #     if self.layers == 1:
-    #         return sample_some_numbers_single_layer(n_samples)
-    #     else:
-    #         return sample_some_numbers(n_samples)
-    #
-    # def plot_samples(self, epoch_number="", leading_text="", n_samples=400):
-    #     to_sample = time.time()
-    #     initial = self.test_X[0].get_value(borrow=True)[:1]
-    #     rand_idx = numpy.random.choice(range(self.test_X[0].get_value(borrow=True).shape[0]))
-    #     rand_init = self.test_X[0].get_value(borrow=True)[rand_idx:rand_idx+1]
-    #
-    #     V, _ = self.sample(initial, n_samples)
-    #     rand_V, _ = self.sample(rand_init, n_samples)
-    #
-    #     img_samples = PIL.Image.fromarray(
-    #       tile_raster_images(V, (self.image_height, self.image_width), closest_to_square_factors(n_samples))
-    #     )
-    #     rand_img_samples = PIL.Image.fromarray(
-    #       tile_raster_images(rand_V, (self.image_height, self.image_width), closest_to_square_factors(n_samples))
-    #     )
-    #
-    #     fname = self.outdir+leading_text+'samples_epoch_'+str(epoch_number)+'.png'
-    #     img_samples.save(fname)
-    #     rfname = self.outdir+leading_text+'samples_rand_epoch_'+str(epoch_number)+'.png'
-    #     rand_img_samples.save(rfname)
-    #     log.debug('Took ' + make_time_units_string(time.time() - to_sample) +
-    #               ' to sample '+str(n_samples*2)+' numbers')
+    def save_samples(self, initial=None, n_samples=10000):
+        log.info('Generating %d samples', n_samples)
+        if initial is None:
+            initial = numpy.zeros(shape=(1, self.input_size), dtype=theano.config.floatX)
+        samples, _ = self.sample(initial=initial, n_samples=n_samples, k=1)
+        f_samples = os.path.join(self.outdir, 'gsn_samples.npy')
+        numpy.save(f_samples, samples)
+        log.debug('saved samples')
+
+    def sample(self, initial, n_samples=400, k=1):
+        log.debug("Starting sampling...")
+        def sample_some_numbers_single_layer(n_samples):
+            x0 = initial
+            samples = [x0]
+            x = self.f_noise(x0)
+            for _ in xrange(n_samples-1):
+                x = self.f_sample(x)
+                samples.append(x)
+                x = self.visible_sampling(n=1, p=x, size=x.shape).astype(theano.config.floatX)
+                x = self.f_noise(x)
+
+            log.debug("Sampling done.")
+            return numpy.vstack(samples), None
+
+        def sampling_wrapper(NSI):
+            # * is the "splat" operator: It takes a list as input, and expands it into actual
+            # positional arguments in the function call.
+            out = self.f_sample(*NSI)
+            NSO = out[:len(self.network_state_output)]
+            vis_pX_chain = out[len(self.network_state_output):]
+            return NSO, vis_pX_chain
+
+        def sample_some_numbers(n_samples):
+            # The network's initial state
+            init_vis       = initial
+            noisy_init_vis = self.f_noise(init_vis)
+
+            network_state  = [
+                [noisy_init_vis] +
+                [
+                    numpy.zeros(shape=(initial.shape[0], self.layer_sizes[i+1]), dtype=theano.config.floatX)
+                    for i in range(len(self.bias_list[1:]))
+                ]
+            ]
+
+            visible_chain  = [init_vis]
+            noisy_h0_chain = [noisy_init_vis]
+            sampled_h = []
+
+            times = []
+            for i in xrange(n_samples-1):
+                _t = time.time()
+
+                # feed the last state into the network, run new state, and obtain visible units expectation chain
+                net_state_out, vis_pX_chain = sampling_wrapper(network_state[-1])
+
+                # append to the visible chain
+                visible_chain += vis_pX_chain
+
+                # append state output to the network state chain
+                network_state.append(net_state_out)
+
+                noisy_h0_chain.append(net_state_out[0])
+
+                if i%k == 0:
+                    sampled_h.append(T.stack(net_state_out[1:]))
+                    if i == k:
+                        log.debug("About "+make_time_units_string(numpy.mean(times)*(n_samples-1-i))+" remaining...")
+
+                times.append(time.time() - _t)
+
+            log.DEBUG("Sampling done.")
+            return numpy.vstack(visible_chain), sampled_h
+
+        if self.layers == 1:
+            return sample_some_numbers_single_layer(n_samples)
+        else:
+            return sample_some_numbers(n_samples)
 
     def create_reconstruction_image(self, input_data):
+        """
+        Adds noise to an input and saves an image from the reconstruction
+        """
         n_examples = len(input_data)
         xs_test = input_data
         noisy_xs_test = self.f_noise(input_data)
@@ -598,12 +607,13 @@ class GSN(Model):
             tile_raster_images(stacked, (self.image_height, self.image_width), (height, 3*width))
         )
 
-        save_path = os.path.join(self.outdir, 'reconstruction.png')
+        save_path = os.path.join(self.outdir, 'gsn_reconstruction.png')
         save_path = os.path.realpath(save_path)
         number_reconstruction.save(save_path)
         log.info("saved output image to %s", save_path)
 
-    def pack_hiddens(self, hiddens_list):
+    @staticmethod
+    def pack_hiddens(hiddens_list):
         '''
         This concatenates all the odd layers into a single tensor
         (GSNs alternate even/odd layers for storing network state)
@@ -634,28 +644,18 @@ class GSN(Model):
         (including the even layers initialized to 0)
         :rtype: List(theano tensor)
         '''
-        h_list = [T.zeros_like(self.X)]
-        if self.tied_weights:
-            for idx, w in enumerate(self.weights_list):
-                # we only care about the odd layers
-                # (where h0 is the input layer - which makes it even here in the hidden layer space)
-                if (idx % 2) != 0:
-                    h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
-                else:
-                    h_list.append(
-                        (hiddens_tensor.T[(idx/2)*self.layer_sizes[idx] : (idx/2 + 1)*self.layer_sizes[idx+1]]).T
-                    )
-        else:
-            for idx, w in enumerate(self.weights_list[:self.layers]):
-                # we only care about the odd layers
-                # (where h0 is the input layer - which makes it even here in the hidden layer space)
-                if (idx % 2) != 0:
-                    h_list.append(T.zeros_like(T.dot(h_list[-1], w)))
-                else:
-                    h_list.append(
-                        (hiddens_tensor.T[
-                         (idx/2) * self.layer_sizes[idx]: (idx/2 + 1) * self.layer_sizes[idx+1]]).T
-                    )
+        h_list = [T.zeros(shape=(hiddens_tensor.shape[0], self.input_size), dtype=theano.config.floatX)]
+        for idx in range(self.layers):
+            # we only care about the odd layers
+            # (where h0 is the input layer - which makes it even here in the hidden layer space)
+            if (idx % 2) != 0:
+                h_list.append(
+                    T.zeros(shape=(hiddens_tensor.shape[0], self.layer_sizes[idx+1]), dtype=theano.config.floatX)
+                )
+            else:
+                h_list.append(
+                    (hiddens_tensor.T[(idx/2)*self.layer_sizes[idx] : (idx/2 + 1)*self.layer_sizes[idx+1]]).T
+                )
 
         return h_list
 
@@ -666,7 +666,7 @@ class GSN(Model):
         return [self.X]
 
     def get_hiddens(self):
-        return self.pack_hiddens(self.hiddens)
+        return GSN.pack_hiddens(self.hiddens)
 
     def get_outputs(self):
         return self.output

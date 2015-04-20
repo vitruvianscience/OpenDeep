@@ -162,8 +162,8 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     """
     This function takes a list of monitor channels and collapses them into a list of tuples (collapsed_name, expression)
 
-    :param monitor_channels: list of MonitorsChannels to collapse
-    :type monitor_channels: MonitorsChannel
+    :param monitor_channels: list of MonitorsChannels or Monitors to collapse
+    :type monitor_channels: list of MonitorsChannel or Monitor
     :return: list of tuples
     :rtype: list of tuples
     """
@@ -171,14 +171,24 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     collapsed = []
     for channel in monitor_channels:
         # make sure it is the right type
-        assert isinstance(channel, MonitorsChannel), "Need input monitor_channels to be MonitorsChannel! Found %s" % \
-            str(type(channel))
-        # grab the channel's monitors
-        monitors = channel.monitors
+        if isinstance(channel, MonitorsChannel):
+            # grab the channel's monitors
+            monitors = channel.monitors
+            is_channel = True
+        elif isinstance(channel, Monitor):
+            # or if it is a monitor already, just return it as a single item list
+            monitors = raise_to_list(channel)
+            is_channel = False
+        else:
+            raise AssertionError("Expected Monitor or MonitorChannel, found %s" % str(type(channel)))
+
         # if flags are all None, just grab one copy of all the monitors.
         if train is None and valid is None and test is None:
             # collapse their names with the channel name
-            names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors]
+            if is_channel:
+                names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors]
+            else:
+                names = [monitor.name for monitor in monitors]
             expressions = [monitor.expression for monitor in monitors]
 
         else:
@@ -187,42 +197,25 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
             expressions = []
             for monitor in monitors:
                 if monitor.train_flag and train:
-                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER]))
+                    if is_channel:
+                        names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER]))
+                    else:
+                        names.append(COLLAPSE_SEPARATOR.join([monitor.name, TRAIN_MARKER]))
                     expressions.append(monitor.expression)
                 if monitor.valid_flag and valid:
-                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER]))
+                    if is_channel:
+                        names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER]))
+                    else:
+                        names.append(COLLAPSE_SEPARATOR.join([monitor.name, VALID_MARKER]))
                     expressions.append(monitor.expression)
                 if monitor.test_flag and test:
-                    names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER]))
+                    if is_channel:
+                        names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER]))
+                    else:
+                        names.append(COLLAPSE_SEPARATOR.join([monitor.name, TEST_MARKER]))
                     expressions.append(monitor.expression)
 
         # extend the list of tuples
         collapsed.extend(zip(names, expressions))
 
     return collapsed
-
-def values_dict_from_collapsed(names, vals):
-    """
-    This function takes two lists (in the same order) of collapsed MonitorsChannel and Monitor names from the function
-    above, and the values computed for these monitors by some function, and returns a dictionary of dictionaries
-    representing the same structure as MonitorsChannel.
-
-    :param names: list of names that were computed from collapsing MonitorsChannels.
-    :type names: list of string
-    :param vals: list of values computed corresponding to the names
-    :type vals: list of floats
-    :return: dictionary of dictionaries where the top level is the MonitorsChannel, and the lower level are the Monitors
-    :rtype: dict of dict
-    """
-    names = raise_to_list(names)
-    vals = raise_to_list(vals)
-    # make sure the lists have the same length
-    assert len(names) == len(vals), "Names and values need to be same length. Found %d, %d" % (len(names), len(vals))
-
-    reconstructed = {}
-    for name, val in zip(names, vals):
-        channel_name, monitor_name = name.split(COLLAPSE_SEPARATOR, 1)
-        if channel_name in reconstructed:
-            reconstructed[channel_name].update(monitor_name, val)
-        else:
-            reconstructed[channel_name] = {monitor_name: val}

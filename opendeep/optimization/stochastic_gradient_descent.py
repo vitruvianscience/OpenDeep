@@ -27,7 +27,6 @@ class SGD(Optimizer):
     '''
     Stochastic gradient descent for training a model - includes lr decay and momentum
     '''
-
     # Default values to use for some training parameters
     defaults = {"learning_rate": 0.25,
                 "lr_decay": "exponential",
@@ -66,10 +65,10 @@ class SGD(Optimizer):
             else:
                 self.momentum_decay = False
         else:
-            self.momentum = 1
+            self.momentum = 0
             self.momentum_decay = False
 
-    def get_updates(self, grads):
+    def get_updates(self, gradients):
         """
         Based on Pylearn2
         (https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/training_algorithms/learning_rule.py)
@@ -83,17 +82,19 @@ class SGD(Optimizer):
 
         Also has the option to implement Nesterov momentum (accelerated momentum), which works better in a lot of cases.
 
-        :param grads: OrderedDict
+        :param gradients: OrderedDict
         An OrderedDict of (parameter, gradient) for the model's gradients
         :return: OrderedDict
         Updates at each training step
         """
         log.debug('Setting up Stochastic Gradient Descent with momentum for optimizer...')
         updates = OrderedDict()
-        for (param, gradient) in six.iteritems(grads):
+        for (param, gradient) in six.iteritems(gradients):
             velocity = sharedX(param.get_value() * 0.)
+
             assert param.dtype == velocity.dtype
             assert gradient.dtype == param.dtype
+
             if param.name is not None:
                 velocity.name = 'vel_' + param.name
 

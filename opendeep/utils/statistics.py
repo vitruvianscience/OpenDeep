@@ -15,6 +15,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 # third party libraries
 import theano.tensor as T
+import theano.compat.six as six
 # internal imports
 from opendeep.utils.misc import raise_to_list
 
@@ -46,6 +47,6 @@ def get_stats(input, stat=None):
         return stats
 
     for stat in stat_list:
-        if isinstance(stat, basestring) and stat in stats:
+        if isinstance(stat, six.string_types) and stat in stats:
             compiled_stats.update({stat: stats[stat]})
     return compiled_stats

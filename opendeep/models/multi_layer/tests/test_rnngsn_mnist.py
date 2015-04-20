@@ -2,7 +2,7 @@ import numpy
 import logging
 import opendeep.log.logger as logger
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
+from opendeep.models.multi_layer.rnn_gsn import RNN_GSN
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.utils.image import tile_raster_images
@@ -14,28 +14,29 @@ log = logging.getLogger(__name__)
 
 
 def run_sequence(sequence=0):
-    log.info("Creating RNN-RBM for sequence %d!" % sequence)
+    log.info("Creating RNN-GSN for sequence %d!" % sequence)
 
     # grab the MNIST dataset
     mnist = MNIST(sequence_number=sequence, concat_train_valid=True)
-    outdir = "outputs/rnnrbm/mnist_%d/" % sequence
-    # create the RNN-RBM
+    outdir = "outputs/rnngsn/mnist_%d/" % sequence
+
     rng = numpy.random.RandomState(1234)
     mrg = RandomStreams(rng.randint(2 ** 30))
-    rnnrbm = RNN_RBM(input_size=28 * 28,
+    rnngsn = RNN_GSN(layers=3,
+                     walkbacks=5,
+                     input_size=28 * 28,
                      hidden_size=1000,
                      rnn_hidden_size=100,
-                     k=15,
                      weights_init='uniform',
                      weights_interval=4 * numpy.sqrt(6. / (28 * 28 + 500)),
                      rnn_weights_init='gaussian',
                      rnn_weights_std=1e-4,
-                     rng=rng,
+                     mrg=mrg,
                      outdir=outdir)
     # load pretrained rbm on mnist
-    # rnnrbm.load_params(outdir + 'trained_epoch_200.pkl')
+    # rnngsn.load_params(outdir + 'trained_epoch_200.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=rnnrbm,
+    optimizer = AdaDelta(model=rnngsn,
                          dataset=mnist,
                          n_epoch=200,
                          batch_size=100,
@@ -44,14 +45,14 @@ def run_sequence(sequence=0):
                          save_frequency=10,
                          early_stop_length=100)
 
-    crossentropy = Monitor('crossentropy', rnnrbm.get_monitors()['crossentropy'], test=True)
-    error = Monitor('error', rnnrbm.get_monitors()['frame_error'], test=True)
+    crossentropy = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'], test=True)
+    error = Monitor('error', rnngsn.get_monitors()['mse'], test=True)
 
     # perform training!
     optimizer.train(monitor_channels=[crossentropy, error])
     # use the generate function!
     log.debug("generating images...")
-    generated, ut = rnnrbm.generate(initial=None, n_steps=400)
+    generated, ut = rnngsn.generate(initial=None, n_steps=400)
 
 
 
@@ -64,24 +65,24 @@ def run_sequence(sequence=0):
             tile_spacing=(1, 1)
         )
     )
-    image.save(outdir + "rnnrbm_mnist_generated.png")
+    image.save(outdir + "rnngsn_mnist_generated.png")
     log.debug('saved generated.png')
 
     # Construct image from the weight matrix
     image = Image.fromarray(
         tile_raster_images(
-            X=rnnrbm.W.get_value(borrow=True).T,
+            X=rnngsn.weights_list[0].get_value(borrow=True).T,
             img_shape=(28, 28),
-            tile_shape=closest_to_square_factors(rnnrbm.hidden_size),
+            tile_shape=closest_to_square_factors(rnngsn.hidden_size),
             tile_spacing=(1, 1)
         )
     )
-    image.save(outdir + "rnnrbm_mnist_weights.png")
+    image.save(outdir + "rnngsn_mnist_weights.png")
 
     log.debug("done!")
 
     del mnist
-    del rnnrbm
+    del rnngsn
     del optimizer
 
 

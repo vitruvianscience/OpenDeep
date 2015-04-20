@@ -49,7 +49,7 @@ def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noi
     This will initialize the weights from the method passed from weights_init with the arguments in kwargs
 
     :param weights_init: string of the method for creating weights
-    :type weights_init: basestring
+    :type weights_init: string
 
     :param shape: tuple of the shape you want the weight matrix
     :type shape: tuple or ndarray
@@ -67,7 +67,7 @@ def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noi
     :type rng: numpy or theano rng
 
     :param name: name for the returned tensor
-    :type name: basestring
+    :type name: string
 
     :return: theano tensor (shared variable) for the weights
     :rtype: shared tensor
@@ -190,7 +190,7 @@ def get_weights_identity(shape, name="W", add_noise=None):
     :type shape: Tuple
 
     :param name: name to give the shared variable
-    :type name: basestring
+    :type name: string
 
     :return: the theano shared variable with given shape
     :rtype: shared tensor

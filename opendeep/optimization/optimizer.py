@@ -220,7 +220,7 @@ class Optimizer(object):
         This method performs the training!!!
 
         :param monitor_channels: the list of channels containing monitor expressions/variables to compile and evaluate
-        :type monitor_channels: list of opendeep.monitor.monitor.MonitorsChannel objects
+        :type monitor_channels: list of opendeep.monitor.monitor.MonitorsChannel or Monitor objects
 
         :param plot: the Plot object to use if we want to graph the outputs (uses bokeh server)
         :type plot: opendeep.monitor.plot.Plot object

@@ -27,7 +27,6 @@ from opendeep.models.model import Model
 from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
-from opendeep.utils.noise import get_noise
 from opendeep.utils import file_ops
 
 log = logging.getLogger(__name__)
@@ -47,6 +46,7 @@ class RNN_RBM(Model):
             'rnn_bias_init': 0.0,  # how to initialize the bias parameter
             'generate_n_steps': 200,  # how many steps to generate
             # rbm parameters
+            'input_size': None,
             'hidden_size': None,
             'visible_activation': 'sigmoid',  # type of activation to use for visible activation
             'hidden_activation': 'sigmoid',  # type of activation to use for hidden activation
@@ -57,18 +57,22 @@ class RNN_RBM(Model):
             'bias_init': 0.0,  # how to initialize the bias parameter
             'k': 15,  # the k steps used for CD-k or PCD-k with Gibbs sampling
             # general parameters
-            'input_size': None,
             'mrg': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
             'rng': numpy.random.RandomState(1),  #default random number generator from Numpy
             'outdir': 'outputs/rnnrbm/',  # the output directory for this model's outputs
     }
 
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, config=None, defaults=default,
-                 input_size=None, hidden_size=None, visible_activation=None, hidden_activation=None,
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 config=None, defaults=default,
+                 input_size=None, hidden_size=None,
+                 visible_activation=None, hidden_activation=None,
                  weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
-                 mrg=None, rng=None, k=None, outdir=None, rnn_hidden_size=None, rnn_hidden_activation=None,
-                 rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None,
-                 rnn_weights_interval=None, rnn_bias_init=None, generate_n_steps=None):
+                 mrg=None, rng=None,
+                 k=None,
+                 outdir=None,
+                 rnn_hidden_size=None, rnn_hidden_activation=None,
+                 rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None, rnn_weights_interval=None,
+                 rnn_bias_init=None, generate_n_steps=None):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         super(RNN_RBM, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # all configuration parameters are now in self!
@@ -78,10 +82,10 @@ class RNN_RBM(Model):
         ##################
         # grab info from the inputs_hook, hiddens_hook, or from parameters
         if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
-            raise NotImplementedError("Inputs_hook not implemented yet for RNN_RBM")
+            raise NotImplementedError("Inputs_hook not implemented yet for RNN-RBM")
         else:
             # make the input a symbolic matrix - a sequence of inputs
-            self.input = T.fmatrix('Vs')
+            self.input = T.matrix('Vs')
 
         # set an initial value for the recurrent hiddens
         self.u0 = T.zeros((self.rnn_hidden_size,))
@@ -94,7 +98,7 @@ class RNN_RBM(Model):
 
         # deal with hiddens_hook
         if self.hiddens_hook is not None:
-            raise NotImplementedError("Hiddnes_hook not implemented yet for RNN_RBM")
+            raise NotImplementedError("Hiddens_hook not implemented yet for RNN_RBM")
 
 
         # other specifications
@@ -220,14 +224,16 @@ class RNN_RBM(Model):
         # {bv_t, bh_t, 1 <= t <= T} given v. Conditional RBMs can then be trained
         # in batches using those parameters.
         (u_ts, bv_ts, bh_ts), updates_train = theano.scan(fn=lambda v_t, u_tm1: self.recurrence(v_t, u_tm1),
-                                                       sequences=self.input,
-                                                       outputs_info=[self.u0, None, None],
-                                                       name="rnnrbm_computation_scan")
+                                                          sequences=self.input,
+                                                          outputs_info=[self.u0, None, None],
+                                                          name="rnnrbm_computation_scan")
 
         rbm = RBM(inputs_hook=(self.input_size, self.input),
                   params_hook=(self.W, bv_ts[:], bh_ts[:]),
+                  visible_activation=self.visible_activation,
+                  hidden_activation=self.hidden_activation,
                   k=self.k,
-                  outdir=self.outdir,
+                  outdir=os.path.join(self.outdir, 'rbm'),
                   mrg=self.mrg,
                   rng=self.rng)
         v_sample    = rbm.get_outputs()
@@ -235,11 +241,11 @@ class RNN_RBM(Model):
         monitors    = rbm.get_monitors()
         updates_rbm = rbm.get_updates()
 
-        # make another chain to determine frame-level accuracy/error
+        # make another chain to determine frame-level accuracy/error (this one is one step in the future)
         rbm = RBM(inputs_hook=(self.input_size, self.input[:-1]),
                   params_hook=(self.W, bv_ts[1:], bh_ts[1:]),
                   k=self.k,
-                  outdir=self.outdir,
+                  outdir=os.path.join(self.outdir, 'rbm'),
                   mrg=self.mrg,
                   rng=self.rng)
 
@@ -255,9 +261,8 @@ class RNN_RBM(Model):
         updates_train.update(updates_predict)
 
         # symbolic loop for sequence generation
-        (v_ts, u_ts), updates_generate = theano.scan(lambda u_tm1, *_: self.recurrence(None, u_tm1),
+        (v_ts, u_ts), updates_generate = theano.scan(lambda u_tm1: self.recurrence(None, u_tm1),
                                                      outputs_info=[None, self.generate_u0],
-                                                     non_sequences=self.params,
                                                      n_steps=self.n_steps,
                                                      name="rnnrbm_generate_scan")
 
@@ -285,8 +290,10 @@ class RNN_RBM(Model):
         if generate:
             rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
                       params_hook=(self.W, bv_t, bh_t),
+                      visible_activation=self.visible_activation,
+                      hidden_activation=self.hidden_activation,
                       k=self.k,
-                      outdir=self.outdir,
+                      outdir=os.path.join(self.outdir, 'rbm'),
                       mrg=self.mrg,
                       rng=self.rng)
             v_t = rbm.get_outputs()

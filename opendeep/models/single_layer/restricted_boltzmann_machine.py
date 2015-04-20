@@ -128,6 +128,7 @@ class RBM(Model):
             # make sure the params_hook has W (weights matrix) and bh, bv (bias vectors)
             assert len(self.params_hook) == 3, \
                 "Expected 3 params (W, bv, bh) for RBM, found {0!s}!".format(len(self.params_hook))
+            # doesn't matter if bv and bh are vectors or matrices.
             self.W, self.bv, self.bh = self.params_hook
             self.hidden_size = self.W.shape[1].eval()
         else:
