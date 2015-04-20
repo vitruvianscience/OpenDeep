@@ -17,7 +17,6 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import signal
 import time
-import collections
 from subprocess import Popen, PIPE
 import warnings
 # third party libraries
@@ -31,7 +30,8 @@ except ImportError:
     BOKEH_AVAILABLE = False
     warnings.warn("Bokeh is not available - plotting is disabled. Please pip install bokeh.")
 # internal imports
-from opendeep.monitor.monitor import MonitorsChannel, COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER
+from opendeep.monitor.monitor import MonitorsChannel, Monitor
+from opendeep.monitor.monitor import COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER
 from opendeep.utils.misc import raise_to_list
 from opendeep.optimization.optimizer import TRAIN_COST_KEY
 
@@ -137,27 +137,42 @@ class Plot(object):
 
             for i, channel in enumerate(self.channels):
                 idx = i+1  # offset by 1 because of the train_cost figure
-                assert isinstance(channel, MonitorsChannel), "Need channels to be type MonitorsChannel. Found %s" % \
-                    str(type(channel))
+                assert isinstance(channel, MonitorsChannel) or isinstance(channel, Monitor), \
+                    "Need channels to be type MonitorsChannel or Monitor. Found %s" % str(type(channel))
                 # create the figure
                 self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, channel.name),
                                            logo=None,
                                            toolbar_location='right'))
                 self.figure_color_indices.append(0)
                 # for each monitor in this channel, assign this figure to the monitor (and train/valid/test variants)
-                for monitor in channel.monitors:
-                    self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = idx
-                    if monitor.train_flag:
+                if isinstance(channel, MonitorsChannel):
+                    for monitor in channel.monitors:
+                        self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = idx
+                        if monitor.train_flag:
+                            self.figure_indices[
+                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
+                            ] = idx
+                        if monitor.valid_flag:
+                            self.figure_indices[
+                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
+                            ] = idx
+                        if monitor.test_flag:
+                            self.figure_indices[
+                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
+                            ] = idx
+                else:
+                    self.figure_indices[channel.name] = idx
+                    if channel.train_flag:
                         self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
+                            COLLAPSE_SEPARATOR.join([channel.name, TRAIN_MARKER])
                         ] = idx
-                    if monitor.valid_flag:
+                    if channel.valid_flag:
                         self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
+                            COLLAPSE_SEPARATOR.join([channel.name, VALID_MARKER])
                         ] = idx
-                    if monitor.test_flag:
+                    if channel.test_flag:
                         self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
+                            COLLAPSE_SEPARATOR.join([channel.name, TEST_MARKER])
                         ] = idx
 
             log.debug("Figure indices for monitors: %s" % str(self.figure_indices))

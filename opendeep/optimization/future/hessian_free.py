@@ -211,13 +211,13 @@ train :
     '''Performs HF training.
 
   gradient_dataset : SequenceDataset-like object
-      Defines batches used to compute the gradient.
+      Defines batches used to run the gradient.
       The `iterate(update=True)` method should yield shuffled training examples
       (tuples of variables matching your graph inputs).
       The same examples MUST be returned between multiple calls to iterator(),
       unless update is True, in which case the next batch should be different.
   cg_dataset : SequenceDataset-like object
-      Defines batches used to compute CG iterations.
+      Defines batches used to run CG iterations.
   initial_lambda : float
       Initial value of the Tikhonov damping coefficient.
   mu : float
@@ -338,7 +338,7 @@ class SequenceDataset:
     dataset in a single tensor to be split here. All tensors in `data` must
     then have the same leading dimension.
   number_batches : int
-    Number of mini-batches over which you iterate to compute a gradient or
+    Number of mini-batches over which you iterate to run a gradient or
     Gauss-Newton matrix product.
   minimum_size : int
     Reject all mini-batches that end up smaller than this length.'''

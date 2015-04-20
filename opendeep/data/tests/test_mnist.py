@@ -25,7 +25,7 @@ class TestMNIST(unittest.TestCase):
         # get a logger for this session
         self.log = logging.getLogger(__name__)
         # get the mnist dataset
-        self.mnist = MNIST(binary=False)
+        self.mnist = MNIST(binary=False, concat_train_valid=True)
 
     def testSizes(self):
         assert self.mnist.getDataShape(dataset.TRAIN) == (60000, 784)

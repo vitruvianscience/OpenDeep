@@ -57,7 +57,7 @@ class BasicLayer(Model):
                  outdir=None,
                  **kwargs):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
-        initial_parameters = locals()
+        initial_parameters = locals().copy()
         initial_parameters.pop('self')
         super(BasicLayer, self).__init__(**initial_parameters)
         # all configuration parameters are now in self!

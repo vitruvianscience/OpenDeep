@@ -20,7 +20,6 @@ from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.data.standard_datasets.midi.piano_midi_de import PianoMidiDe
 from opendeep.data.dataset import TRAIN, VALID, TEST
 import opendeep.log.logger as logger
-from opendeep.utils.misc import make_time_units_string
 
 
 class TestMuse(unittest.TestCase):
@@ -51,7 +50,6 @@ class TestMuse(unittest.TestCase):
         assert self.nottingham.train.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TRAIN)])
         assert self.nottingham.valid.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(VALID)])
         assert self.nottingham.test.shape.eval()[0] == numpy.sum([l[0] for l in self.nottingham.getDataShape(TEST)])
-
 
     def tearDown(self):
         del self.muse

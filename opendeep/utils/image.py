@@ -103,7 +103,7 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                 out_array[:, :, i] = numpy.zeros(out_shape,
                         dtype=dt) + channel_defaults[i]
             else:
-                # use a recurrent call to compute the channel and store it
+                # use a recurrent call to run the channel and store it
                 # in the output
                 out_array[:, :, i] = tile_raster_images(
                     X[i], img_shape, tile_shape, tile_spacing,

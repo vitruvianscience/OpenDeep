@@ -19,8 +19,10 @@ def run_dae():
     log.info("Creating a new DAE")
 
     mnist = MNIST()
-    config = {"output_path": '../../../../outputs/dae/mnist/'}
-    dae = DenoisingAutoencoder(config=config, dataset=mnist)
+    config = {"outdir": 'outputs/dae/mnist/',
+              "input_size":28*28,
+              "tied_weights":False}
+    dae = DenoisingAutoencoder(config=config)
 
     # # Load initial weights and biases from file
     # params_to_load = 'dae_params.pkl'
@@ -32,7 +34,8 @@ def run_dae():
     # Save some reconstruction output images
     import opendeep.data.dataset as datasets
     n_examples = 100
-    test_xs = mnist.getDataByIndices(indices=range(n_examples), subset=datasets.TEST)
+    test_xs, _ = mnist.getSubset(subset=datasets.TEST)
+    test_xs = test_xs[:n_examples].eval()
     dae.create_reconstruction_image(test_xs)
 
 

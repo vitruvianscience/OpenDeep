@@ -30,8 +30,10 @@ log = logging.getLogger(__name__)
 def get_noise(name, *args, **kwargs):
     """
     Helper function to return a partially applied noise
+
     :param name: name of noise
     :type name: string
+
     :return: partial function
     :rtype: partial
     """
@@ -81,12 +83,16 @@ def dropout(input, corruption_level=0.5, mrg=None, rescale=True):
 def add_gaussian(input, std=1, mrg=None):
     """
     This takes an input tensor and adds Gaussian noise to its elements with mean zero and provided standard deviation.
+
     :param input: tensor to add Gaussian noise to
     :type input: tensor
+
     :param std: standard deviation to use
     :type std: float
+
     :param mrg: random number generator with a .normal method
     :type mrg: random
+
     :return: tensor with Gaussian noise added
     :rtype: tensor
     """
@@ -119,12 +125,16 @@ def add_uniform(input, interval, mrg=None):
 def salt_and_pepper(input, corruption_level=0.2, mrg=None):
     """
     This applies salt and pepper noise to the input tensor - randomly setting bits to 1 or 0.
+
     :param input: the tensor to apply salt and pepper noise to
     :type input: tensor
+
     :param corruption_level: the amount of salt and pepper noise to add
     :type corruption_level: float
+
     :param mrg: random number generator with .binomial method
     :type mrg: random
+
     :return: tensor with salt and pepper noise applied
     :rtype: tensor
     """

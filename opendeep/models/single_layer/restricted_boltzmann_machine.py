@@ -128,6 +128,7 @@ class RBM(Model):
             # make sure the params_hook has W (weights matrix) and bh, bv (bias vectors)
             assert len(self.params_hook) == 3, \
                 "Expected 3 params (W, bv, bh) for RBM, found {0!s}!".format(len(self.params_hook))
+            # doesn't matter if bv and bh are vectors or matrices.
             self.W, self.bv, self.bh = self.params_hook
             self.hidden_size = self.W.shape[1].eval()
         else:
@@ -144,7 +145,7 @@ class RBM(Model):
             self.bv = get_bias(shape=self.input_size, name="bv", init_values=self.bias_init)
             self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=self.bias_init)
 
-        # Finally have the three parameters
+        # Finally have the parameters
         self.params = [self.W, self.bv, self.bh]
 
         # Create the RBM graph!
@@ -197,6 +198,7 @@ class RBM(Model):
         # this actually keeps v_sample from being considered in the gradient, to set gradient to 0 instead,
         # use theano.gradient.zero_grad
         v_sample_constant = theano.gradient.disconnected_grad(v_sample)
+        # v_sample_constant = v_sample
         cost = (self.free_energy(self.input) - self.free_energy(v_sample_constant)) / self.input.shape[0]
 
         return cost, monitors, updates, v_sample, h_sample

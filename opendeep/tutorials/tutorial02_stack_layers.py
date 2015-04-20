@@ -32,7 +32,8 @@ def create_mlp():
     test_data, test_labels = mnist.getSubset(TEST)
     test_data = test_data[:25].eval()
     test_labels = test_labels[:25].eval()
-    # use the predict function!
+
+    # use the run function!
     preds = mlp.run(test_data)
     log.info('-------')
     log.info("predicted: %s",str(preds))

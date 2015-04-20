@@ -85,10 +85,10 @@ class DenoisingAutoencoder(Model):
         # Perform the computation for a denoising autoencoder!
         # first, add noise (corrupt) the input
         corrupted_input = salt_and_pepper(input=x, corruption_level=self.corruption_level)
-        # next, compute the hidden layer given the inputs (the encoding function)
+        # next, run the hidden layer given the inputs (the encoding function)
         # We don't need to worry about hiddens_hook during training, because we can't
-        # compute a cost without having the input!
-        # hiddens_hook is more for the predict function and linking methods below.
+        # run a cost without having the input!
+        # hiddens_hook is more for the run function and linking methods below.
         hiddens = hidden_activation(T.dot(corrupted_input, W) + b1)
         # finally, create the reconstruction from the hidden layer (we tie the weights with W.T)
         reconstruction = visible_activation(T.dot(hiddens, W.T) + b0)
@@ -99,18 +99,18 @@ class DenoisingAutoencoder(Model):
         # When using real-world data in predictions, we wouldn't corrupt the input first.
         # Therefore, create another version of the hiddens and reconstruction without adding the noise.
         # Here is where we would handle hiddens_hook because this is a generative model!
-        # For the predict function, it would take in the hiddens instead of the input variable x.
+        # For the run function, it would take in the hiddens instead of the input variable x.
         if self.hiddens_hook is not None:
             self.hiddens = self.hiddens_hook[1]
         else:
             self.hiddens = hidden_activation(T.dot(x, W) + b1)
         # make the reconstruction (generated) from the hiddens
         self.recon_predict = visible_activation(T.dot(self.hiddens, W.T) + b0)
-        # now compile the predict function accordingly - if it used x or hiddens as the input.
+        # now compile the run function accordingly - if it used x or hiddens as the input.
         if self.hiddens_hook is not None:
-            self.f_predict = function(inputs=[self.hiddens], outputs=self.recon_predict)
+            self.f_run = function(inputs=[self.hiddens], outputs=self.recon_predict)
         else:
-            self.f_predict = function(inputs=[x], outputs=self.recon_predict)
+            self.f_run = function(inputs=[x], outputs=self.recon_predict)
 
     def get_inputs(self):
         return self.inputs
@@ -121,8 +121,8 @@ class DenoisingAutoencoder(Model):
     def get_outputs(self):
         return self.recon_predict
 
-    def predict(self, input):
-        return self.f_predict(input)
+    def run(self, input):
+        return self.f_run(input)
 
     def get_params(self):
         return self.params
@@ -162,7 +162,8 @@ if __name__ == '__main__':
     test_data, _ = mnist.getSubset(TEST)
     test_data = test_data[:25].eval()
     corrupted_test = salt_and_pepper(test_data, 0.4).eval()
-    # use the predict function!
+
+    # use the run function!
     reconstructed_images = dae.run(corrupted_test)
 
     # create an image from this reconstruction!

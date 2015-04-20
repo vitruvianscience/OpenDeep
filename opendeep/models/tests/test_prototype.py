@@ -53,12 +53,14 @@ def run_mlp():
     optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=10)
     optimizer.train()
 
-    test_data = mnist.getDataByIndices(indices=range(25), subset=TEST)
-    # use the predict function!
-    yhat = mlp.predict(test_data)
+    test_data, test_labels = mnist.getSubset(subset=TEST)
+    test_data = test_data[:25].eval()
+    test_labels = test_labels[:25].eval()
+    # use the run function!
+    yhat = mlp.run(test_data)
     print '-------'
     print 'Prediction:', yhat
-    print 'Actual:    ', mnist.getLabelsByIndices(indices=range(25), subset=TEST).astype('int32')
+    print 'Actual:    ', test_labels.astype('int32')
 
 
 
