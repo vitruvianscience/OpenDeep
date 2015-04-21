@@ -67,7 +67,7 @@ class DenoisingAutoencoder(Model):
             # grab the new input variable from the inputs_hook tuple
             x = self.inputs_hook[1]
         else:
-            x = T.fmatrix("X")
+            x = T.matrix("X")
         self.inputs = [x]
 
         # Build the model's parameters - a weight matrix and two bias vectors

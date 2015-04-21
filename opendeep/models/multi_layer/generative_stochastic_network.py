@@ -310,8 +310,8 @@ class GSN(Model):
         # Sampling #
         ############
         # the input to the sampling function
-        X_sample = T.fmatrix("X_sampling")
-        self.network_state_input = [X_sample] + [T.fmatrix("H_sampling_"+str(i+1)) for i in range(self.layers)]
+        X_sample = T.matrix("X_sampling")
+        self.network_state_input = [X_sample] + [T.matrix("H_sampling_"+str(i+1)) for i in range(self.layers)]
        
         # "Output" state of the network (noisy)
         # initialized with input, then we apply updates

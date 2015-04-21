@@ -17,7 +17,7 @@ class DenoisingAutoencoder(Model):
 
         # Now, define the symbolic input to the model (Theano)
         # We use a matrix rather than a vector so that minibatch processing can be done in parallel.
-        x = T.fmatrix("X")
+        x = T.matrix("X")
         self.inputs = [x]
 
         # Build the model's parameters - a weight matrix and two bias vectors

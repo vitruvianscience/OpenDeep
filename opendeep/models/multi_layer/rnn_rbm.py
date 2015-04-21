@@ -91,7 +91,7 @@ class RNN_RBM(Model):
         self.u0 = T.zeros((self.rnn_hidden_size,))
 
         # make a symbolic vector for the initial recurrent hiddens value to use during generation for the model
-        self.generate_u0 = T.fvector("generate_u0")
+        self.generate_u0 = T.vector("generate_u0")
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
         self.hidden_size = self.hidden_size or self.input_size

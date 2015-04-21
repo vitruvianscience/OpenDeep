@@ -72,10 +72,10 @@ class BasicLayer(Model):
             self.input = self.inputs_hook[1]
         else:
             # make the input a symbolic matrix
-            self.input = T.fmatrix('X')
+            self.input = T.matrix('X')
 
         # now that we have the input specs, define the output 'target' variable to be used in supervised training!
-        self.target = T.fmatrix('Y')
+        self.target = T.matrix('Y')
 
         # either grab the output's desired size from the parameter directly, or copy n_in
         self.output_size = self.output_size or self.input_size
@@ -230,7 +230,7 @@ class SoftmaxLayer(BasicLayer):
             log.debug('Using softmax negative log-likelihood cost!!')
             # nll requires integer targets 'y'.
             self.target_flag = True
-            self.y = T.fvector('y')
+            self.y = T.vector('y')
             self.cost = self.negative_log_likelihood()
 
     def get_outputs(self):

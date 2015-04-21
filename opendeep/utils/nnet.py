@@ -247,7 +247,7 @@ def mirror_images(input, image_shape, cropsize, rand, flag_rand):
     :type cropsize: Integer
 
     :param rand: a vector representing a random array for cropping/mirroring the data
-    :type rand: fvector
+    :type rand: vector
 
     :param flag_rand: to randomize the mirror
     :type flag_rand: Boolean
