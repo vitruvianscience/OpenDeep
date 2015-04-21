@@ -237,7 +237,7 @@ class Optimizer(object):
         # index to a [mini]batch - both start and end
         data_idx = T.iscalar('data_index')
         data_end_idx = T.iscalar('data_end_index')
-        self.function_input = [data_idx, data_end_idx]
+        function_input = [data_idx, data_end_idx]
         batch_slice = slice(data_idx, data_end_idx)
 
         # compute number of minibatches for training, validation and testing
@@ -265,16 +265,16 @@ class Optimizer(object):
             self.test_batches = None
 
         # create the givens for the input function as pairs of (input_variable: sliced_data)
-        self.train_givens = self.get_givens_subset(TRAIN, batch_slice)
-        self.valid_givens = self.get_givens_subset(VALID, batch_slice)
-        self.test_givens = self.get_givens_subset(TEST, batch_slice)
+        train_givens = self.get_givens_subset(TRAIN, batch_slice)
+        valid_givens = self.get_givens_subset(VALID, batch_slice)
+        test_givens = self.get_givens_subset(TEST, batch_slice)
 
         # Now time to create the gradient updates for the model - make sure to handle the possible
         # list of costs used for pretraining of certain parts of the model.
-        self.train_costs = raise_to_list(self.model.get_train_cost())
-        self.train_updates = []
+        train_costs = raise_to_list(self.model.get_train_cost())
+        train_updates = []
         self.gradients = []
-        for i, train_cost in enumerate(self.train_costs):
+        for i, train_cost in enumerate(train_costs):
             # Now create the training cost function for the model to use while training - update parameters
             # gradient!
             gradients, _ = self.model.get_gradient(cost=train_cost)
@@ -286,12 +286,12 @@ class Optimizer(object):
             gradient_updates = self.get_updates(gradients)
 
             # Combine the updates from the model also if applicable
-            train_updates = self.model.get_updates()
-            if train_updates:
-                train_updates.update(gradient_updates)
+            updates = self.model.get_updates()
+            if updates:
+                updates.update(gradient_updates)
             else:
-                train_updates = gradient_updates
-            self.train_updates.append(train_updates)
+                updates = gradient_updates
+            train_updates.append(updates)
 
         # grab the model parameters to use during training
         self.params = self.model.get_params()
@@ -311,23 +311,23 @@ class Optimizer(object):
         #######################################
         # compile train and monitor functions #
         #######################################
-        self.train_functions = []
-        for i in range(len(self.train_costs)):
-            train_updates = self.train_updates[i]
-            train_cost = self.train_costs[i]
+        train_functions = []
+        for i in range(len(train_costs)):
+            updates = train_updates[i]
+            train_cost = train_costs[i]
             # Compile the training function!
-            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(self.train_updates),
+            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_updates),
                      str(type(self.model)))
             t = time.time()
 
-            f_learn = function(inputs=self.function_input,
-                               updates=train_updates,
+            f_learn = function(inputs=function_input,
+                               updates=updates,
                                outputs=[train_cost] + self.train_monitors_dict.values(),
-                               givens=self.train_givens,
+                               givens=train_givens,
                                name='f_learn_%d' % i)
 
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
-            self.train_functions.append(f_learn)
+            train_functions.append(f_learn)
 
         # figure out if we want valid and test
         self.valid_flag = self.dataset.hasSubset(VALID) and len(self.valid_monitors_dict) > 0
@@ -338,10 +338,10 @@ class Optimizer(object):
         # valid monitors
         if self.valid_flag:
             self.valid_monitor_function = function(
-                inputs=self.function_input,
+                inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.valid_monitors_dict.values(),
-                givens=self.valid_givens,
+                givens=valid_givens,
                 name='valid_monitor_function'
             )
         else:
@@ -350,10 +350,10 @@ class Optimizer(object):
         # test monitors
         if self.test_flag:
             self.test_monitor_function = function(
-                inputs=self.function_input,
+                inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.test_monitors_dict.values(),
-                givens=self.test_givens,
+                givens=test_givens,
                 name='test_monitor_function'
             )
         else:
@@ -368,9 +368,9 @@ class Optimizer(object):
         # make sure to deal with a list of train_cost functions - for layer-wise pretraining!
         # this list of training functions was created during __init__()
         start_time = time.time()
-        for func_i, train_function in enumerate(self.train_functions):
+        for func_i, train_function in enumerate(train_functions):
             log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS (continue_training=%s)-----------",
-                     str(type(self.model)), func_i + 1, len(self.train_functions), self.n_epoch, str(continue_training))
+                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch, str(continue_training))
 
             log.debug("Train dataset size is: %s", self.dataset.getDataShape(TRAIN))
             if self.dataset.hasSubset(VALID):
