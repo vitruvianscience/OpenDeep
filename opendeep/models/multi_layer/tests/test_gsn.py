@@ -28,12 +28,12 @@ def main():
                    "minimum_batch_size": 1,  # the minimum number of examples for a batch to be considered
                    "save_frequency": 10,  # how many epochs between saving parameters
                    "early_stop_threshold": .9995,  # multiplier for how much the train cost to improve to not stop early
-                   "early_stop_length": 30,  # how many epochs to wait to see if the threshold has been reached
+                   "early_stop_length": 500,  # how many epochs to wait to see if the threshold has been reached
                    "learning_rate": .25,  # initial learning rate for SGD
                    "lr_decay": 'exponential',  # the decay function to use for the learning rate parameter
                    "lr_factor": .995,  # by how much to decay the learning rate each epoch
                    "momentum": 0.5,  # the parameter momentum amount
-                   'momentum_decay': 'linear',  # how to decay the momentum each epoch (if applicable)
+                   'momentum_decay': False,  # how to decay the momentum each epoch (if applicable)
                    'momentum_factor': 0,  # by how much to decay the momentum (in this case not at all)
                    'nesterov_momentum': False,  # whether to use nesterov momentum update (accelerated momentum)
     }
@@ -41,9 +41,24 @@ def main():
     config_root_logger()
     log.info("Creating a new GSN")
 
-    mnist = MNIST()
-    config = {"outdir": 'outputs/gsn/mnist/'}
-    gsn = GSN(config=config, layers=3, walkbacks=5, hidden_size=1000, input_size=28*28, tied_weights=True)
+    mnist = MNIST(concat_train_valid=True)
+    gsn = GSN(layers=2,
+              walkbacks=4,
+              hidden_size=1500,
+              visible_activation='sigmoid',
+              hidden_activation='tanh',
+              input_size=28*28,
+              tied_weights=True,
+              hidden_add_noise_sigma=2,
+              input_salt_and_pepper=0.4,
+              outdir='outputs/test_gsn/',
+              vis_init=False,
+              noiseless_h1=True,
+              input_sampling=True,
+              weights_init='uniform',
+              weights_interval='montreal',
+              bias_init=0,
+              cost_function='binary_crossentropy')
 
     recon_cost_channel = MonitorsChannel(name='cost')
     recon_cost_channel.add(Monitor('recon_cost', gsn.get_monitors()['recon_cost'], test=True))

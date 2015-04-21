@@ -56,8 +56,8 @@ log = logging.getLogger(__name__)
 # Default values to use for some GSN parameters.
 # These defaults are used to produce the MNIST results given in the comments top of file.
 _defaults = {# gsn parameters
-            "layers": 3,  # number of hidden layers to use
-            "walkbacks": 5,  # number of walkbacks (generally 2*layers) - need enough to propagate to visible layer
+            "layers": 2,  # number of hidden layers to use
+            "walkbacks": 4,  # number of walkbacks (generally 2*layers) - need enough to propagate to visible layer
             "input_size": None,  # number of input features - please specify for your dataset!
             "hidden_size": 1500,  # number of hidden units in each layer
             "visible_activation": 'sigmoid',  # activation for visible layer - make appropriate for input data type.
