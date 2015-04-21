@@ -34,7 +34,7 @@ def run_sequence(sequence=0):
                      mrg=mrg,
                      outdir=outdir)
     # load pretrained rbm on mnist
-    # rnngsn.load_params(outdir + 'trained_epoch_200.pkl')
+    rnngsn.load_gsn_params('outputs/gsn/mnist/trained_epoch_72.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnngsn,
                          dataset=mnist,

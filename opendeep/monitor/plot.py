@@ -28,7 +28,7 @@ try:
     BOKEH_AVAILABLE = True
 except ImportError:
     BOKEH_AVAILABLE = False
-    warnings.warn("Bokeh is not available - plotting is disabled. Please pip install bokeh.")
+    warnings.warn("Bokeh is not available - plotting is disabled. Please pip install bokeh to use Plot.")
 # internal imports
 from opendeep.monitor.monitor import MonitorsChannel, Monitor
 from opendeep.monitor.monitor import COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER

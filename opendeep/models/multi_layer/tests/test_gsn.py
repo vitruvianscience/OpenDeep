@@ -11,6 +11,7 @@ from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.utils.image import tile_raster_images
 from opendeep.monitor.monitor import Monitor, MonitorsChannel
+from opendeep.utils.misc import closest_to_square_factors
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +76,17 @@ def main():
 
     number_reconstruction.save(gsn.outdir + 'reconstruction.png')
     log.info("saved output image!")
+
+    # Construct image from the weight matrix
+    image = PIL.Image.fromarray(
+        tile_raster_images(
+            X=gsn.weights_list[0].get_value(borrow=True).T,
+            img_shape=(28, 28),
+            tile_shape=closest_to_square_factors(gsn.hidden_size),
+            tile_spacing=(1, 1)
+        )
+    )
+    image.save(gsn.outdir + "gsn_mnist_weights.png")
 
 
 if __name__ == '__main__':
