@@ -27,6 +27,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 import time
+import os
 # third party
 import numpy
 import theano.tensor as T
@@ -37,6 +38,7 @@ from opendeep import sharedX, function, trunc
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
+from opendeep.monitor.out_service import FileService
 from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import raise_to_list, make_time_units_string, get_shared_values, set_shared_values
@@ -321,6 +323,11 @@ class Optimizer(object):
             self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in test_collapsed])
         # finally deal with an outservice provided to monitor training cost
         self.train_outservice = train_outservice
+        # remove redundant files made by the fileservice
+        # TODO: THIS FEELS LIKE A HACK. I don't like.
+        if isinstance(self.train_outservice, FileService):
+            os.remove(self.train_outservice.valid_filename)
+            os.remove(self.train_outservice.test_filename)
 
         #######################################
         # compile train and monitor functions #
