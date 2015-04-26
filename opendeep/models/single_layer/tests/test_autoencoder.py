@@ -21,7 +21,7 @@ def run_dae():
     mnist = MNIST()
     config = {"outdir": 'outputs/dae/mnist/',
               "input_size":28*28,
-              "tied_weights":False}
+              "tied_weights":True}
     dae = DenoisingAutoencoder(config=config)
 
     # # Load initial weights and biases from file

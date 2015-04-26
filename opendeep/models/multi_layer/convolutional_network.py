@@ -195,7 +195,7 @@ class AlexNet(Model):
         self.params += fc_layer6.get_params()
 
         # now apply dropout to the output for training
-        dropout_layer6 = dropout(fc_layer6.get_outputs(), corruption_level=0.5)
+        dropout_layer6 = dropout(fc_layer6.get_outputs(), noise_level=0.5)
 
         log.debug("fully connected layer 2 (model layer 7)...")
         fc_layer7       = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()),
@@ -209,7 +209,7 @@ class AlexNet(Model):
         self.params += fc_layer7.get_params()
 
         # apply dropout again for training
-        dropout_layer7 = dropout(fc_layer7_train.get_outputs(), corruption_level=0.5)
+        dropout_layer7 = dropout(fc_layer7_train.get_outputs(), noise_level=0.5)
 
         # last layer is a softmax prediction output layer
         softmax_config = {

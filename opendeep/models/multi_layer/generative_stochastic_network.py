@@ -467,7 +467,7 @@ class GSN(Model):
         # pre activation noise
         if layer_idx != 0 and add_noise:
             log.debug('Adding pre-activation gaussian noise for layer %s', str(layer_idx))
-            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], std=self.hidden_add_noise_sigma, mrg=self.mrg)
+            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], noise_level=self.hidden_add_noise_sigma, mrg=self.mrg)
 
         # ACTIVATION!
         if layer_idx == 0:
@@ -482,7 +482,7 @@ class GSN(Model):
         # this just doubles the amount of noise between each activation of the hiddens.
         if layer_idx != 0 and add_noise:
             log.debug('Adding post-activation gaussian noise for layer %s', str(layer_idx))
-            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], std=self.hidden_add_noise_sigma, mrg=self.mrg)
+            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], noise_level=self.hidden_add_noise_sigma, mrg=self.mrg)
 
         # build the reconstruction chain if updating the visible layer X
         if layer_idx == 0:

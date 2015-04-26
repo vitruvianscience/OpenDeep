@@ -20,8 +20,8 @@ def sequential_add_layers():
     # This method is to demonstrate adding layers one-by-one to a Prototype container.
     # As you can see, inputs_hook are created automatically by Prototype so we don't need to specify!
     mlp = Prototype()
-    mlp.add(BasicLayer(input_size=28*28, output_size=512, activation='rectifier', noise='dropout'))
-    mlp.add(BasicLayer(output_size=512, activation='rectifier', noise='dropout'))
+    mlp.add(BasicLayer(input_size=28*28, output_size=1000, activation='rectifier', noise='dropout', noise_level=0.5))
+    mlp.add(BasicLayer(output_size=512, activation='rectifier', noise='dropout', noise_level=0.5))
     mlp.add(SoftmaxLayer(output_size=10))
 
     return mlp
@@ -49,7 +49,7 @@ def add_list_layers():
 if __name__ == '__main__':
     mlp = sequential_add_layers()
     optimizer = SGD(model=mlp,
-                    dataset=MNIST(concat_train_valid=False),
+                    dataset=MNIST(concat_train_valid=True),
                     n_epoch=500,
                     batch_size=600,
                     learning_rate=.01,

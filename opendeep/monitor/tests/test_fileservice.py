@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 def main():
     var = theano.shared(T.zeros(shape=(88, 100), dtype=theano.config.floatX).eval(), name='W')
-    updates = [(var, add_uniform(input=var, interval=.02))]
+    updates = [(var, add_uniform(input=var, noise_level=.02))]
 
     stats = get_stats(var)
     l1 = stats.pop('l1')

@@ -53,7 +53,7 @@ def get_noise(name, *args, **kwargs):
         log.error("Noise name needs to be a string, found %s", str(name))
         raise AssertionError("Noise name needs to be a string, found %s" % str(name))
 
-def dropout(input, corruption_level=0.5, mrg=None, rescale=True):
+def dropout(input, noise_level=0.5, mrg=None, rescale=True):
     """
     This is the dropout function.
     :param input: tensor to apply dropout to
@@ -70,7 +70,7 @@ def dropout(input, corruption_level=0.5, mrg=None, rescale=True):
     if mrg is None:
         mrg = theano_random
 
-    keep_probability = 1 - corruption_level
+    keep_probability = 1 - noise_level
     mask = mrg.binomial(p=keep_probability, n=1, size=input.shape, dtype=theano.config.floatX)
 
     output = (input * mask)
@@ -80,15 +80,15 @@ def dropout(input, corruption_level=0.5, mrg=None, rescale=True):
 
     return output
 
-def add_gaussian(input, std=1, mrg=None):
+def add_gaussian(input, noise_level=1, mrg=None):
     """
     This takes an input tensor and adds Gaussian noise to its elements with mean zero and provided standard deviation.
 
     :param input: tensor to add Gaussian noise to
     :type input: tensor
 
-    :param std: standard deviation to use
-    :type std: float
+    :param noise_level: standard deviation to use
+    :type noise_level: float
 
     :param mrg: random number generator with a .normal method
     :type mrg: random
@@ -98,18 +98,18 @@ def add_gaussian(input, std=1, mrg=None):
     """
     if mrg is None:
         mrg = theano_random
-    log.debug('Adding Gaussian noise with std: %s', str(std))
-    noise = mrg.normal(avg=0, std=std, size=input.shape, dtype=theano.config.floatX)
+    log.debug('Adding Gaussian noise with std: %s', str(noise_level))
+    noise = mrg.normal(avg=0, std=noise_level, size=input.shape, dtype=theano.config.floatX)
     OUT = input + noise
     return OUT
 
-def add_uniform(input, interval, mrg=None):
+def add_uniform(input, noise_level, mrg=None):
     """
     This takes an intput tensor and adds noise drawn from a Uniform distribution from +- interval.
     :param input: tensor to add uniform noise to.
     :type input: tensor
-    :param interval: range for noise to be drawn from (+- interval)
-    :type interval: float
+    :param noise_level: range for noise to be drawn from (+- interval)
+    :type noise_level: float
     :param mrg: random number generator with a .uniform method
     :type mrg: random
     :return: tensor with uniform noise added
@@ -117,8 +117,8 @@ def add_uniform(input, interval, mrg=None):
     """
     if mrg is None:
         mrg = theano_random
-    log.debug("Adding Uniform noise with interval [-%s, %s]", str(interval), str(interval))
-    noise = mrg.uniform(low=-interval, high=interval, size=input.shape, dtype=theano.config.floatX)
+    log.debug("Adding Uniform noise with interval [-%s, %s]", str(noise_level), str(noise_level))
+    noise = mrg.uniform(low=-noise_level, high=noise_level, size=input.shape, dtype=theano.config.floatX)
     OUT = input + noise
     return OUT
 
