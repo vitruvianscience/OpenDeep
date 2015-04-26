@@ -468,7 +468,7 @@ class Optimizer(object):
         if self.train_outservice:
             self.train_outservice.write(mean_train, TRAIN)
         for name, service in self.train_monitors_outservice_dict.items():
-            if name in current_mean_monitors:
+            if name in current_mean_monitors and service:
                 service.write(current_mean_monitors[name], TRAIN)
         # if there is a plot, also send them over!
         if plot:
@@ -495,7 +495,7 @@ class Optimizer(object):
             log.info('Valid monitors: %s', str(current_mean_monitors))
             # send the values to their outservices
             for name, service in self.valid_monitors_outservice_dict.items():
-                if name in current_mean_monitors:
+                if name in current_mean_monitors and service:
                     service.write(current_mean_monitors[name], VALID)
             # if there is a plot, also send them over!
             if plot:
@@ -516,7 +516,7 @@ class Optimizer(object):
             log.info('Test monitors: %s', str(current_mean_monitors))
             # send the values to their outservices
             for name, service in self.test_monitors_outservice_dict.items():
-                if name in current_mean_monitors:
+                if name in current_mean_monitors and service:
                     service.write(current_mean_monitors[name], TEST)
             # if there is a plot, also send them over!
             if plot:
