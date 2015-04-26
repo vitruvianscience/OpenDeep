@@ -22,19 +22,19 @@ def run_sequence(sequence=0):
 
     rng = numpy.random.RandomState(1234)
     mrg = RandomStreams(rng.randint(2 ** 30))
-    rnngsn = RNN_GSN(layers=3,
-                     walkbacks=5,
+    rnngsn = RNN_GSN(layers=2,
+                     walkbacks=4,
                      input_size=28 * 28,
                      hidden_size=1000,
+                     tied_weights=True,
                      rnn_hidden_size=100,
                      weights_init='uniform',
-                     weights_interval=4 * numpy.sqrt(6. / (28 * 28 + 500)),
-                     rnn_weights_init='gaussian',
-                     rnn_weights_std=1e-4,
+                     weights_interval='montreal',
+                     rnn_weights_init='identity',
                      mrg=mrg,
                      outdir=outdir)
     # load pretrained rbm on mnist
-    rnngsn.load_gsn_params('outputs/gsn/mnist/trained_epoch_72.pkl')
+    rnngsn.load_gsn_params('outputs/trained_gsn_epoch_1000.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnngsn,
                          dataset=mnist,

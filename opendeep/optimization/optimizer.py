@@ -215,7 +215,7 @@ class Optimizer(object):
         """
         return {'learning_rate': self.learning_rate}
 
-    def train(self, monitor_channels=None, plot=None, continue_training=False):
+    def train(self, monitor_channels=None, train_outservice=None, plot=None, continue_training=False):
         """
         This method performs the training!!!
 
@@ -303,10 +303,24 @@ class Optimizer(object):
         self.train_monitors_dict = {}
         self.valid_monitors_dict = {}
         self.test_monitors_dict = {}
+        self.train_monitors_outservice_dict = {}
+        self.valid_monitors_outservice_dict = {}
+        self.test_monitors_outservice_dict = {}
         if monitor_channels:
-            self.train_monitors_dict = OrderedDict(collapse_channels(monitor_channels, train=True))
-            self.valid_monitors_dict = OrderedDict(collapse_channels(monitor_channels, valid=True))
-            self.test_monitors_dict  = OrderedDict(collapse_channels(monitor_channels, test=True))
+            # collapse the appropriate monitors into their (name, expression, out_service) tuples
+            train_collapsed = collapse_channels(monitor_channels, train=True)
+            valid_collapsed = collapse_channels(monitor_channels, valid=True)
+            test_collapsed  = collapse_channels(monitor_channels, test=True)
+            # get name: expression dictionary
+            self.train_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in train_collapsed])
+            self.valid_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in valid_collapsed])
+            self.test_monitors_dict  = OrderedDict([(name, expression) for name, expression, _ in test_collapsed])
+            # get name: outservice dictionary
+            self.train_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in train_collapsed])
+            self.valid_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in valid_collapsed])
+            self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in test_collapsed])
+        # finally deal with an outservice provided to monitor training cost
+        self.train_outservice = train_outservice
 
         #######################################
         # compile train and monitor functions #
@@ -443,6 +457,12 @@ class Optimizer(object):
         log.info('Train cost: %s', trunc(mean_train))
         if len(current_mean_monitors) > 0:
             log.info('Train monitors: %s', str(current_mean_monitors))
+        # send the values to their outservices
+        if self.train_outservice:
+            self.train_outservice.write(mean_train, TRAIN)
+        for name, service in self.train_monitors_outservice_dict.items():
+            if name in current_mean_monitors:
+                service.write(current_mean_monitors[name], TRAIN)
         # if there is a plot, also send them over!
         if plot:
             current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
@@ -466,6 +486,10 @@ class Optimizer(object):
             current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in valid_monitors.items()}
             # log the mean values!
             log.info('Valid monitors: %s', str(current_mean_monitors))
+            # send the values to their outservices
+            for name, service in self.valid_monitors_outservice_dict.items():
+                if name in current_mean_monitors:
+                    service.write(current_mean_monitors[name], VALID)
             # if there is a plot, also send them over!
             if plot:
                 plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
@@ -483,6 +507,10 @@ class Optimizer(object):
             current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in test_monitors.items()}
             # log the mean values!
             log.info('Test monitors: %s', str(current_mean_monitors))
+            # send the values to their outservices
+            for name, service in self.test_monitors_outservice_dict.items():
+                if name in current_mean_monitors:
+                    service.write(current_mean_monitors[name], TEST)
             # if there is a plot, also send them over!
             if plot:
                 plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)

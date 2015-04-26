@@ -11,9 +11,9 @@ from theano.compat.python2x import OrderedDict
 
 import theano
 import theano.tensor as T
-
 from opendeep.monitor.monitor import Monitor, MonitorsChannel, collapse_channels
-from opendeep.monitor.plot import Plot
+from opendeep.monitor.out_service import FileService
+from opendeep.data.dataset import TRAIN, VALID, TEST
 from opendeep.utils.noise import add_uniform
 from opendeep.utils.statistics import get_stats
 from opendeep.utils.misc import make_time_units_string
@@ -35,8 +35,8 @@ def main():
     std = stats.pop('std')
     mean = stats.pop('mean')
 
-    mean_monitor = Monitor('mean', mean, train=True, valid=True)
-    var_monitor = Monitor('var', var)
+    mean_monitor = Monitor('mean', mean, train=True, valid=True, out_service=FileService('outs/mean.txt'))
+    var_monitor = Monitor('var', var, out_service=FileService('outs/var.txt'))
 
     w_channel = MonitorsChannel('W', monitors=mean_monitor)
 
@@ -44,12 +44,12 @@ def main():
 
     monitors = [w_channel, stat_channel]
 
-    train_collapsed = collapse_channels(monitors, train=True)
-    train_collapsed = OrderedDict([(name, expression) for name, expression, _ in train_collapsed])
-    valid_collapsed = collapse_channels(monitors, valid=True)
-    valid_collapsed = OrderedDict([(name, expression) for name, expression, _ in valid_collapsed])
-
-    plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, start_server=False, open_browser=True)
+    train_collapsed_raw = collapse_channels(monitors, train=True)
+    train_collapsed = OrderedDict([(item[0], item[1]) for item in train_collapsed_raw])
+    train_services = OrderedDict([(item[0], item[2]) for item in train_collapsed_raw])
+    valid_collapsed_raw = collapse_channels(monitors, valid=True)
+    valid_collapsed = OrderedDict([(item[0], item[1]) for item in valid_collapsed_raw])
+    valid_services = OrderedDict([(item[0], item[2]) for item in valid_collapsed_raw])
 
     log.debug('compiling...')
     f = theano.function(inputs=[], outputs=train_collapsed.values(), updates=updates)
@@ -63,7 +63,9 @@ def main():
         log.debug(epoch)
         vals = f()
         m = OrderedDict(zip(train_collapsed.keys(), vals))
-        plot.update_plots(epoch, m)
+        for name, service in train_services.items():
+            if name in m:
+                service.write(m[name], TRAIN)
         log.debug('----- '+make_time_units_string(time.time()-t))
 
     for epoch in range(100):
@@ -71,7 +73,9 @@ def main():
         log.debug(epoch)
         vals = f2()
         m = OrderedDict(zip(valid_collapsed.keys(), vals))
-        plot.update_plots(epoch, m)
+        for name, service in valid_services.items():
+            if name in m:
+                service.write(m[name], VALID)
         log.debug('----- ' + make_time_units_string(time.time() - t))
 
     log.debug("TOTAL TIME "+make_time_units_string(time.time()-t1))

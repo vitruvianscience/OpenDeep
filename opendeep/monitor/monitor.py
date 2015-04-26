@@ -13,10 +13,12 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 # standard libraries
 import logging
+import os
 # third party
 from theano.compat.six import string_types  # for basestring compatability
 # internal
 from opendeep.utils.misc import raise_to_list
+from opendeep.monitor.out_service import FileService
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +142,7 @@ class Monitor(object):
     """
     A Monitor to make managing values to output during training/testing easy.
     """
-    def __init__(self, name, expression, train=True, valid=False, test=False):
+    def __init__(self, name, expression, out_service=None, train=True, valid=False, test=False):
         """
         This initializes a Monitor representation.
 
@@ -156,11 +158,20 @@ class Monitor(object):
         self.train_flag = train
         self.valid_flag = valid
         self.test_flag  = test
-
+        self.out_service = out_service
+        # remove redundant files made by the fileservice
+        if isinstance(self.out_service, FileService):
+            if not self.train_flag:
+                os.remove(self.out_service.train_filename)
+            if not self.valid_flag:
+                os.remove(self.out_service.valid_filename)
+            if not self.test_flag:
+                os.remove(self.out_service.test_filename)
 
 def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     """
-    This function takes a list of monitor channels and collapses them into a list of tuples (collapsed_name, expression)
+    This function takes a list of monitor channels and collapses them into a
+    list of tuples (collapsed_name, expression, out_service)
 
     :param monitor_channels: list of MonitorsChannels or Monitors to collapse
     :type monitor_channels: list of MonitorsChannel or Monitor
@@ -190,11 +201,13 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
             else:
                 names = [monitor.name for monitor in monitors]
             expressions = [monitor.expression for monitor in monitors]
+            services = [monitor.out_service for monitor in monitors]
 
         else:
             # collapse their names with the channel name and the train/valid/test ending
             names = []
             expressions = []
+            services = []
             for monitor in monitors:
                 if monitor.train_flag and train:
                     if is_channel:
@@ -202,20 +215,23 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
                     else:
                         names.append(COLLAPSE_SEPARATOR.join([monitor.name, TRAIN_MARKER]))
                     expressions.append(monitor.expression)
+                    services.append(monitor.out_service)
                 if monitor.valid_flag and valid:
                     if is_channel:
                         names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER]))
                     else:
                         names.append(COLLAPSE_SEPARATOR.join([monitor.name, VALID_MARKER]))
                     expressions.append(monitor.expression)
+                    services.append(monitor.out_service)
                 if monitor.test_flag and test:
                     if is_channel:
                         names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER]))
                     else:
                         names.append(COLLAPSE_SEPARATOR.join([monitor.name, TEST_MARKER]))
                     expressions.append(monitor.expression)
+                    services.append(monitor.out_service)
 
         # extend the list of tuples
-        collapsed.extend(zip(names, expressions))
+        collapsed.extend(zip(names, expressions, services))
 
     return collapsed
