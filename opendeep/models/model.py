@@ -4,7 +4,8 @@
 This module defines the generic Model class -
 which represents everything from a single layer to a full-blown deep network.
 
-Models are the reusable, modular building blocks for the deep networks.
+Models are the reusable, modular building blocks for the deep networks. Their power comes from
+their ability to connect with other Models.
 """
 
 __authors__ = "Markus Beissinger"
@@ -24,7 +25,6 @@ import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 from opendeep import function
-from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
 from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
 from opendeep.utils.file_ops import mkdir_p
@@ -34,10 +34,7 @@ try:
 except ImportError:
     import pickle
 
-
 log = logging.getLogger(__name__)
-
-OUTDIR_DEFAULT = 'outputs/'
 
 class Model(object):
     """
@@ -55,17 +52,12 @@ class Model(object):
     shouldn't be a breaking error.
     """
 
-    def __init__(self, config=None, defaults=None,
-                 inputs_hook=None, hiddens_hook=None, params_hook=None,
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
                  output_size=None,
                  outdir=None,
                  **kwargs):
         """
-        This creates the model's combined configuration params from config and defaults into a self.args
-        dictionary-like object (meaning it implements collections.Mapping and you can use self.args.get('parameter')
-        to access something).
-
-        Further, your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
+        Your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
         to set your inputs and hidden representation in a modular fashion, allowing models to link together.
         inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
         hiddens_hook is a tuple of (shape, variable) that should replace the default model hidden representation
@@ -73,14 +65,6 @@ class Model(object):
         run outputs directly from the hidden variable provided).
         You can also accept a params_hook to share model parameters rather than instantiate a new set of parameters.
         ------------------
-
-        :param config: A dictionary-like object containing all the necessary user-defined parameters for the model.
-        This means it either implements collections.Mapping or is a file path to a JSON or YAML configuration file.
-        :type config: collections.Mapping object or String (.json file path or .yaml file path)
-
-        :param defaults: A dictionary-like object containing all the necessary default parameters for the model.
-        This means it either implements collections.Mapping or is a file path to a JSON or YAML configuration file.
-        :type defaults: collections.Mapping object or String (.json file path or .yaml file path)
 
         :param inputs_hook: Routing information for the model to accept inputs from elsewhere. This is used for linking
         different models together (e.g. setting the Sigmoid model's input layer to the DAE's hidden layer gives a
@@ -106,49 +90,24 @@ class Model(object):
         in the default or config dictionaries.
         :type output_size: int
 
-        :param outdir: the directory you want outputs (parameters, images, etc.) to save to.
+        :param outdir: the directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+        be saved.
         :type outdir: string
 
         :param kwargs: this will be all the other left-over parameters passed to the class as a dictionary of
-        {param: value}. We will use the kwargs to finally combine defaults, config, and passed parameters together
-        into the self.args dict, making each model's parameters accessible by name in self.args
+        {param: value}.
         :type kwargs: dict
         """
         log.info("Creating a new instance of %s", str(type(self)))
 
-        # set self.args to be the combination of the defaults and the config dictionaries
-        self.args = combine_config_and_defaults(config, defaults)
-
-        # if the args are none, make it a blank dictionary
-        if self.args is None:
-            self.args = {}
-
-        # now, go through the inputs_hook, hiddens_hook, params_hook, and output_size to add them to self.args
-        # if the variable isn't None, override the argument from config/default. (or add it if it doesn't exist)
-        if inputs_hook is not None or 'inputs_hook' not in self.args:
-            self.args['inputs_hook'] = inputs_hook
-
-        if hiddens_hook is not None or 'hiddens_hook' not in self.args:
-            self.args['hiddens_hook'] = hiddens_hook
-
-        if params_hook is not None or 'params_hook' not in self.args:
-            self.args['params_hook'] = params_hook
-
-        if output_size is not None or 'output_size' not in self.args:
-            self.args['output_size'] = output_size
-
-        # set the overall default outdir to outputs/
-        if outdir is not None or 'outdir' not in self.args:
-            self.args['outdir'] = outdir
-
-        if self.args['outdir'] is None:
-            self.args['outdir'] = OUTDIR_DEFAULT
+        # copy all the extra params into the args dictionary (used for saving the model configuration)
+        self.args = kwargs.copy()
 
         # Now create the directory for outputs of the model
         # set up base path for the outputs of the model during training, etc.
+        self.args['outdir'] = outdir
         if self.args['outdir']:
             mkdir_p(self.args['outdir'])
-
 
         # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
         for arg, val in kwargs.items():
@@ -238,6 +197,20 @@ class Model(object):
     #############################################
     # Methods for running the model on an input #
     #############################################
+    def compile_run_fn(self):
+        """
+        Compile and set the f_run function used for run()
+        """
+        if not hasattr(self, 'f_run'):
+            log.debug("Compiling f_run...")
+            t = time.time()
+            self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
+                                  outputs = self.get_outputs(),
+                                  updates = self.get_updates())
+            log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
+        else:
+            log.warn('f_run already exists!')
+
     def run(self, input):
         """
         This method will return the model's output (run through the function), given an input. In the case that
@@ -254,28 +227,14 @@ class Model(object):
         :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
         :rtype: tensor
         """
-        # set any noise switches to zero
-        if len(self.get_noise_switch()) > 0:
-            vals = [switch.get_value() for switch in self.get_noise_switch()]
-            [switch.set_value(0.) for switch in self.get_noise_switch()]
-
         # check if the run function is already compiled, otherwise compile it!
         if not hasattr(self, 'f_run'):
-            log.debug("Compiling f_run...")
-            t = time.time()
-            self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                  outputs = self.get_outputs(),
-                                  updates = self.get_updates())
-            log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
+            self.compile_run_fn()
 
         # because we use the splat to account for multiple inputs to the function, make sure input is a list.
         input = raise_to_list(input)
         # return the results of the run function!
-        output =  self.f_run(*input)
-
-        # reset the noise switches
-        if len(self.get_noise_switch()) > 0:
-            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), vals)]
+        output = self.f_run(*input)
 
         return output
 
