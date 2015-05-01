@@ -70,7 +70,7 @@ class Optimizer(object):
                      "lr_factor": 1,  # no learning rate decay by default
                      }
 
-        log.debug("Initializing optimizer %s", str(type(self)))
+        log.info("Initializing optimizer %s", str(type(self)))
 
         assert isinstance(model, Model), "Optimizer input model needs to be an opendeep Model class!"
         self.model = model
@@ -120,7 +120,7 @@ class Optimizer(object):
         # _defaults < defaults < config < kwargs (explicits passed to model's __init__)
 
         # log the arguments
-        log.debug("optimizer config args: %s", str(self.args))
+        log.info("optimizer config args: %s", str(self.args))
 
         # Finally, to make things really easy, update the class 'self' with everything in self.args to make
         # all the parameters accessible via self.<param>
@@ -546,7 +546,7 @@ class Optimizer(object):
 
         log.info('time: ' + make_time_units_string(timing))
 
-        log.info('remaining time: ' +
+        log.debug('remaining time: ' +
                  make_time_units_string((self.n_epoch - self.epoch_counter) * numpy.mean(self.times)))
 
         if (self.epoch_counter % self.save_frequency) == 0:

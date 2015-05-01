@@ -255,7 +255,7 @@ class RNN_RBM(Model):
         frame_level_mse = T.mean(T.sqr(v_sample[1:] - v_prediction), axis=0)
         frame_level_error = T.mean(frame_level_mse)
         # add the frame-level error to the monitors
-        monitors['frame_error'] = frame_level_error
+        monitors['mse'] = frame_level_error
 
         updates_train.update(updates_rbm)
         updates_train.update(updates_predict)

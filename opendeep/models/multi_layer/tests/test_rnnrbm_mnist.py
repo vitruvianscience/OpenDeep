@@ -8,6 +8,7 @@ from opendeep.optimization.adadelta import AdaDelta
 from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.monitor.monitor import Monitor
+from opendeep.monitor.plot import Plot
 import PIL.Image as Image
 
 log = logging.getLogger(__name__)
@@ -28,7 +29,8 @@ def run_sequence(sequence=0):
                      k=15,
                      weights_init='uniform',
                      weights_interval=4 * numpy.sqrt(6. / (28 * 28 + 500)),
-                     rnn_weights_init='gaussian',
+                     rnn_weights_init='identity',
+                     rnn_hidden_activation='relu',
                      rnn_weights_std=1e-4,
                      rng=rng,
                      outdir=outdir)
@@ -40,15 +42,16 @@ def run_sequence(sequence=0):
                          n_epoch=200,
                          batch_size=100,
                          minimum_batch_size=2,
-                         learning_rate=1e-6,
+                         learning_rate=1e-8,
                          save_frequency=10,
-                         early_stop_length=100)
+                         early_stop_length=200)
 
     crossentropy = Monitor('crossentropy', rnnrbm.get_monitors()['crossentropy'], test=True)
-    error = Monitor('error', rnnrbm.get_monitors()['frame_error'], test=True)
+    error = Monitor('error', rnnrbm.get_monitors()['mse'], test=True)
+    plot = Plot(bokeh_doc_name='rnnrbm_mnist_%d' % sequence, monitor_channels=[crossentropy, error], open_browser=True)
 
     # perform training!
-    optimizer.train(monitor_channels=[crossentropy, error])
+    optimizer.train(plot=plot)
     # use the generate function!
     log.debug("generating images...")
     generated, ut = rnnrbm.generate(initial=None, n_steps=400)
