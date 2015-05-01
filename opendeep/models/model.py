@@ -121,7 +121,7 @@ class Model(object):
         self.__dict__.update(self.args)
 
         # log the arguments.
-        log.debug("%s self.args: %s", str(type(self)), str(self.args))
+        log.info("%s self.args: %s", str(type(self)), str(self.args))
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!

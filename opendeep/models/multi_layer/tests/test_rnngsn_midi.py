@@ -12,6 +12,7 @@ from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.utils.midi import midiwrite
 from opendeep.monitor.monitor import Monitor
+from opendeep.monitor.plot import Plot
 import PIL.Image as Image
 try:
     import pylab
@@ -58,7 +59,8 @@ def run_midi(dataset):
                      rnn_hidden_size=100,
                      weights_init='gaussian',
                      weights_std=0.01,
-                     rnn_weights_init='gaussian',
+                     rnn_weights_init='identity',
+                     rnn_hidden_activation='relu',
                      rnn_weights_std=0.0001,
                      mrg=mrg,
                      outdir=outdir)
@@ -69,14 +71,17 @@ def run_midi(dataset):
                          n_epoch=200,
                          batch_size=100,
                          minimum_batch_size=2,
+                         # learning_rate=1e-4,
                          learning_rate=1e-6,
                          save_frequency=10,
                          early_stop_length=100)
 
-    # ll = Monitor('pseudo-log', rnngsn.get_monitors()['pseudo-log'])
+    ll = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'],test=True)
+    mse = Monitor('frame-error', rnngsn.get_monitors()['mse'],train=True,test=True,valid=True)
+    plot = Plot(bokeh_doc_name='rnngsn_midi_%s'%dataset, monitor_channels=[ll,mse],open_browser=True)
 
     # perform training!
-    optimizer.train(monitor_channels=None)
+    optimizer.train(plot=plot)
     # use the generate function!
     generated, _ = rnngsn.generate(initial=None, n_steps=200)
 
@@ -115,7 +120,7 @@ def run_midi(dataset):
 
 if __name__ == '__main__':
     config_root_logger()
-    # run_midi('nottingham')
-    run_midi('jsb')
-    run_midi('piano_de')
-    run_midi('muse')
+    # run_midi('jsb')
+    # run_midi('piano_de')
+    # run_midi('muse')
+    run_midi('nottingham')
