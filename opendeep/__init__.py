@@ -17,6 +17,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 # third-party libraries
 import theano
 import numpy
+# internal imports
+from opendeep.utils.config import create_dictionary_like
 
 cast_floatX = lambda x: numpy.cast[theano.config.floatX](x)
 trunc       = lambda x: str(x)[:8]
@@ -98,3 +100,15 @@ def make_shared_variables(variable_list, borrow=True):
     """
     # Borrow is true by default
     return [sharedX(variable, borrow=borrow) if variable is not None else None for variable in variable_list]
+
+def init_from_config(class_type, config):
+    """
+    This takes a class type and a configuration, and instantiates the class with the parameters in config.
+
+    :param config: a json, yaml, or dictionary-like object
+    :return: an instantiated class with the config file
+    """
+    config_dict = create_dictionary_like(config)
+    if config_dict is None:
+        config_dict = {}
+    return class_type(**config_dict)

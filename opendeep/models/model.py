@@ -100,28 +100,15 @@ class Model(object):
         """
         log.info("Creating a new instance of %s", str(type(self)))
 
-        # copy all the extra params into the args dictionary (used for saving the model configuration)
-        self.args = kwargs.copy()
+        # copy all of the parameters from the class into an args (configuration) dictionary
+        self.args = {}
+        self._add_kwargs_to_dict(kwargs.copy(), self.args)
 
         # Now create the directory for outputs of the model
         # set up base path for the outputs of the model during training, etc.
         self.args['outdir'] = outdir
         if self.args['outdir']:
             mkdir_p(self.args['outdir'])
-
-        # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
-        for arg, val in kwargs.items():
-            if (val is not None or str(arg) not in self.args) and str(arg) != 'kwargs':
-                self.args[str(arg)] = val
-            # flatten kwargs if it was passed as a variable
-            elif str(arg) == 'kwargs':
-                inner_kwargs = kwargs['kwargs']
-                for key, item in inner_kwargs.items():
-                    if item is not None or str(key) not in self.args:
-                        self.args[str(key)] = item
-
-        # Magic! Now self.args contains the combination of all the initialization variables, overridden like so:
-        # defaults < config < kwargs (explicits passed to model's __init__)
 
         # Do a check if both input_size and inputs_hook are None (this should only happen in Prototype)
         if self.args.get("input_size") is None and self.args.get('inputs_hook') is None:
@@ -138,6 +125,18 @@ class Model(object):
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
+
+    def _add_kwargs_to_dict(self, kwargs, dictionary):
+        """
+        recursively add any kwargs into the dictionary
+        """
+        for arg, val in kwargs.items():
+            if arg not in dictionary and arg != 'kwargs':
+                dictionary[arg] = val
+            # flatten kwargs if it was passed as a variable
+            elif arg == 'kwargs':
+                inner_kwargs = kwargs['kwargs']
+                self._add_kwargs_to_dict(inner_kwargs, dictionary)
 
 
     ######################################################################
@@ -507,10 +506,8 @@ class Model(object):
         :return: whether or not successful
         :rtype: Boolean
         """
-        if not hasattr(self, 'outdir'):
-            self.outdir = OUTDIR_DEFAULT
         # make sure outdir was not set to false (no saving or outputs)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             # By default, try to dump all the values from get_param_values into a pickle file.
             params = self.get_param_values()
 
@@ -583,10 +580,8 @@ class Model(object):
         :return: whether or not successful
         :rtype: bool
         """
-        if not hasattr(self, 'outdir'):
-            self.outdir = OUTDIR_DEFAULT
         # make sure outdir is not set to False (no outputs/saving)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             args_path = os.path.join(self.outdir, args_file)
             args_file = os.path.realpath(args_path)
 
