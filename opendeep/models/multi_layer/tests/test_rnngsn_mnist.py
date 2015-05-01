@@ -5,6 +5,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_gsn import RNN_GSN
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
+from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 from opendeep.monitor.monitor import Monitor
@@ -22,19 +23,19 @@ def run_sequence(sequence=0):
 
     rng = numpy.random.RandomState(1234)
     mrg = RandomStreams(rng.randint(2 ** 30))
-    rnngsn = RNN_GSN(layers=3,
-                     walkbacks=5,
+    rnngsn = RNN_GSN(layers=2,
+                     walkbacks=4,
                      input_size=28 * 28,
                      hidden_size=1000,
+                     tied_weights=True,
                      rnn_hidden_size=100,
                      weights_init='uniform',
-                     weights_interval=4 * numpy.sqrt(6. / (28 * 28 + 500)),
-                     rnn_weights_init='gaussian',
-                     rnn_weights_std=1e-4,
+                     weights_interval='montreal',
+                     rnn_weights_init='identity',
                      mrg=mrg,
                      outdir=outdir)
     # load pretrained rbm on mnist
-    rnngsn.load_gsn_params('outputs/gsn/mnist/trained_epoch_72.pkl')
+    # rnngsn.load_gsn_params('outputs/trained_gsn_epoch_1000.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnngsn,
                          dataset=mnist,
@@ -42,8 +43,21 @@ def run_sequence(sequence=0):
                          batch_size=100,
                          minimum_batch_size=2,
                          learning_rate=1e-6,
-                         save_frequency=10,
-                         early_stop_length=100)
+                         save_frequency=20,
+                         early_stop_length=200)
+    # optimizer = SGD(model=rnngsn,
+    #                 dataset=mnist,
+    #                 n_epoch=300,
+    #                 batch_size=100,
+    #                 minimum_batch_size=2,
+    #                 learning_rate=.25,
+    #                 lr_decay='exponential',
+    #                 lr_factor=.995,
+    #                 momentum=0.5,
+    #                 nesterov_momentum=True,
+    #                 momentum_decay=False,
+    #                 save_frequency=20,
+    #                 early_stop_length=100)
 
     crossentropy = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'], test=True)
     error = Monitor('error', rnngsn.get_monitors()['mse'], test=True)

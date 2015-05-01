@@ -122,7 +122,7 @@ class BasicLayer(Model):
         if self.noise:
             log.debug('Adding noise switch.')
             if self.noise_level is not None:
-                noise_func = get_noise(self.noise, self.noise_level, self.mrg)
+                noise_func = get_noise(self.noise, noise_level=self.noise_level, mrg=self.mrg)
             else:
                 noise_func = get_noise(self.noise, mrg=self.mrg)
             # apply the noise as a switch!
