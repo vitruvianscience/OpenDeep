@@ -69,10 +69,10 @@ def _compile_csl_fn():
     M = 10
     # data dim
     D = 784
-    minibatch.tag.test_value = numpy.random.binomial(1, 0.5, size=(M, D)).astype('float32')
+    minibatch.tag.test_value = as_floatX(numpy.random.binomial(1, 0.5, size=(M, D)))
     # chain length
     K = 100
-    means.tag.test_value = numpy.random.uniform(size=(N, K, D)).astype('float32')
+    means.tag.test_value = as_floatX(numpy.random.uniform(size=(N, K, D)))
 
     # computing LL
 
@@ -83,7 +83,7 @@ def _compile_csl_fn():
     _means = means.dimshuffle('x', 0, 1, 2)
 
     A = T.log(sample_size)
-    B = _minibatch * T.log(_means) + (as_floatX(1) - _minibatch) * T.log(as_floatX(1) - _means)
+    B = _minibatch * T.log(_means) + (1. - _minibatch) * T.log(1. - _means)
     C = B.sum(axis=3)
     D = log_sum_exp_theano(C, axis=2)
     E = D - A
@@ -106,11 +106,11 @@ def _compile_csl_fn_v2(mu):
     #
     log.debug('building theano fn for Bernoulli CSL')
     x = T.fmatrix('inputs')
-    x.tag.test_value = numpy.random.uniform(size=(10, 784)).astype('float32')
+    x.tag.test_value = as_floatX(numpy.random.uniform(size=(10, 784)))
     mu = numpy.clip(mu, 1e-10, (1 - (1e-5)))
     mu = mu[None, :, :]
     inner_1 = numpy.log(mu)
-    inner_2 = numpy.log(numpy.float32(1) - mu)
+    inner_2 = numpy.log(1. - mu)
 
     k = mu.shape[1]
     D = mu.shape[2]
@@ -119,7 +119,7 @@ def _compile_csl_fn_v2(mu):
 
     term_1 = -T.log(k)
     c = T.sum(x.dimshuffle(0, 'x', 1) * inner_1 +
-              (numpy.float32(1) - x.dimshuffle(0, 'x', 1)) * inner_2,
+              (1. - x.dimshuffle(0, 'x', 1)) * inner_2,
               axis=2)
     debug = c.sum(axis=1)
     term_2 = log_sum_exp_theano(c, axis=1)

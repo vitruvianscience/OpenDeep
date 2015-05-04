@@ -22,7 +22,7 @@ import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal imports
-from opendeep import cast_floatX
+from opendeep import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
         log.debug("Creating weights with shape %s from Uniform distribution with given interval +- %s",
                   str(shape), str(interval))
     # build the uniform weights tensor
-    val = cast_floatX(rng.uniform(low=-interval, high=interval, size=shape))
+    val = as_floatX(rng.uniform(low=-interval, high=interval, size=shape))
     return theano.shared(value=val, name=name)
 
 def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
@@ -175,7 +175,7 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
     if std != 0:
         val = numpy.asarray(rng.normal(loc=mean, scale=std, size=shape), dtype=theano.config.floatX)
     else:
-        val = cast_floatX(mean * numpy.ones(shape, dtype=theano.config.floatX))
+        val = as_floatX(mean * numpy.ones(shape, dtype=theano.config.floatX))
 
     return theano.shared(value=val, name=name)
 
@@ -229,7 +229,7 @@ def get_bias(shape, name="b", init_values=None):
 
     log.debug("Initializing bias variable with shape %s" % str(shape))
     # init to zeros plus the offset
-    val = cast_floatX(numpy.ones(shape=shape, dtype=theano.config.floatX) * init_values)
+    val = as_floatX(numpy.ones(shape=shape, dtype=theano.config.floatX) * init_values)
     return theano.shared(value=val, name=name)
 
 def mirror_images(input, image_shape, cropsize, rand, flag_rand):

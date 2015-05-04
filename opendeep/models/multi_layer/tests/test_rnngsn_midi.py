@@ -1,4 +1,4 @@
-
+from __future__ import print_function
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_gsn import RNN_GSN
@@ -18,10 +18,8 @@ try:
     import pylab
     has_pylab = True
 except ImportError:
-    print (
-        "pylab isn't available."
-    )
-    print "It can be installed with 'pip install -q Pillow'"
+    print("pylab isn't available.")
+    print("It can be installed with 'pip install -q Pillow'")
     has_pylab = False
 
 import logging

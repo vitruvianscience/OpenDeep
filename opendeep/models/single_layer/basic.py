@@ -30,31 +30,14 @@ class BasicLayer(Model):
     """
     This is your basic input -> nonlinear(output) layer. No hidden representation.
     """
-    _default = {
-        'activation': 'rectifier',  # type of activation function to use for output
-        'cost': 'mse',  # the cost function to use for supervised training - comparing outputs to target labels.
-        'cost_args': {},  # extra arguments to give the cost function (such as std's for gaussian LL). normally not used
-        'weights_init': 'uniform',  # either 'gaussian' or 'uniform' - how to initialize weights
-        'weights_mean': 0,  # mean for gaussian weights init
-        'weights_std': 0.005,  # standard deviation for gaussian weights init
-        'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-        'bias_init': 0.0,  # how to initialize the bias parameter
-        'input_size': None,
-        'output_size': None,
-        'noise': None,
-        'noise_level': None,
-        'mrg': RNG_MRG.MRG_RandomStreams(1),
-        'outdir': 'outputs/basic'  # the output directory for this model's outputs
-    }
-    def __init__(self, config=None, defaults=_default,
-                 inputs_hook=None, params_hook=None,
+    def __init__(self, inputs_hook=None, params_hook=None,
                  input_size=None, output_size=None,
-                 activation=None,
-                 cost=None, cost_args=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None,
-                 bias_init=None,
-                 noise=None, noise_level=None, mrg=None,
-                 outdir=None,
+                 activation='rectifier',
+                 cost='mse', cost_args={},
+                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 bias_init=0.0,
+                 noise=None, noise_level=None, mrg=RNG_MRG.MRG_RandomStreams(1),
+                 outdir='outputs/basic',
                  **kwargs):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         initial_parameters = locals().copy()
@@ -171,39 +154,19 @@ class SoftmaxLayer(BasicLayer):
 
     It is a special subclass of the FullyConnectedLayer, with the activation function forced to be 'softmax'
     """
-    _default = {'cost': 'nll',  # the cost function to use
-               'out_as_probs': False,  # whether output is class guess (False) or vector of class probabilities (True)
-               'outdir': 'outputs/softmax'  # the output directory for this model's outputs
-               }
-    def __init__(self, config=None, defaults=_default,
-                 inputs_hook=None, params_hook=None,
+    def __init__(self, inputs_hook=None, params_hook=None,
                  input_size=None, output_size=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None,
-                 bias_init=None,
-                 cost=None, cost_args=None,
-                 out_as_probs=None,
-                 outdir=None,
-                 **kwargs):
-        # grab what cost to use
-        if cost is None:
-            if config is not None:
-                cost = config.get('cost', defaults.get('cost'))
-            else:
-                cost = defaults.get('cost')
-        # see if we want to output a class guess or vector of probabilities
-        if out_as_probs is None:
-            if config is not None:
-                out_as_probs = config.get('out_as_probs', defaults.get('out_as_probs'))
-            else:
-                out_as_probs = defaults.get('out_as_probs')
-
+                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 bias_init=0.0,
+                 cost='nll', cost_args={},
+                 out_as_probs=False,
+                 outdir='outputs/softmax'):
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
                                            activation='softmax',
                                            cost=cost,
                                            cost_args=cost_args,
-                                           config=config,
                                            input_size=input_size,
                                            output_size=output_size,
                                            weights_init=weights_init,

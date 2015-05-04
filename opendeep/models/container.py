@@ -25,6 +25,7 @@ from opendeep.utils.misc import make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)
 
+
 class Prototype(Model):
     """
     The Prototype lets you add Models in sequence, where the first model takes your input
@@ -87,10 +88,8 @@ class Prototype(Model):
                     # grab the current model class
                     model_class = type(model)
                     # make the model a new instance of the current model (same arguments) except new inputs_hook
-                    model_args = model.args
+                    model_args = model.args.copy()
                     model_args['inputs_hook'] = current_inputs_hook
-                    # no need for hiddens_hook - it must be None to be at this point.
-                    model_args.pop('hiddens_hook')
                     new_model = model_class(**model_args)
                     # clean up allocated variables from old model
                     for param in model.get_params():

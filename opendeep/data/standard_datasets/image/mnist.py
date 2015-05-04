@@ -1,7 +1,7 @@
 '''
-.. module:: mnist
+Provides the MNIST handwritten digit dataset.
 
-Object for the MNIST handwritten digit dataset
+See: http://yann.lecun.com/exdb/mnist/
 '''
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -16,7 +16,7 @@ import gzip
 # third party libraries
 import numpy
 # internal imports
-from opendeep import dataset_shared
+from opendeep import dataset_shared, binarize
 import opendeep.data.dataset as datasets
 from opendeep.data.dataset import FileDataset
 from opendeep.utils import file_ops
@@ -32,10 +32,43 @@ log = logging.getLogger(__name__)
 class MNIST(FileDataset):
     '''
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
-    train, valid, and test sets.
+    train, valid, and test sets. http://www.iro.umontreal.ca/~lisa/deep/data/mnist/
+
+    Attributes
+    ----------
+    train_X : shared variable
+        The training input variables.
+    train_Y : shared variable
+        The training input labels.
+    valid_X : shared variable
+        The validation input variables.
+    valid_Y : shared variable
+        The validation input labels.
+    test_X : shared variable
+        The testing input variables.
+    test_Y : shared variable
+        The testing input labels.
     '''
-    def __init__(self, binary=False, one_hot=False, concat_train_valid=False,
+    def __init__(self, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
                  dataset_dir='../../datasets', sequence_number=0, rng=None):
+        """
+        Parameters
+        ----------
+        binary : bool, optional
+            Flag to binarize the input images.
+        binary_cutoff : float, optional
+            If you want to binarize the input images, what threshold value to use.
+        one_hot : bool, optional
+            Flag to convert the labels to one-hot encoding rather than their normal integers.
+        concat_train_valid : bool, optional
+            Flag to concatenate the training and validation datasets together. This would be the original split.
+        dataset_dir : str, optional
+            The `dataset_dir` parameter to a ``FileDataset``.
+        sequence_number : int, optional
+            The sequence method to use if we want to put the input images into a specific order. 0 defaults to random.
+        rng : random, optional
+            The random number generator to use when sequencing.
+        """
         # instantiate the Dataset class to install the dataset from the url
         log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
 
@@ -67,11 +100,10 @@ class MNIST(FileDataset):
 
         # make optional binary
         if binary:
-            _binary_cutoff = 0.5
-            log.debug('Making MNIST X values binary with cutoff %s', str(_binary_cutoff))
-            self.train_X = (self.train_X > _binary_cutoff).astype('float32')
-            self.valid_X = (self.valid_X > _binary_cutoff).astype('float32')
-            self.test_X  = (self.test_X > _binary_cutoff).astype('float32')
+            log.debug('Making MNIST X values binary with cutoff %s', str(binary_cutoff))
+            self.train_X = binarize(self.train_X, binary_cutoff)
+            self.valid_X = binarize(self.valid_X, binary_cutoff)
+            self.test_X  = binarize(self.test_X, binary_cutoff)
 
         # make optional one-hot labels
         if one_hot:
@@ -90,44 +122,43 @@ class MNIST(FileDataset):
         self.test_Y = dataset_shared(self.test_Y, name='mnist_test_y', borrow=True)
 
     def getSubset(self, subset):
-        y = None
+        """
+        Returns the (x, y) pair of shared variables for the given train, validation, or test subset.
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            (x, y) tuple of shared variables holding the dataset input and label, or None if the subset doesn't exist.
+        """
         if subset is datasets.TRAIN:
-            if hasattr(self, 'train_Y'):
-                y = self.train_Y
-            return self.train_X, y
-        elif subset is datasets.VALID and hasattr(self, 'valid_X') and self.valid_X:
-            if hasattr(self, 'valid_Y'):
-                y = self.valid_Y
-            return self.valid_X, y
-        elif subset is datasets.TEST and hasattr(self, 'test_X') and self.test_X:
-            if hasattr(self, 'test_Y'):
-                y = self.test_Y
-            return self.test_X, y
+            return self.train_X, self.train_Y
+        elif subset is datasets.VALID:
+            return self.valid_X, self.valid_Y
+        elif subset is datasets.TEST:
+            return self.test_X, self.test_Y
         else:
-            return None, None
-
-
-    def hasSubset(self, subset):
-        '''
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: boolean
-        Whether or not this dataset has the given subset split
-        '''
-        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
             log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
-            return False
-        # it has them all.
-        return True
+            return None, None
 
     def getDataShape(self, subset):
         '''
-        :return: tuple
-        Return the shape of this dataset's subset in a NxD tuple where N=#examples and D=dimensionality
+        Returns the shape of the input data for the given subset
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            Return the shape of this dataset's subset in a (N, D) tuple where N=#examples and D=dimensionality
         '''
-        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
-            return None
         if subset is datasets.TRAIN:
             return self._train_shape
         elif subset is datasets.VALID:
@@ -135,23 +166,30 @@ class MNIST(FileDataset):
         elif subset is datasets.TEST:
             return self._test_shape
         else:
-            log.critical('No getDataShape method implemented for %s for subset %s!',
-                         str(type(self)),
-                         datasets.get_subset_strings(subset))
-            raise NotImplementedError()
+            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+            return None
 
-    def sequence(self, sequence_number, rng=None, one_hot=False):
+    def sequence(self, sequence_number, rng=None):
         """
-        Sequences the train, valid, and test datasets according to the artificial sequences
+        Sequences the train, valid, and test datasets according to the artificial sequences I made up...
 
-        :param sequence_number: which sequence to do
-        :type sequence_number: int
-
-        :param rng: the random number generator to use
-        :type rng: rng
-
-        :param one_hot: whether to encode the data as one-hot
-        :type one_hot: bool
+        Parameters
+        ----------
+        sequence_number : {0, 1, 2, 3, 4}
+            The sequence is is determined as follows:
+            +------+-----------------------------------------------------------+
+            | 0 | The original image ordering.                                 |
+            +------+-----------------------------------------------------------+
+            | 1 | Order by digits 0-9 repeating.                               |
+            +------+-----------------------------------------------------------+
+            | 2 | Order by digits 0-9-9-0 repeating.                           |
+            +------+-----------------------------------------------------------+
+            | 3 | Rotates digits 1, 4, and 8. See implementation.              |
+            +------+-----------------------------------------------------------+
+            | 4 | Has 3 bits of parity. See implementation.                    |
+            +------+-----------------------------------------------------------+
+        rng : random
+            the random number generator to use
         """
         log.debug("Sequencing MNIST with sequence %d", sequence_number)
         if rng is None:
@@ -165,21 +203,21 @@ class MNIST(FileDataset):
         if sequence_number == 0:
             pass
         elif sequence_number == 1:
-            train_ordered_indices = sequence1_indices(self.train_Y)
-            valid_ordered_indices = sequence1_indices(self.valid_Y)
-            test_ordered_indices  = sequence1_indices(self.test_Y)
+            train_ordered_indices = _sequence1_indices(self.train_Y)
+            valid_ordered_indices = _sequence1_indices(self.valid_Y)
+            test_ordered_indices  = _sequence1_indices(self.test_Y)
         elif sequence_number == 2:
-            train_ordered_indices = sequence2_indices(self.train_Y)
-            valid_ordered_indices = sequence2_indices(self.valid_Y)
-            test_ordered_indices  = sequence2_indices(self.test_Y)
+            train_ordered_indices = _sequence2_indices(self.train_Y)
+            valid_ordered_indices = _sequence2_indices(self.valid_Y)
+            test_ordered_indices  = _sequence2_indices(self.test_Y)
         elif sequence_number == 3:
-            train_ordered_indices = sequence3_indices(self.train_Y)
-            valid_ordered_indices = sequence3_indices(self.valid_Y)
-            test_ordered_indices  = sequence3_indices(self.test_Y)
+            train_ordered_indices = _sequence3_indices(self.train_Y)
+            valid_ordered_indices = _sequence3_indices(self.valid_Y)
+            test_ordered_indices  = _sequence3_indices(self.test_Y)
         elif sequence_number == 4:
-            train_ordered_indices = sequence4_indices(self.train_Y)
-            valid_ordered_indices = sequence4_indices(self.valid_Y)
-            test_ordered_indices  = sequence4_indices(self.test_Y)
+            train_ordered_indices = _sequence4_indices(self.train_Y)
+            valid_ordered_indices = _sequence4_indices(self.valid_Y)
+            test_ordered_indices  = _sequence4_indices(self.test_Y)
         else:
             log.warning("MNIST sequence number %s not recognized, leaving dataset as-is.", str(sequence_number))
 
@@ -200,48 +238,49 @@ class MNIST(FileDataset):
         log.debug('Valid shape is: %s', str(self._valid_shape))
         log.debug('Test shape is: %s', str(self._test_shape))
 
-def sequence1_indices(labels, classes=10):
+def _sequence1_indices(labels, classes=10):
     # make sure labels are integers
     labels = [label.astype('int32') for label in labels]
-    #Creates an ordering of indices for this MNIST label series (normally expressed as y in dataset) that makes the numbers go in order 0-9....
+    # Creates an ordering of indices for this MNIST label series (normally expressed as y in dataset)
+    # that makes the numbers go in order 0-9....
     sequence = []
     pool = []
     for _ in range(classes):
         pool.append([])
-    #organize the indices into groups by label
+    # organize the indices into groups by label
     for i in range(len(labels)):
         pool[labels[i]].append(i)
-    #draw from each pool (also with the random number insertions) until one is empty
+    # draw from each pool (also with the random number insertions) until one is empty
     stop = False
-    #check if there is an empty class
+    # check if there is an empty class
     for n in pool:
         if len(n) == 0:
             stop = True
             log.warning("stopped early from dataset1 sequencing - missing some class of labels")
     while not stop:
-        #for i in range(classes)+range(classes-2,0,-1):
+        # for i in range(classes)+range(classes-2,0,-1):
         for i in range(classes):
             if not stop:
-                if len(pool[i]) == 0: #stop the procedure if you are trying to pop from an empty list
+                if len(pool[i]) == 0:  # stop the procedure if you are trying to pop from an empty list
                     stop = True
                 else:
                     sequence.append(pool[i].pop())
     return sequence
 
-#order sequentially up then down 0-9-9-0....
-def sequence2_indices(labels, classes=10):
+# order sequentially up then down 0-9-9-0....
+def _sequence2_indices(labels, classes=10):
     # make sure labels are integers
     labels = [label.astype('int32') for label in labels]
     sequence = []
     pool = []
     for _ in range(classes):
         pool.append([])
-    #organize the indices into groups by label
+    # organize the indices into groups by label
     for i in range(len(labels)):
         pool[labels[i]].append(i)
-    #draw from each pool (also with the random number insertions) until one is empty
+    # draw from each pool (also with the random number insertions) until one is empty
     stop = False
-    #check if there is an empty class
+    # check if there is an empty class
     for n in pool:
         if len(n) == 0:
             stop = True
@@ -249,25 +288,25 @@ def sequence2_indices(labels, classes=10):
     while not stop:
         for i in range(classes)+range(classes-1,-1,-1):
             if not stop:
-                if len(pool[i]) == 0: #stop the procedure if you are trying to pop from an empty list
+                if len(pool[i]) == 0:  # stop the procedure if you are trying to pop from an empty list
                     stop = True
                 else:
                     sequence.append(pool[i].pop())
     return sequence
 
-def sequence3_indices(labels, classes=10):
+def _sequence3_indices(labels, classes=10):
     # make sure labels are integers
     labels = [label.astype('int32') for label in labels]
     sequence = []
     pool = []
     for _ in range(classes):
         pool.append([])
-    #organize the indices into groups by label
+    # organize the indices into groups by label
     for i in range(len(labels)):
         pool[labels[i]].append(i)
-    #draw from each pool (also with the random number insertions) until one is empty
+    # draw from each pool (also with the random number insertions) until one is empty
     stop = False
-    #check if there is an empty class
+    # check if there is an empty class
     for n in pool:
         if len(n) == 0:
             stop = True
@@ -283,7 +322,7 @@ def sequence3_indices(labels, classes=10):
                     n = 8
                 elif i == 8 and a:
                     n = 1
-                if len(pool[n]) == 0: #stop the procedure if you are trying to pop from an empty list
+                if len(pool[n]) == 0:  # stop the procedure if you are trying to pop from an empty list
                     stop = True
                 else:
                     sequence.append(pool[n].pop())
@@ -292,23 +331,23 @@ def sequence3_indices(labels, classes=10):
     return sequence
 
 # extra bits of parity
-def sequence4_indices(labels, classes=10):
+def _sequence4_indices(labels, classes=10):
     # make sure labels are integers
     labels = [label.astype('int32') for label in labels]
     def even(n):
-        return n%2==0
+        return n % 2 == 0
     def odd(n):
         return not even(n)
     sequence = []
     pool = []
     for _ in range(classes):
         pool.append([])
-    #organize the indices into groups by label
+    # organize the indices into groups by label
     for i in range(len(labels)):
         pool[labels[i]].append(i)
-    #draw from each pool (also with the random number insertions) until one is empty
+    # draw from each pool (also with the random number insertions) until one is empty
     stop = False
-    #check if there is an empty class
+    # check if there is an empty class
     for n in pool:
         if len(n) == 0:
             stop = True
@@ -319,19 +358,19 @@ def sequence4_indices(labels, classes=10):
     sequence.append(pool[2].pop())
     while not stop:
         if odd(s[-3]):
-            first_bit = (s[-2] - s[-3])%classes
+            first_bit = (s[-2] - s[-3]) % classes
         else:
-            first_bit = (s[-2] + s[-3])%classes
+            first_bit = (s[-2] + s[-3]) % classes
         if odd(first_bit):
-            second_bit = (s[-1] - first_bit)%classes
+            second_bit = (s[-1] - first_bit) % classes
         else:
-            second_bit = (s[-1] + first_bit)%classes
+            second_bit = (s[-1] + first_bit) % classes
         if odd(second_bit):
-            next_num = (s[-1] - second_bit)%classes
+            next_num = (s[-1] - second_bit) % classes
         else:
-            next_num = (s[-1] + second_bit + 1)%classes
+            next_num = (s[-1] + second_bit + 1) % classes
 
-        if len(pool[next_num]) == 0: #stop the procedure if you are trying to pop from an empty list
+        if len(pool[next_num]) == 0:  # stop the procedure if you are trying to pop from an empty list
             stop = True
         else:
             s.append(next_num)

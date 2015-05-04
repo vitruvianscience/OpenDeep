@@ -41,7 +41,7 @@ import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
 import PIL
 # internal references
-from opendeep import cast_floatX, function, sharedX
+from opendeep import as_floatX, function, sharedX
 from opendeep.models.model import Model
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.activation import get_activation_function, is_binary
@@ -89,21 +89,34 @@ class GSN(Model):
     '''
     Class for creating a new Generative Stochastic Network (GSN)
     '''
-    def __init__(self, config=None, defaults=_defaults,
-                 inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 input_size=None, hidden_size=None,
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 input_size=None, hidden_size=1000,
                  layers=None, walkbacks=None,
-                 visible_activation=None,
-                 hidden_activation=None,
-                 input_sampling=None, mrg=None,
-                 tied_weights=None, weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
-                 bias_init=None,
-                 cost_function=None,
-                 noise_decay=None, noise_annealing=None,
-                 add_noise=None, noiseless_h1=None, hidden_add_noise_sigma=None, input_salt_and_pepper=None,
-                 outdir=None,
+                 visible_activation='sigmoid',
+                 hidden_activation='tanh',
+                 input_sampling=True, mrg=RNG_MRG.MRG_RandomStreams(1),
+                 tied_weights=True,
+                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 bias_init=0.0,
+                 cost_function='binary_crossentropy',
+                 noise_decay='exponential', noise_annealing=1,
+                 add_noise=True, noiseless_h1=True, hidden_add_noise_sigma=2, input_salt_and_pepper=0.4,
+                 outdir='outputs/gsn/',
                  image_width=None, image_height=None,
-                 vis_init=None):
+                 vis_init=False,
+                 **kwargs):
+        # the GSN is an unsupervised model, so its output size is the same as the input size. This means we need
+        # to first determine the input size.
+        if inputs_hook is not None:
+            assert len(inputs_hook) == 2, "inputs_hook was expected (shape, input) tuple. " \
+                                               "Found length %s instead" % str(len(inputs_hook))
+            if inputs_hook[0] is not None:
+                input_size = inputs_hook[0]
+        elif input_size is None and (inputs_hook is None or inputs_hook[0] is None):
+            log.critical("Please specify GSN input_size.")
+            raise AssertionError("Please specify GSN input_size.")
+        output_size = input_size
+
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
@@ -153,9 +166,9 @@ class GSN(Model):
                             'Generaly want 2X walkbacks to layers',
                             str(self.layers), str(self.walkbacks))
 
-        self.noise_annealing        = cast_floatX(self.noise_annealing)  # noise schedule parameter
-        self.hidden_add_noise_sigma = sharedX(cast_floatX(self.hidden_add_noise_sigma))
-        self.input_salt_and_pepper  = sharedX(cast_floatX(self.input_salt_and_pepper))
+        self.noise_annealing        = as_floatX(self.noise_annealing)  # noise schedule parameter
+        self.hidden_add_noise_sigma = sharedX(as_floatX(self.hidden_add_noise_sigma))
+        self.input_salt_and_pepper  = sharedX(as_floatX(self.input_salt_and_pepper))
 
         # if there was a hiddens_hook, unpack the hidden layers in the tensor
         if self.hiddens_hook is not None:

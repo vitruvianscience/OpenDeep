@@ -17,7 +17,7 @@ import logging
 import theano.tensor as T
 import theano.compat.six as six
 # internal references
-from opendeep import cast_floatX
+from opendeep import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -87,13 +87,13 @@ def rectifier(x):
         which is faster than max(0,x)
         See https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
     """
-    # return T.maximum(cast_floatX(0), x)
+    # return T.maximum(as_floatX(0), x)
     # below fix is taken from Lasagne framework:
     # https://github.com/benanne/Lasagne/blob/master/lasagne/nonlinearities.py
     # The following is faster than lambda x: T.maximum(0, x)
     # Thanks to @SnippyHolloW for pointing this out.
     # See: https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
-    return (x + abs(x)) / cast_floatX(2.0)
+    return (x + abs(x)) / as_floatX(2.0)
 
 def tanh(x):
     """

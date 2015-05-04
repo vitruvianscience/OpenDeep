@@ -35,7 +35,7 @@ from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
 from opendeep import sharedX, function, trunc
-from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
+from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST, get_subset_strings
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
@@ -185,14 +185,19 @@ class Optimizer(object):
         model_inputs = raise_to_list(self.model.get_inputs())
         model_targets = raise_to_list(self.model.get_targets())
         givens = None
-        if self.dataset.hasSubset(subset):
+        if self.dataset.getSubset(subset)[0] is not None:
             # grab the data and labels
             data, labels = self.dataset.getSubset(subset)
             # create the givens for the input function as pairs of (input_variable: sliced_data)
             givens = OrderedDict(zip(model_inputs, [data[batch_slice]]))
             # include labels as well if they are required by the model
             if model_targets is not None and len(model_targets) > 0:
+                if labels is None:
+                    log.error("No labels in the dataset!")
+                    raise AssertionError, "No lables in the dataset!"
                 givens.update(OrderedDict(zip(model_targets, [labels[batch_slice]])))
+        else:
+            log.warning("Dataset doesn't have subset %s" % get_subset_strings(subset))
 
         return givens
 
@@ -351,8 +356,8 @@ class Optimizer(object):
             train_functions.append(f_learn)
 
         # figure out if we want valid and test
-        self.valid_flag = self.dataset.hasSubset(VALID) and len(self.valid_monitors_dict) > 0
-        self.test_flag = self.dataset.hasSubset(TEST) and len(self.test_monitors_dict) > 0
+        self.valid_flag = (self.dataset.getSubset(VALID)[0] is not None) and (len(self.valid_monitors_dict) > 0)
+        self.test_flag = (self.dataset.getSubset(TEST)[0] is not None) and (len(self.test_monitors_dict) > 0)
         # Now compile the monitor functions!
         log.debug("Compiling monitor functions...")
         monitor_t = time.time()
@@ -394,9 +399,9 @@ class Optimizer(object):
                      str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch, str(continue_training))
 
             log.debug("Train dataset size is: %s", self.dataset.getDataShape(TRAIN))
-            if self.dataset.hasSubset(VALID):
+            if self.dataset.getSubset(VALID)[0] is not None:
                 log.debug("Valid dataset size is: %s", self.dataset.getDataShape(VALID))
-            if self.dataset.hasSubset(TEST):
+            if self.dataset.getSubset(TEST)[0] is not None:
                 log.debug("Test dataset size is: %s", self.dataset.getDataShape(TEST))
 
             self.STOP = False

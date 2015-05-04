@@ -1,3 +1,4 @@
+from __future__ import print_function
 from opendeep.models.single_layer.basic import SoftmaxLayer
 # import the dataset and optimizer to use
 from opendeep.data.dataset import TEST
@@ -28,11 +29,11 @@ if __name__ == '__main__':
     test_labels = test_labels[:25].eval()
     # use the run function!
     preds = s.run(test_data)
-    print '-------'
-    print preds
-    print test_labels.astype('int32')
-    print
-    print
+    print('-------')
+    print(preds)
+    print(test_labels.astype('int32'))
+    print()
+    print()
     del mnist
     del s
     del optimizer
@@ -53,9 +54,9 @@ if __name__ == '__main__':
     test_labels = test_labels[:5].eval()
     # use the run function!
     preds = s.run(test_data)
-    print '-------'
-    print preds
-    print test_labels.astype('int32')
+    print('-------')
+    print(preds)
+    print(test_labels.astype('int32'))
     del mnist
     del s
     del optimizer

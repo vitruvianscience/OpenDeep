@@ -1,12 +1,11 @@
+from __future__ import print_function
 # standard libraries
 import logging
 # third party libraries
 from opendeep.log.logger import config_root_logger
 from opendeep.models.container import Prototype
 from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
-from opendeep.tutorials.tutorial01b_modular_dae import DenoisingAutoencoder
 from opendeep.optimization.adadelta import AdaDelta
-from opendeep.optimization.adasecant import AdaSecant
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.data.dataset import TEST
 
@@ -58,9 +57,9 @@ def run_mlp():
     test_labels = test_labels[:25].eval()
     # use the run function!
     yhat = mlp.run(test_data)
-    print '-------'
-    print 'Prediction:', yhat
-    print 'Actual:    ', test_labels.astype('int32')
+    print('-------')
+    print('Prediction: %s' % str(yhat))
+    print('Actual:     %s' % str(test_labels.astype('int32')))
 
 
 

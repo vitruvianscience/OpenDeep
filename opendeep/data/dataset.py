@@ -1,10 +1,23 @@
 """
-.. module:: dataset
-
 Generic structure for a dataset, and common sub-classes to deal with files/urls or arrays from numpy/scipy (in memory).
+
+Attributes
+----------
+TRAIN : int
+    The integer representing the training dataset subset.
+VALID : int
+    The integer representing the validation dataset subset.
+TEST : int
+    The integer representing the testing dataset subset.
+
+.. todo:: Add large dataset support with database connections, numpy.memmap, h5py, pytables
+    (and in the future grabbing from pipelines like spark)
+
+.. todo:: Add methods for cleaning data, like normalizing to mean0 std1, or scaling to [min,max].
 """
 # TODO: add large dataset support with database connections, numpy.memmap, h5py, pytables
 # TODO: (and in the future grabbing from pipelines like spark)
+# TODO: Add methods for cleaning data, like normalizing to mean0 std1, or scaling to [min,max].
 
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -32,6 +45,19 @@ VALID = 1
 TEST  = 2
 
 def get_subset_strings(subset):
+    """
+    Converts the subset integer to a string representation of TRAIN, VALID, or TEST.
+
+    Parameters
+    ----------
+    subset : int
+        The integer specifying the subset.
+
+    Returns
+    -------
+    str
+        The string representation of the subset.
+    """
     if subset is TRAIN:
         return 'TRAIN'
     elif subset is VALID:
@@ -41,94 +67,88 @@ def get_subset_strings(subset):
     else:
         return str(subset)
 
+
 class Dataset(object):
     '''
-    Default interface for a dataset object - a bunch of sources for an iterator to grab data from
+    Default interface for a dataset object. At minimum, a Dataset needs to implement getSubset() and getDataShape().
+    getSubset() returns the (input, label) pair of shared variables holding the specific subset of this dataset.
+    getDataShape() returns the list of (#examples, dimensionality) tuples for the given subset of this dataset, where
+    each tuple in the list could represent a sequence. If there are no sequences or the dataset is padded, it would
+    just return a single tuple.
     '''
-    def __init__(self):
-        pass
-
     def getSubset(self, subset):
         """
-        This method returns the entire shared variable for the subset.
+        This method returns the single tuple of (input_data, labels) shared variables holding the given subset.
 
-        :param subset: the subset TRAIN, VALID, or TEST
-        :type subset: integer
-        :return: tuple of theano shared variable holding the data and labels (or None if no labels)
-        :rtype: shared variable
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by this module's attributes.
+
+        Returns
+        -------
+        tuple
+            (x, y) tuple of shared variables holding the dataset inputs and labels. If there aren't any labels (it is
+            and unsupervised dataset), it should return (x, None).
+            If the subset doesn't exist, it should return (None, None)
         """
         log.critical('No getSubset method implemented for %s!', str(type(self)))
         raise NotImplementedError()
 
-    def hasSubset(self, subset):
-        '''
-        :param subset: integer
-        The integer representing the subset of the data to consider dataset.(TRAIN, VALID, or TEST)
-        :return: boolean
-        Whether or not this dataset has the given subset split
-        '''
-        if subset not in [TRAIN, VALID, TEST]:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return False
-        if subset is TRAIN:
-            return True
-        elif subset is VALID:
-            log.error("Don't know if valid exists!")
-            raise NotImplementedError("Don't know if valid exists!")
-        elif subset is TEST:
-            log.error("Don't know if test exists!")
-            raise NotImplementedError("Don't know if test exists!")
-        else:
-            return False
-
     def getDataShape(self, subset):
         '''
-        :return: tuple
-        Return the shape of this dataset's subset in a tuple where the first number is #examples N
-        '''
-        if subset not in [TRAIN, VALID, TEST]:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return (0, None)
-        if subset is TRAIN:
-            log.error("No training shape implemented")
-            raise NotImplementedError("No training shape implemented")
-        elif subset is VALID:
-            log.error("No valid shape implemented")
-            raise NotImplementedError("No valid shape implemented")
-        elif subset is TEST:
-            log.error("No test shape implemented")
-            raise NotImplementedError("No test shape implemented")
+        This method returns the shape (or list of shapes in the case of sequences) for the given subset of the data.
 
-    def scaleMeanZeroVarianceOne(self):
-        '''
-        Scale the dataset input vectors X to have a mean of 0 and variance of 1
-        :return: boolean
-        Whether successful
-        '''
-        log.critical('No scaleMeanZeroVarianceOne method implemented for %s', str(type(self)))
-        raise NotImplementedError()
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by this module's attributes.
 
-    def scaleMinMax(self, min, max):
+        Returns
+        -------
+        list(tuple) or tuple
+            The list of (#examples, dimensionality) tuples for the given subset of this dataset, where
+            each tuple in the list could represent a sequence. If there are no sequences or the dataset is padded,
+            it would just return a single tuple representing the shape of the subset.
         '''
-        Scale the dataset input vectors X to have a minimum and maximum
-        :param min: integer
-        Minimum value in input vector X
-        :param max: integer
-        Maximum value in input vector X
-        :return: boolean
-        Whether successful
-        '''
-        log.critical('No scaleMinMax method implemented for %s', str(type(self)))
+        log.critical('No getDataShape method implemented for %s!', str(type(self)))
         raise NotImplementedError()
 
 
 class FileDataset(Dataset):
     '''
-    Default interface for a file-based dataset object - a bunch of sources for an iterator to grab data from
+    Default interface for a file-based dataset object. Files should either exist in the dataset_dir or have
+    a downloadable source. Subclasses should implement the specific methods for extracting data from their
+    respective files.
+
+    Attributes
+    ----------
+    filename : str
+        The name of the file for the dataset.
+    source : str
+        The URL path for downloading the dataset (if applicable).
+    dataset_dir : str
+        The base path to the folder for containing the dataset filename.
+    dataset_location : str
+        The full path to the dataset on disk.
+    file_type : int
+        The integer representing the type of file for this dataset. The file_type integer is assigned by the
+        opendeep.utils.file_ops module.
     '''
     def __init__(self, filename=None, source=None, dataset_dir='../../datasets'):
-        super(FileDataset, self).__init__()
+        """
+        Creates a new FileDataset from the filename, source, and dataset_dir. It installs the file from the source
+        if it isn't found in the dataset_dir, and determines the filetype and full path location to the file.
 
+        Parameters
+        ----------
+        filename : str
+            The name of the file for the dataset.
+        source : str
+            The URL path for downloading the dataset (if applicable).
+        dataset_dir : str
+            The base path to the folder for containing the dataset filename.
+        """
         self.filename    = filename
         self.source      = source
         self.dataset_dir = dataset_dir
@@ -136,10 +156,17 @@ class FileDataset(Dataset):
         # install the dataset from source! (makes sure file is there and returns the type so you know how to read it)
         self.dataset_location, self.file_type = self.install()
 
-    # helper methods for installing dataset files
     def install(self):
         '''
-        Method to both download and extract the dataset from the internet (if there) or verify connection settings
+        Method to both download and extract the dataset from the internet (if applicable) or verify that the file
+        exists in the dataset_dir.
+
+        Returns
+        -------
+        str
+            The absolute path to the dataset location on disk.
+        int
+            The integer representing the file type for the dataset, as defined in the opendeep.utils.file_ops module.
         '''
         file_type = None
         if self.filename is not None:
@@ -218,7 +245,11 @@ class FileDataset(Dataset):
 
     def uninstall(self):
         '''
-        Method to delete dataset files from disk (if in file form)
+        Method to delete dataset files from its dataset_location on disk.
+
+        .. warning::
+            This method currently uses the shutil.rmtree method, which may be unsafe. A better bet would be to delete
+            the dataset yourself from disk.
         '''
         # TODO: Check if this shutil.rmtree is unsafe...
         log.info('Uninstalling (removing) dataset %s', self.dataset_location)
@@ -234,15 +265,30 @@ class FileDataset(Dataset):
             log.debug('dataset_location was not valid. It was %s', str(self.dataset_location))
         log.info('Uninstallation (removal) successful!')
 
+
 class MemoryDataset(Dataset):
     '''
-    Dataset object wrapper for something given in memory (numpy matrix, theano matrix)
+    Dataset object wrapper for something given in memory (numpy matrix, theano matrix). You pass the array_like objects
+    containing the subset inputs and labels, and the getSubset and getDataShape methods are automatically implemented.
+
+    Attributes
+    ----------
+    train_X : shared variable
+        The training input variables.
+    train_Y : shared variable
+        The training input labels.
+    valid_X : shared variable
+        The validation input variables.
+    valid_Y : shared variable
+        The validation input labels.
+    test_X : shared variable
+        The testing input variables.
+    test_Y : shared variable
+        The testing input labels.
     '''
 
     def __init__(self, train_X, train_Y=None, valid_X=None, valid_Y=None, test_X=None, test_Y=None):
         log.info('Wrapping matrix from memory')
-        super(self.__class__, self).__init__()
-
         # make sure the inputs are arrays
         train_X = numpy.array(train_X)
         self._train_shape = train_X.shape
@@ -280,6 +326,19 @@ class MemoryDataset(Dataset):
                 log.exception("COULD NOT CONVERT test_Y TO NUMPY ARRAY. EXCEPTION: %s", str(e))
 
     def getSubset(self, subset):
+        """
+        Returns the (x, y) pair of shared variables for the given train, validation, or test subset.
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            (x, y) tuple of shared variables holding the dataset input and label, or None if the subset doesn't exist.
+        """
         y = None
         if subset is TRAIN:
             if hasattr(self, 'train_Y'):
@@ -298,8 +357,17 @@ class MemoryDataset(Dataset):
 
     def getDataShape(self, subset):
         '''
-        :return: tuple
-        Return the shape of this dataset's subset in a tuple where the first number is #examples N
+        Returns the shape of the input data for the given subset
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            Return the shape of this dataset's subset in a (N, D) tuple where N=#examples and D=dimensionality
         '''
         if subset not in [TRAIN, VALID, TEST]:
             log.error('Subset %s not recognized!', get_subset_strings(subset))
