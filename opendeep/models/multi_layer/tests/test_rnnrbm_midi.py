@@ -1,7 +1,6 @@
-"""
-produce results from here:
-http://deeplearning.net/tutorial/rnnrbm.html
-"""
+# produce results from here:
+# http://deeplearning.net/tutorial/rnnrbm.html
+
 from __future__ import print_function
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams

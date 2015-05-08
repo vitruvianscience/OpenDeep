@@ -160,8 +160,11 @@ def get_activation_function(name):
 
     :raises: NotImplementedError
     """
+    # if the activation is None, return identity function (no activation)
+    if name is None:
+        return linear
     # return the function itself if it is a Callable
-    if callable(name):
+    elif callable(name):
         return name
     # otherwise if it is a string
     elif isinstance(name, six.string_types):

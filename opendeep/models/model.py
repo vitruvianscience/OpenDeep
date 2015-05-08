@@ -34,12 +34,13 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+
 class Model(object):
     """
     The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
     (which can be a combination of multiple models linked through input_hooks, hidden_hooks, and params_hooks).
 
-    Think of a Model like Legos - you can attach single pieces together as well as multi-piece units together.
+    Think of a :class:`Model` like Legos - you can attach single pieces together as well as multi-piece units together.
     The main vision of OpenDeep is to provide a lightweight, highly modular structure that makes creating and
     experimenting with new models as easy as possible. Much of current deep learning progress has come from
     combining multiple deep models together for complex tasks.
@@ -51,7 +52,8 @@ class Model(object):
     Attributes
     ----------
     args : dict
-        This is a dictionary containing all the input parameters that initialize the Model.
+        This is a dictionary containing all the input parameters that initialize the Model. Think of it
+        as the configuration for initializing a :class:`Model`.
     inputs_hook : tuple
         Tuple of (shape, input_variable) or None describing the inputs to use for this Model.
     hiddens_hook : tuple
@@ -72,6 +74,8 @@ class Model(object):
                  outdir=None,
                  **kwargs):
         """
+        Initialize a new Model.
+
         Your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
         to set your inputs and hidden representation in a modular fashion, allowing models to link together.
         inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
@@ -84,34 +88,29 @@ class Model(object):
         ----------
         inputs_hook : Tuple of (shape, variable)
             Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together (e.g. setting the Sigmoid model's input layer to the DAE's hidden layer gives a
-            newly supervised classification model). For now, you need to include the shape information (normally the
+            different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
+            newly supervised classification model). For now, it needs to include the shape information (normally the
             dimensionality of the input i.e. n_in).
-
         hiddens_hook : Tuple of (shape, variable)
             Routing information for the model to accept its hidden representation from elsewhere.
             This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
-            output layer gives the RNN-GSN model, a deep recurrent model.) For now, you need to include the shape
+            output layer gives the RNN-GSN model, a deep recurrent model.) For now, it needs to include the shape
             information (normally the dimensionality of the hiddens i.e. n_hidden).
-
         params_hook : List(theano shared variable)
             A list of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
             have two versions of the model that use the same parameters - such as a training model with dropout applied
             to layers and one without for testing, where the parameters are shared between the two.
-
         output_size : int or shape tuple
             The dimensionality of the output for this model. This is required for stacking models
             automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
             run the size from Theano's graph, so it needs to be explicit.
-
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-
         kwargs : dict
             This will be all the other left-over keyword parameters passed to the class as a
-            dictionary of {param: value}.
+            dictionary of {param: value}. These get created into `self.args` along with outdir and output_size.
         """
         log.info("Creating a new instance of %s", str(type(self)))
 
@@ -379,10 +378,8 @@ class Model(object):
         ----------
         starting_gradient : dictionary of {variable: known_gradient}, optional
             The starting, known gradients for parameters.
-
         cost : theano expression, optional
             The cost expression to use when calculating the gradients. Defaults to `get_train_cost()`.
-
         additional_cost : theano expression, optional
             Any additional cost to add to the gradient.
 
@@ -540,7 +537,6 @@ class Model(object):
         ------
         NotImplementedError
             If `get_params()` hasn't been implemented.
-
         AttributeError
             If a parameter isn't a SharedVariable.
         """
@@ -571,7 +567,6 @@ class Model(object):
         ----------
         param_values : list(array_like)
             List of theano/numpy arrays of values to use for the model parameters.
-
         borrow : bool
             Theano 'borrow' parameter for `set_value()` method on shared variables.
 

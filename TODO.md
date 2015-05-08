@@ -11,7 +11,7 @@ Models
 ======
 (also see opendeep.models.future package)
 
-* Modular RNN framework support, ideas from "How to Construct Deep Recurrent Neural Networks" http://arxiv.org/abs/1312.6026
+* Modular RNN framework support, ideas from "How to Construct Deep Recurrent Neural Networks" http://arxiv.org/abs/1312.6026  This framework is key for working with many other model types.
 * GRU and LSTM for RNN hidden unit as a mixin.
 * Memory networks http://arxiv.org/abs/1410.3916 and http://arxiv.org/abs/1503.08895
 * 1D convolutional networks (temporal cnn)
@@ -22,6 +22,7 @@ Models
 * Support for multiple inputs to a model
 * Maxout network
 * Deep Q Network
+* RL-NTM http://arxiv.org/abs/1505.00521
 
 Optimization
 ============
@@ -33,7 +34,8 @@ Optimization
 Misc
 ====
 * Visualization module! Support t-sne, activation maps, etc.
-* Regularization mixin for training costs - l1, l2
-* Log-likelihood measures.
+* Regularization mixin for training costs: l1, l2
+* Log-likelihood estimators.
 * Bayesian hyperparameter optimization
 * Monitor outservice to a database
+* Add the ability to create a Prototype from a config file.

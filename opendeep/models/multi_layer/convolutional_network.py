@@ -1,14 +1,15 @@
 """
-.. module:: convolutional_network
-
 This module provides the main Convolutional Neural Network multi-layer models.
 
-TO USE CUDNN WRAPPING, YOU MUST INSTALL THE APPROPRIATE .h and .so FILES FOR THEANO LIKE SO:
-http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
+.. note::
+
+    To use CuDNN wrapping, you must install the appropriate .h and .so files for theano as described here:
+    http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
+
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Weiguang Ding", "Ruoyan Wang", "Fei Mao", "Graham Taylor", "Markus Beissinger"]
+__credits__ = ["Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
 __email__ = "opendeep-dev@googlegroups.com"
@@ -54,27 +55,13 @@ class AlexNet(Model):
     Alex Krizhevsky, Ilya Sutskever, Geoffrey E. Hinton
     http://www.cs.toronto.edu/~fritz/absps/imagenet.pdf
 
-    Most of the code here is adapted from the authors listed in the license above, from the paper:
+    Most of the code here is adapted from the authors for the paper:
     'Theano-based large-scale visual recognition with multiple GPUs'
     Weiguang Ding & Ruoyan Wnag, Fei Mao, Graham Taylor
     http://arxiv.org/pdf/1412.2302.pdf
-
-    Copyright (c) 2014, Weiguang Ding, Ruoyan Wang, Fei Mao and Graham Taylor
-    All rights reserved.
-    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     """
-    defaults = {  # data stuff
-                  "use_data_layer": False,
-                  "rand_crop": True,
-                  "batch_size": 256,  # convolutional nets are particular about the batch size
-                  "output_path": '/outputs/alexnet/'
-    }
-    def __init__(self, config=None, defaults=defaults, inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 use_data_layer=None, rand_crop=None, batch_size=None):
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 use_data_layer=False, rand_crop=True, batch_size=256, outdir='outputs/alexnet/'):
         # combine everything by passing to Model's init
         super(AlexNet, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # configs can now be accessed through self dictionary

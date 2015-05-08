@@ -1,10 +1,11 @@
 """
-.. module:: convolutional
+This module provides the base convolutional layers.
 
-This module provides the layers necessary for convolutional nets.
+.. note::
 
-TO USE CUDNN WRAPPING, YOU MUST INSTALL THE APPROPRIATE .h and .so FILES FOR THEANO LIKE SO:
-http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
+    To use CuDNN wrapping, you must install the appropriate .h and .so files for theano as described here:
+    http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
+
 """
 
 __authors__ = "Markus Beissinger"
@@ -21,13 +22,12 @@ import numpy
 import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
-import theano.compat.six as six
 # internal references
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
+from opendeep.utils.conv1d_implementations import get_conv1d_function
+from opendeep.utils.decorators import doc
 from opendeep.utils.nnet import get_weights, get_weights_gaussian, get_bias, cross_channel_normalization_bc01
-from opendeep.utils.conv1d_implementations import conv1d_mc0
-
 
 log = logging.getLogger(__name__)
 
@@ -59,53 +59,102 @@ if theano.config.optimizer_including != "conv_meta":
 
 class Conv1D(Model):
     """
-    A 1-dimensional convolution (taken from Sander Dieleman's Lasagne framework)
+    A 1-dimensional convolutional layer (taken from Sander Dieleman's Lasagne framework)
     (https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py)
+
+    This means the input is a 3-dimensional tensor of form (batch, channel, input)
     """
-    defaults = {
-        "border_mode": "valid",
-        "weights_init": "uniform",
-        'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-        'weights_mean': 0,  # mean for gaussian weights init
-        'weights_std': 0.005,  # standard deviation for gaussian weights init
-        'bias_init': 0.0,  # how to initialize the bias parameter
-        "activation": 'rectifier',
-        "convolution": conv1d_mc0,
-        'outdir': 'outputs/conv1d'  # the output directory for this model's outputs
-    }
-    def __init__(self, config=None, defaults=defaults,
-                 inputs_hook=None, params_hook=None,
-                 input_shape=None, filter_shape=None, stride=None, border_mode=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
-                 bias_init=None,
-                 activation=None,
-                 convolution=None,
-                 outdir=None):
-        # combine everything by passing to Model's init
+    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv1d',
+                 input_shape=None, filter_shape=None, stride=None, border_mode='valid',
+                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 bias_init=0,
+                 activation='rectifier',
+                 convolution='mc0'):
+        """
+        Initialize a 1-D convolutional layer.
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together. For now, it needs to include the shape information.
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables).
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        input_shape : tuple
+            Shape of the incoming data: (batch_size, num_channels, data_dimensionality). Most likely, your channels
+            will be 1. For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
+            D=dimensionality (chars, words, etc.)
+        filter_shape : tuple
+            (num_filters, num_channels, filter_length). This is also the shape of the weights matrix.
+        stride : int
+            The distance between the receptive field centers of neighboring units. This is the 'stride' of the
+            convolution operation.
+        border_mode : str, one of 'valid', 'full', 'same'
+            A string indicating the convolution border mode.
+            If 'valid', the convolution is only computed where the input and the
+            filter fully overlap.
+            If 'full', the convolution is computed wherever the input and the
+            filter overlap by at least one position.
+            If 'same', the convolution is computed wherever the input and the
+            filter overlap by at least half the filter size, when the filter size
+            is odd. In practice, the input is zero-padded with half the filter size
+            at the beginning and half at the end (or one less than half in the case
+            of an even filter size). This results in an output length that is the
+            same as the input length (for both odd and even filter sizes).
+        weights_init : str
+            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+        weights_interval : str or float
+            If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        weights_mean : float
+            If Gaussian `weights_init`, the mean value to use.
+        weights_std : float
+            If Gaussian `weights_init`, the standard deviation to use.
+        bias_init : float
+            The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
+        activation : str or Callable
+            The activation function to apply to the layer. See opendeep.utils.activation for options.
+        convolution : str or Callable
+            The 1-dimensional convolution implementation to use. The default of 'mc0' is normally fine. See
+            opendeep.utils.conv1d_implementations for alternatives. (This is necessary because Theano only
+            supports 2D convolutions at the moment).
+
+        Notes
+        -----
+        Theano's default convolution function (`theano.tensor.nnet.conv.conv2d`)
+        does not support the 'same' border mode by default. This layer emulates
+        it by performing a 'full' convolution and then cropping the result, which
+        may negatively affect performance.
+        """
         super(Conv1D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
-        # configs can now be accessed through self dictionary
 
         ##################
         # specifications #
         ##################
         # grab info from the inputs_hook, or from parameters
         # expect input to be in the form (B, C, I) (batch, channel, input data)
-        #  inputs_hook is a tuple of (Shape, Input)
+        # inputs_hook is a tuple of (Shape, Input)
         if self.inputs_hook is not None:
             # make sure inputs_hook is a tuple
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            self.input_shape = inputs_hook[0] or self.input_shape
+            input_shape = inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
             self.input = T.ftensor3('X')
 
         # activation function!
-        activation_func = get_activation_function(self.activation)
+        activation_func = get_activation_function(activation)
+
+        # convolution function!
+        convolution_func = get_conv1d_function(convolution)
 
         # filter shape should be in the form (num_filters, num_channels, filter_length)
-        num_filters = self.filter_shape[0]
-        filter_length = self.filter_shape[2]
+        num_filters = filter_shape[0]
+        filter_length = filter_shape[2]
 
         ################################################
         # Params - make sure to deal with params_hook! #
@@ -116,16 +165,16 @@ class Conv1D(Model):
                 "Expected 2 params (W and b) for Conv1D, found {0!s}!".format(len(self.params_hook))
             W, b = self.params_hook
         else:
-            W = get_weights(weights_init=self.weights_init,
-                            shape=self.filter_shape,
+            W = get_weights(weights_init=weights_init,
+                            shape=filter_shape,
                             name="W",
                             # if gaussian
-                            mean=self.weights_mean,
-                            std=self.weights_std,
+                            mean=weights_mean,
+                            std=weights_std,
                             # if uniform
-                            interval=self.weights_interval)
+                            interval=weights_interval)
 
-            b = get_bias(shape=(num_filters,), name="b", init_values=self.bias_init)
+            b = get_bias(shape=(num_filters,), name="b", init_values=bias_init)
 
         # Finally have the two parameters!
         self.params = [W, b]
@@ -133,70 +182,116 @@ class Conv1D(Model):
         ########################
         # Computational Graph! #
         ########################
-        if self.border_mode in ['valid', 'full']:
-            conved = convolution(self.input,
-                                 W,
-                                 subsample=(self.stride,),
-                                 image_shape=self.input_shape,
-                                 filter_shape=self.filter_shape,
-                                 border_mode=self.border_mode)
-        elif self.border_mode == 'same':
-            conved = convolution(self.input,
-                                 W,
-                                 subsample=(self.stride,),
-                                 image_shape=self.input_shape,
-                                 filter_shape=self.filter_shape,
-                                 border_mode='full')
+        if border_mode in ['valid', 'full']:
+            conved = convolution_func(self.input,
+                                      W,
+                                      subsample=(stride,),
+                                      image_shape=input_shape,
+                                      filter_shape=filter_shape,
+                                      border_mode=border_mode)
+        elif border_mode == 'same':
+            conved = convolution_func(self.input,
+                                      W,
+                                      subsample=(stride,),
+                                      image_shape=input_shape,
+                                      filter_shape=filter_shape,
+                                      border_mode='full')
             shift = (filter_length - 1) // 2
-            conved = conved[:, :, shift:self.input_shape[2] + shift]
+            conved = conved[:, :, shift:input_shape[2] + shift]
 
         else:
-            log.error("Invalid border mode: '%s'" % self.border_mode)
-            raise RuntimeError("Invalid border mode: '%s'" % self.border_mode)
+            log.error("Invalid border mode: '%s'" % border_mode)
+            raise RuntimeError("Invalid border mode: '%s'" % border_mode)
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x'))
 
+    @doc
     def get_inputs(self):
         return [self.input]
 
+    @doc
     def get_outputs(self):
         return self.output
 
+    @doc
     def get_params(self):
         return self.params
 
+    @doc
     def save_args(self, args_file="conv1d_config.pkl"):
         super(Conv1D, self).save_args(args_file)
 
 
 class Conv2D(Model):
     """
-    A 2-dimensional convolution (taken from Sander Dieleman's Lasagne framework)
+    A 2-dimensional convolutional layer (taken from Sander Dieleman's Lasagne framework)
     (https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py)
     """
-    defaults = {
-        "border_mode": "valid",
-        "weights_init": "uniform",
-        'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-        'weights_mean': 0,  # mean for gaussian weights init
-        'weights_std': 0.005,  # standard deviation for gaussian weights init
-        'bias_init': 0.0,  # how to initialize the bias parameter
-        "activation": 'rectifier',
-        # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
-        "convolution": T.nnet.conv2d,
-        'outdir': 'outputs/conv2d'  # the output directory for this model's outputs
-    }
-    def __init__(self, config=None, defaults=defaults,
-                 inputs_hook=None, params_hook=None,
-                 input_shape=None, filter_shape=None, strides=None, border_mode=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
-                 bias_init=None,
-                 activation=None,
-                 convolution=None,
-                 outdir=None):
-        # combine everything by passing to Model's init
+    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv2d',
+                 input_shape=None, filter_shape=None, strides=None, border_mode='valid',
+                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 bias_init=0,
+                 activation='rectifier',
+                 convolution='conv2d'):
+        """
+        Initialize a 2-dimensional convolutional layer.
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together. For now, it needs to include the shape information.
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables).
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        input_shape : tuple
+            Shape of the incoming data: (batch_size, num_channels, input_height, input_width).
+        filter_shape : tuple
+            (num_filters, num_channels, filter_height, filter_width). This is also the shape of the weights matrix.
+        stride : int
+            The distance between the receptive field centers of neighboring units. This is the 'stride' of the
+            convolution operation.
+        border_mode : str, one of 'valid', 'full', 'same'
+            A string indicating the convolution border mode.
+            If 'valid', the convolution is only computed where the input and the
+            filter fully overlap.
+            If 'full', the convolution is computed wherever the input and the
+            filter overlap by at least one position.
+            If 'same', the convolution is computed wherever the input and the
+            filter overlap by at least half the filter size, when the filter size
+            is odd. In practice, the input is zero-padded with half the filter size
+            at the beginning and half at the end (or one less than half in the case
+            of an even filter size). This results in an output length that is the
+            same as the input length (for both odd and even filter sizes).
+        weights_init : str
+            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+        weights_interval : str or float
+            If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        weights_mean : float
+            If Gaussian `weights_init`, the mean value to use.
+        weights_std : float
+            If Gaussian `weights_init`, the standard deviation to use.
+        bias_init : float
+            The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
+        activation : str or Callable
+            The activation function to apply to the layer. See opendeep.utils.activation for options.
+        convolution : str or Callable
+            The 2-dimensional convolution implementation to use. The default of 'conv2d' is normally fine because it
+            uses theano's tensor.nnet.conv.conv2d, which cherry-picks the best implementation with a meta-optimizer if
+            you set the theano configuration flag 'optimizer_including=conv_meta'. Otherwise, you could pass a
+            callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer.
+
+        Notes
+        -----
+        Theano's default convolution function (`theano.tensor.nnet.conv.conv2d`)
+        does not support the 'same' border mode by default. This layer emulates
+        it by performing a 'full' convolution and then cropping the result, which
+        may negatively affect performance.
+        """
         super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
-        # configs can now be accessed through self!
 
         ##################
         # specifications #
@@ -207,18 +302,26 @@ class Conv2D(Model):
         if self.inputs_hook:
             # make sure inputs_hook is a tuple
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            self.input_shape = inputs_hook[0] or self.input_shape
+            input_shape = inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
             self.input = T.ftensor4('X')
 
         # activation function!
-        activation_func = get_activation_function(self.activation)
+        activation_func = get_activation_function(activation)
+
+        # convolution function!
+        if convolution == 'conv2d':
+            # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+            convolution_func = T.nnet.conv2d
+        else:
+            assert callable(convolution), "Input convolution was not 'conv2d' and was not Callable."
+            convolution_func = convolution
 
         # filter shape should be in the form (num_filters, num_channels, filter_size[0], filter_size[1])
-        num_filters = self.filter_shape[0]
-        filter_size = self.filter_shape[2:3]
+        num_filters = filter_shape[0]
+        filter_size = filter_shape[2:3]
 
         ################################################
         # Params - make sure to deal with params_hook! #
@@ -229,16 +332,16 @@ class Conv2D(Model):
                 "Expected 2 params (W and b) for Conv2D, found {0!s}!".format(len(self.params_hook))
             W, b = self.params_hook
         else:
-            W = get_weights(weights_init=self.weights_init,
-                            shape=self.filter_shape,
+            W = get_weights(weights_init=weights_init,
+                            shape=filter_shape,
                             name="W",
                             # if gaussian
-                            mean=self.weights_mean,
-                            std=self.weights_std,
+                            mean=weights_mean,
+                            std=weights_std,
                             # if uniform
-                            interval=self.weights_interval)
+                            interval=weights_interval)
 
-            b = get_bias(shape=(num_filters, ), name="b", init_values=self.bias_init)
+            b = get_bias(shape=(num_filters, ), name="b", init_values=bias_init)
 
         # Finally have the two parameters!
         self.params = [W, b]
@@ -246,38 +349,42 @@ class Conv2D(Model):
         ########################
         # Computational Graph! #
         ########################
-        if self.border_mode in ['valid', 'full']:
-            conved = convolution(self.input,
-                                 W,
-                                 subsample=self.strides,
-                                 image_shape=self.input_shape,
-                                 filter_shape=self.filter_shape,
-                                 border_mode=self.border_mode)
-        elif self.border_mode == 'same':
-            conved = convolution(self.input,
-                                 W,
-                                 subsample=self.strides,
-                                 image_shape=self.input_shape,
-                                 filter_shape=self.filter_shape,
-                                 border_mode='full')
+        if border_mode in ['valid', 'full']:
+            conved = convolution_func(self.input,
+                                      W,
+                                      subsample=strides,
+                                      image_shape=input_shape,
+                                      filter_shape=filter_shape,
+                                      border_mode=border_mode)
+        elif border_mode == 'same':
+            conved = convolution_func(self.input,
+                                      W,
+                                      subsample=strides,
+                                      image_shape=input_shape,
+                                      filter_shape=filter_shape,
+                                      border_mode='full')
             shift_x = (filter_size[0] - 1) // 2
             shift_y = (filter_size[1] - 1) // 2
-            conved = conved[:, :, shift_x:self.input_shape[2] + shift_x,
-                            shift_y:self.input_shape[3] + shift_y]
+            conved = conved[:, :, shift_x:input_shape[2] + shift_x,
+                            shift_y:input_shape[3] + shift_y]
         else:
-            raise RuntimeError("Invalid border mode: '%s'" % self.border_mode)
+            raise RuntimeError("Invalid border mode: '%s'" % border_mode)
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x', 'x'))
 
+    @doc
     def get_inputs(self):
         return [self.input]
 
+    @doc
     def get_outputs(self):
         return self.output
 
+    @doc
     def get_params(self):
         return self.params
 
+    @doc
     def save_args(self, args_file="conv2d_config.pkl"):
         super(Conv2D, self).save_args(args_file)
 
@@ -285,100 +392,121 @@ class Conv2D(Model):
 class Conv3D(Model):
     """
     A 3-dimensional convolution layer
-    """
-    defaults = {
-        "border_mode": "valid",
-        "weights_init": "uniform",
-        'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-        'weights_mean': 0,  # mean for gaussian weights init
-        'weights_std': 0.005,  # standard deviation for gaussian weights init
-        'bias_init': 0.0,  # how to initialize the bias parameter
-        "activation": 'rectifier',
-        # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
-        "convolution": T.nnet.conv3D,
-        'outdir': 'outputs/conv3d'  # the output directory for this model's outputs
-    }
 
+    .. todo:: Implement me!
+    """
     def __init__(self):
         log.error("Conv3D not implemented yet.")
-        super(Conv3D, self).__init__()
         raise NotImplementedError("Conv3D not implemented yet.")
 
 
 class ConvPoolLayer(Model):
     """
-    This is the ConvPoolLayer used for an AlexNet implementation.
-
-    Copyright (c) 2014, Weiguang Ding, Ruoyan Wang, Fei Mao and Graham Taylor
-    All rights reserved.
-    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+    This is the ConvPoolLayer used for an AlexNet implementation. It combines a 2D convolution with pooling.
     """
-    defaults = {
-        'filter_shape': (96, 3, 11, 11),  # bc01
-        'convstride': 4,
-        'padsize': 0,
-        'group': 1,
-        'poolsize': 3,
-        'poolstride': 2,
-        'bias_init': 0,
-        'local_response_normalization': False,
-        'convolution': T.nnet.conv2d,
-        'activation': 'rectifier',
-        "weights_init": "gaussian",
-        'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-        'weights_mean': 0,  # mean for gaussian weights init
-        'weights_std': 0.01,  # standard deviation for gaussian weights init
-        'outdir': 'outputs/convpool'  # the output directory for this model's outputs
-    }
-    def __init__(self, config=None, defaults=defaults,
-                 inputs_hook=None, params_hook=None,
-                 input_shape=None, filter_shape=None, convstride=None, padsize=None, group=None,
-                 poolsize=None, poolstride=None,
-                 weights_init=None, weights_interval=None, weights_mean=None, weights_std=None,
-                 bias_init=None,
-                 local_response_normalization=None,
-                 convolution=None,
-                 activation=None,
-                 outdir=None):
-        # combine everything by passing to Model's init
+    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/convpool',
+                 input_shape=None, filter_shape=None, convstride=4, padsize=0, group=1,
+                 poolsize=3, poolstride=2,
+                 weights_init='gaussian', weights_interval='montreal', weights_mean=0, weights_std=.01,
+                 bias_init=0,
+                 local_response_normalization=False,
+                 convolution='conv2d',
+                 activation='rectifier'):
+        """
+        Initialize a convpool layer.
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together. For now, it needs to include the shape information.
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables).
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        input_shape : tuple
+            Shape of the incoming data: (batch_size, num_channels, input_height, input_width).
+        filter_shape : tuple
+            (num_filters, num_channels, filter_height, filter_width). This is also the shape of the weights matrix.
+        convstride : int
+            The distance between the receptive field centers of neighboring units. This is the 'subsample' of theano's
+            convolution operation.
+        padsize : int
+            This is the border_mode for theano's convolution operation.
+        group : int
+            Not yet supported, used for multi-gpu implementation.
+            .. todo:: support multi-gpu
+        poolsize : int
+            How much to downsample the output.
+        poolstride : int
+            The stride width for downsampling the output.
+        weights_init : str
+            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+        weights_interval : str or float
+            If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        weights_mean : float
+            If Gaussian `weights_init`, the mean value to use.
+        weights_std : float
+            If Gaussian `weights_init`, the standard deviation to use.
+        bias_init : float
+            The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
+        activation : str or Callable
+            The activation function to apply to the layer. See opendeep.utils.activation for options.
+        convolution : str or Callable
+            The 2-dimensional convolution implementation to use. The default of 'conv2d' is normally fine because it
+            uses theano's tensor.nnet.conv.conv2d, which cherry-picks the best implementation with a meta-optimizer if
+            you set the theano configuration flag 'optimizer_including=conv_meta'. Otherwise, you could pass a
+            callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer.
+        """
         super(ConvPoolLayer, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
-        # configs can now be accessed through self!
 
         # deal with the inputs coming from inputs_hook - necessary for now to give an input hook
         # inputs_hook is a tuple of (Shape, Input)
         if self.inputs_hook:
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            self.input_shape = self.inputs_hook[0] or self.input_shape
+            input_shape = self.inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             self.input = T.ftensor4("X")
+
+        self.group = group
 
         #######################
         # layer configuration #
         #######################
         # activation function!
-        self.activation_func = get_activation_function(self.activation)
+        self.activation_func = get_activation_function(activation)
+
+        # convolution function!
+        if convolution == 'conv2d':
+            # using the theano flag optimizer_including=conv_meta will let this conv function optimize itself.
+            self.convolution_func = T.nnet.conv2d
+        else:
+            assert callable(convolution), "Input convolution was not 'conv2d' and was not Callable."
+            self.convolution_func = convolution
 
         # expect image_shape to be bc01!
-        self.channel = self.input_shape[1]
+        self.channel = input_shape[1]
 
-        # shortening a word
-        self.lrn = self.local_response_normalization
+        self.convstride = convstride
+        self.padsize = padsize
+
+        self.poolstride = poolstride
+        self.poolsize = poolsize
 
         # if lib_conv is cudnn, it works only on square images and the grad works only when channel % 16 == 0
 
         assert self.group in [1, 2], "group argument needs to be 1 or 2 (1 for default conv2d)"
 
-        self.filter_shape = numpy.asarray(self.filter_shape)
-        self.input_shape = numpy.asarray(self.input_shape)
+        filter_shape = numpy.asarray(filter_shape)
+        input_shape = numpy.asarray(input_shape)
 
-        if self.lrn:
-            self.lrn_func = cross_channel_normalization_bc01
+        if local_response_normalization:
+            lrn_func = cross_channel_normalization_bc01
+        else:
+            lrn_func = None
 
         ################################################
         # Params - make sure to deal with params_hook! #
@@ -390,63 +518,63 @@ class ConvPoolLayer(Model):
                     "Expected 2 params (W and b) for ConvPoolLayer, found {0!s}!".format(len(self.params_hook))
                 self.W, self.b = self.params_hook
             else:
-                self.W = get_weights(weights_init=self.weights_init,
-                                     shape=self.filter_shape,
+                self.W = get_weights(weights_init=weights_init,
+                                     shape=filter_shape,
                                      name="W",
                                      # if gaussian
-                                     mean=self.weights_mean,
-                                     std=self.weights_std,
+                                     mean=weights_mean,
+                                     std=weights_std,
                                      # if uniform
-                                     interval=self.weights_interval)
+                                     interval=weights_interval)
 
-                self.b = get_bias(shape=self.filter_shape[0], init_values=self.bias_init, name="b")
+                self.b = get_bias(shape=filter_shape[0], init_values=bias_init, name="b")
 
             self.params = [self.W, self.b]
 
         else:
-            self.filter_shape[0] = self.filter_shape[0] / 2
-            self.filter_shape[1] = self.filter_shape[1] / 2
+            filter_shape[0] = filter_shape[0] / 2
+            filter_shape[1] = filter_shape[1] / 2
 
-            self.input_shape[0] = self.input_shape[0] / 2
-            self.input_shape[1] = self.input_shape[1] / 2
+            input_shape[0] = input_shape[0] / 2
+            input_shape[1] = input_shape[1] / 2
             if self.params_hook:
                 assert len(self.params_hook) == 4, "expected params_hook to have 4 params"
                 self.W0, self.W1, self.b0, self.b1 = self.params_hook
             else:
-                self.W0 = get_weights_gaussian(shape=self.filter_shape, name="W0")
-                self.W1 = get_weights_gaussian(shape=self.filter_shape, name="W1")
-                self.b0 = get_bias(shape=self.filter_shape[0], init_values=self.bias_init, name="b0")
-                self.b1 = get_bias(shape=self.filter_shape[0], init_values=self.bias_init, name="b1")
+                self.W0 = get_weights_gaussian(shape=filter_shape, name="W0")
+                self.W1 = get_weights_gaussian(shape=filter_shape, name="W1")
+                self.b0 = get_bias(shape=filter_shape[0], init_values=bias_init, name="b0")
+                self.b1 = get_bias(shape=filter_shape[0], init_values=bias_init, name="b1")
             self.params = [self.W0, self.b0, self.W1, self.b1]
 
         #############################################
         # build appropriate graph for conv. version #
         #############################################
-        self.output = self.build_computation_graph()
+        self.output = self._build_computation_graph()
 
         # Local Response Normalization (for AlexNet)
-        if self.lrn:
-            self.output = self.lrn_func(self.output)
+        if local_response_normalization and lrn_func is not None:
+            self.output = lrn_func(self.output)
 
-        log.debug("convpool layer initialized with shape_in: %s", str(self.input_shape))
+        log.debug("convpool layer initialized with shape_in: %s", str(input_shape))
 
-    def build_computation_graph(self):
+    def _build_computation_graph(self):
         if self.group == 1:
-            conv_out = self.convolution(img=self.input,
+            conv_out = self.convolution_func(img=self.input,
                                         kerns=self.W,
                                         subsample=(self.convstride, self.convstride),
                                         border_mode=(self.padsize, self.padsize))
             conv_out = conv_out + self.b.dimshuffle('x', 0, 'x', 'x')
 
         else:
-            conv_out0 = self.convolution(img=self.input[:, :self.channel / 2, :, :],
+            conv_out0 = self.convolution_func(img=self.input[:, :self.channel / 2, :, :],
                                          kerns=self.W0,
                                          subsample=(self.convstride, self.convstride),
                                          border_mode=(self.padsize, self.padsize))
             conv_out0 = conv_out0 + self.b0.dimshuffle('x', 0, 'x', 'x')
 
 
-            conv_out1 = self.convolution(img=self.input[:, self.channel / 2:, :, :],
+            conv_out1 = self.convolution_func(img=self.input[:, self.channel / 2:, :, :],
                                          kerns=self.W1,
                                          subsample=(self.convstride, self.convstride),
                                          border_mode=(self.padsize, self.padsize))
@@ -467,17 +595,20 @@ class ConvPoolLayer(Model):
                 output = downsample.max_pool_2d(output,
                                                 ds=(self.poolsize, self.poolsize),
                                                 st=(self.poolstride, self.poolstride))
-
         return output
 
+    @doc
     def get_inputs(self):
         return [self.input]
 
+    @doc
     def get_outputs(self):
         return self.output
 
+    @doc
     def get_params(self):
         return self.params
 
+    @doc
     def save_args(self, args_file="convpool_config.pkl"):
         super(ConvPoolLayer, self).save_args(args_file)

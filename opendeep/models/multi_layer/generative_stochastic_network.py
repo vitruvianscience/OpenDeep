@@ -48,7 +48,7 @@ from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils.cost import get_cost_function
 from opendeep.utils.misc import closest_to_square_factors, make_time_units_string, raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias
-from opendeep.utils.noise import salt_and_pepper, add_gaussian
+from opendeep.utils.noise import get_noise
 from opendeep.utils.image import tile_raster_images
 
 log = logging.getLogger(__name__)
@@ -72,18 +72,21 @@ _defaults = {# gsn parameters
             'bias_init': 0.0,  # how to initialize the bias parameter
             # train param
             "cost_function": 'binary_crossentropy',  # the cost function for training; make appropriate for input type.
+            "cost_args": {},
             # noise parameters
             "noise_decay": 'exponential',  # noise schedule algorithm
             "noise_annealing": 1.0,  # no noise schedule by default
             "add_noise": True,  # whether to add noise throughout the network's hidden layers
             "noiseless_h1": True,  # whether to keep the first hidden layer uncorrupted
-            "hidden_add_noise_sigma": 2,  # sigma value for adding the gaussian hidden layer noise
-            "input_salt_and_pepper": 0.4,  # the salt and pepper value for inputs corruption
+            'hidden_noise': 'gaussian',
+            "hidden_noise_level": 2,  # sigma value for adding the gaussian hidden layer noise
+            'input_noise': 'salt_and_pepper',
+            "input_noise_level": 0.4,  # the salt and pepper value for inputs corruption
             # data parameters
             "outdir": 'outputs/gsn/',  # base directory to output various files
             "image_width": None,  # if the input is an image, its width
             "image_height": None,  # if the input is an image, its height
-            "vis_init": False}
+            }
 
 class GSN(Model):
     '''
@@ -98,12 +101,12 @@ class GSN(Model):
                  tied_weights=True,
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0.0,
-                 cost_function='binary_crossentropy',
+                 cost_function='binary_crossentropy', cost_args=None,
                  noise_decay='exponential', noise_annealing=1,
-                 add_noise=True, noiseless_h1=True, hidden_add_noise_sigma=2, input_salt_and_pepper=0.4,
+                 add_noise=True, noiseless_h1=True,
+                 hidden_noise='gaussian', hidden_noise_level=2, input_noise='salt_and_pepper', input_noise_level=0.4,
                  outdir='outputs/gsn/',
                  image_width=None, image_height=None,
-                 vis_init=False,
                  **kwargs):
         # the GSN is an unsupervised model, so its output size is the same as the input size. This means we need
         # to first determine the input size.
@@ -166,9 +169,11 @@ class GSN(Model):
                             'Generaly want 2X walkbacks to layers',
                             str(self.layers), str(self.walkbacks))
 
-        self.noise_annealing        = as_floatX(self.noise_annealing)  # noise schedule parameter
-        self.hidden_add_noise_sigma = sharedX(as_floatX(self.hidden_add_noise_sigma))
-        self.input_salt_and_pepper  = sharedX(as_floatX(self.input_salt_and_pepper))
+        self.noise_annealing = as_floatX(self.noise_annealing)  # noise schedule parameter
+        self.hidden_noise_level = sharedX(as_floatX(hidden_noise_level))
+        self.hidden_noise = get_noise(name=hidden_noise, noise_level=self.hidden_noise_level, mrg=mrg)
+        self.input_noise_level = sharedX(as_floatX(input_noise_level))
+        self.input_noise = get_noise(name=input_noise, noise_level=self.input_noise_level, mrg=mrg)
 
         # if there was a hiddens_hook, unpack the hidden layers in the tensor
         if self.hiddens_hook is not None:
@@ -207,6 +212,7 @@ class GSN(Model):
 
         # Cost function
         self.cost_function = get_cost_function(self.cost_function)
+        self.cost_args = cost_args or dict()
 
         ###############
         # Parameters! #
@@ -269,36 +275,34 @@ class GSN(Model):
         #################
         log.debug("Building GSN graphs...")
 
-        # GSN for training - with noise
-        add_noise = self.add_noise
+        # GSN for training - with noise specified in initialization
         # if there is no hiddens_hook, build the GSN normally using the input X
         if not self.hiddens_flag:
-            p_X_chain, _ = self.build_gsn(add_noise=add_noise)
+            p_X_chain, _ = self.build_gsn(add_noise=self.add_noise)
 
         # if there is a hiddens_hook, we want to change the order layers are updated and make this purely
         # generative from the hiddens
         else:
-            p_X_chain, _,  = self.build_gsn(hiddens=self.hiddens, add_noise=add_noise, reverse=True)
+            p_X_chain, _,  = self.build_gsn(hiddens=self.hiddens, add_noise=self.add_noise, reverse=True)
 
         # GSN for prediction - same as above but no noise
-        add_noise = False
         # deal with hiddens_hook exactly as above.
         if not self.hiddens_flag:
-            p_X_chain_recon, recon_hiddens = self.build_gsn(add_noise=add_noise)
+            p_X_chain_recon, recon_hiddens = self.build_gsn(add_noise=False)
         else:
-            p_X_chain_recon, recon_hiddens = self.build_gsn(hiddens=self.hiddens, add_noise=add_noise, reverse=True)
+            p_X_chain_recon, recon_hiddens = self.build_gsn(hiddens=self.hiddens, add_noise=False, reverse=True)
 
         ####################
         # Costs and output #
         ####################
         log.debug('Cost w.r.t p(X|...) at every step in the graph for the GSN')
         # use the noisy ones for training cost
-        costs          = [self.cost_function(rX, self.X) for rX in p_X_chain]
+        costs          = [self.cost_function(input=rX, target=self.X, **self.cost_args) for rX in p_X_chain]
         self.show_cost = costs[-1]  # for a monitor to show progress
         cost           = numpy.sum(costs)  # THIS IS THE TRAINING COST - RECONSTRUCTION OF OUTPUT FROM NOISY GRAPH
 
         # use the non-noisy graph for prediction
-        gsn_costs_recon = [self.cost_function(rX, self.X) for rX in p_X_chain_recon]
+        gsn_costs_recon = [self.cost_function(input=rX, target=self.X, **self.cost_args) for rX in p_X_chain_recon]
         # another monitor, same as self.show_cost but on the non-noisy graph.
         self.monitor    = gsn_costs_recon[-1]
         # this should be considered the main output of the computation, the sample after the
@@ -354,7 +358,7 @@ class GSN(Model):
         # input to f_run)
         log.debug("f_noise...")
         self.f_noise = function(inputs  = [self.X],
-                                outputs = salt_and_pepper(self.X, self.input_salt_and_pepper, self.mrg),
+                                outputs = self.input_noise(self.X),
                                 name    = 'gsn_f_noise')
 
         # the sampling function, for creating lots of samples from the computational graph. (mostly for log-likelihood
@@ -383,7 +387,7 @@ class GSN(Model):
         p_X_chain = []
         # Whether or not to corrupt the visible input X
         if add_noise:
-            X_init = salt_and_pepper(self.X, self.input_salt_and_pepper, self.mrg)
+            X_init = self.input_noise(self.X)
         else:
             X_init = self.X
 
@@ -480,7 +484,7 @@ class GSN(Model):
         # pre activation noise
         if layer_idx != 0 and add_noise:
             log.debug('Adding pre-activation gaussian noise for layer %s', str(layer_idx))
-            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], noise_level=self.hidden_add_noise_sigma, mrg=self.mrg)
+            hiddens[layer_idx] = self.hidden_noise(hiddens[layer_idx])
 
         # ACTIVATION!
         if layer_idx == 0:
@@ -495,7 +499,7 @@ class GSN(Model):
         # this just doubles the amount of noise between each activation of the hiddens.
         if layer_idx != 0 and add_noise:
             log.debug('Adding post-activation gaussian noise for layer %s', str(layer_idx))
-            hiddens[layer_idx] = add_gaussian(hiddens[layer_idx], noise_level=self.hidden_add_noise_sigma, mrg=self.mrg)
+            hiddens[layer_idx] = self.hidden_noise(hiddens[layer_idx])
 
         # build the reconstruction chain if updating the visible layer X
         if layer_idx == 0:
@@ -517,7 +521,7 @@ class GSN(Model):
                 log.debug('>>NO input sampling')
                 sampled = hiddens[layer_idx]
             # add noise to input layer
-            sampled = salt_and_pepper(sampled, self.input_salt_and_pepper, self.mrg)
+            sampled = self.input_noise(sampled)
 
             # set input layer
             hiddens[layer_idx] = sampled
@@ -702,8 +706,8 @@ class GSN(Model):
     def get_decay_params(self):
         # noise scheduling
         noise_schedule = get_decay_function(self.noise_decay,
-                                            self.input_salt_and_pepper,
-                                            self.args.get('input_salt_and_pepper'),
+                                            self.input_noise_level,
+                                            self.args.get('input_noise_level'),
                                             self.noise_annealing)
         return [noise_schedule]
 

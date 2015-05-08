@@ -122,15 +122,15 @@ def add_uniform(input, noise_level, mrg=None):
     OUT = input + noise
     return OUT
 
-def salt_and_pepper(input, corruption_level=0.2, mrg=None):
+def salt_and_pepper(input, noise_level=0.2, mrg=None):
     """
     This applies salt and pepper noise to the input tensor - randomly setting bits to 1 or 0.
 
     :param input: the tensor to apply salt and pepper noise to
     :type input: tensor
 
-    :param corruption_level: the amount of salt and pepper noise to add
-    :type corruption_level: float
+    :param noise_level: the amount of salt and pepper noise to add
+    :type noise_level: float
 
     :param mrg: random number generator with .binomial method
     :type mrg: random
@@ -141,7 +141,7 @@ def salt_and_pepper(input, corruption_level=0.2, mrg=None):
     if mrg is None:
         mrg = theano_random
     # salt and pepper noise
-    a = mrg.binomial(size=input.shape, n=1, p=(1 - corruption_level), dtype=theano.config.floatX)
+    a = mrg.binomial(size=input.shape, n=1, p=(1 - noise_level), dtype=theano.config.floatX)
     b = mrg.binomial(size=input.shape, n=1, p=0.5, dtype=theano.config.floatX)
     c = T.eq(a, 0) * b
     return input * a + c

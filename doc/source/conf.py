@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.abspath('../opendeep/'))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
@@ -39,6 +40,16 @@ extensions = [
     'sphinx.ext.viewcode',
     'numpydoc',
 ]
+
+# numpydoc_class_members_toctree = False
+numpydoc_show_class_members = False
+
+# What to insert into the main body of an autoclass directive.
+# "class" - only the class' docstring is inserted. This is default. You can still document __init__ as a
+# separate method using automethod or the members option to autoclass.
+# "both" - both the class' and the __init__ method's docstring are concatenated and inserted.
+# "init" - only the __init__ method's docstring is inserted.
+autoclass_content = 'both'
 
 [extensions]
 todo_include_todos = True
@@ -97,7 +108,7 @@ today_fmt = '%B %d, %Y'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['images']
+exclude_patterns = ['images', 'tests']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -126,6 +137,8 @@ pygments_style = 'sphinx'
 
 # -- Options for HTML output ----------------------------------------------
 
+image_path = '_static/images/'
+
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 # html_theme = 'default'
@@ -150,12 +163,12 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = 'images/OpenDeep_logo_name.png'
+html_logo = image_path+'OpenDeep_logo_name.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # doc.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-html_favicon = 'images/favicon.ico'
+html_favicon = image_path+'favicon.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -235,7 +248,7 @@ latex_documents = [
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
-latex_logo = 'images/OpenDeep_logo_name.png'
+latex_logo = image_path+'OpenDeep_logo_name.png'
 
 # For "manual" documents, if this is true, then toplevel headings are parts,
 # not chapters.

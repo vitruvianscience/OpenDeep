@@ -1,6 +1,6 @@
-'''
+"""
 Code used throughout the entire OpenDeep package.
-'''
+"""
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
@@ -16,6 +16,7 @@ import theano
 import numpy
 # internal imports
 from opendeep.utils.config import create_dictionary_like
+from opendeep.utils.decorators import *
 
 def trunc(input, length=8):
     """
@@ -93,7 +94,7 @@ def sigmoid(x):
 
 def function(*args, **kwargs):
     """
-    A wrapper around theano.function that disables the on_unused_input error (sets `on_unused_input`='warn').
+    A wrapper around theano.function that disables the on_unused_input error (sets `on_unused_input` = "warn").
     Almost no part of OpenDeep can assume that an unused input is an error, so
     the default from Theano is inappropriate for this project.
 
@@ -116,7 +117,7 @@ def function(*args, **kwargs):
 def grad(*args, **kwargs):
     """
     A wrapper around theano.gradient.grad that disable the disconnected_inputs
-    error (sets `disconnected_inputs`='warn'). Almost no part of OpenDeep can assume that a disconnected input
+    error (sets `disconnected_inputs` = "warn"). Almost no part of OpenDeep can assume that a disconnected input
     is an error.
 
     See: http://deeplearning.net/software/theano/library/tensor/basic.html#theano.gradient.grad
@@ -212,7 +213,6 @@ def as_floatX(variable):
         return numpy.cast[theano.config.floatX](variable)
 
     return theano.tensor.cast(variable, theano.config.floatX)
-
 
 def constantX(value):
     """

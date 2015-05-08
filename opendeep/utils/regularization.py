@@ -78,3 +78,32 @@ def elastic(parameters, l1_coefficient, l2_coefficient=None):
         return l1_coefficient*L1(parameters) + l2_coefficient*L2(parameters)
     else:
         log.warning("None parameters passed to elastic regularizer!")
+
+def kl_divergence(p, q):
+    """
+    Kullback-Leibler divergence that is a non-symmetric measure of the difference between two probability distributions
+    P and Q. It is a measure of the information lost when Q is used to approximate P. See Wikipedia.
+
+    KL(P || Q) = p log p - p log q + (1-p) log (1-p) - (1-p) log (1-q)
+    """
+    term1 = p * T.log(p)
+    term2 = p * T.log(q)
+    term3 = (1 - p) * T.log(1 - p)
+    term4 = (1 - p) * T.log(1 - q)
+    return term1 - term2 + term3 - term4
+
+def sparsity(units, sparsity_level=0.05, sparse_reg=1e-3):
+    """
+    Sparsity regularization for the `units`.
+
+    .. todo:: Implement Sparsity requirement for regularization adding to the :class:`Model` cost.
+    """
+    raise NotImplementedError("Sparsity not implemented currently.")
+    #
+    # assert units.ndim == 2, "Expected units to be a matrix, but it had %d dimensions" % units.ndim
+    #
+    # sparsity_level = T.extra_ops.repeat(sparsity_level, units.shape[1])
+    # avg_act = units.mean(axis=0)
+    # kl_div = kl_divergence(sparsity_level, avg_act)
+    # sparsity_penalty = sparse_reg * kl_div.sum()
+    # return sparsity_penalty

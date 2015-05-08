@@ -3,7 +3,6 @@
 # standard library imports
 from __future__ import print_function
 from types import StringType
-from struct import unpack
 
 # custom import
 from DataTypeConverters import readBew, readVar, varLen

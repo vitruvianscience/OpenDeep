@@ -177,17 +177,17 @@ class MNIST(FileDataset):
         ----------
         sequence_number : {0, 1, 2, 3, 4}
             The sequence is is determined as follows:
-            +------+-----------------------------------------------------------+
-            | 0 | The original image ordering.                                 |
-            +------+-----------------------------------------------------------+
-            | 1 | Order by digits 0-9 repeating.                               |
-            +------+-----------------------------------------------------------+
-            | 2 | Order by digits 0-9-9-0 repeating.                           |
-            +------+-----------------------------------------------------------+
-            | 3 | Rotates digits 1, 4, and 8. See implementation.              |
-            +------+-----------------------------------------------------------+
-            | 4 | Has 3 bits of parity. See implementation.                    |
-            +------+-----------------------------------------------------------+
+
+            ======  =================================================
+            value   Description
+            ======  =================================================
+            0       The original image ordering.
+            1       Order by digits 0-9 repeating.
+            2       Order by digits 0-9-9-0 repeating.
+            3       Rotates digits 1, 4, and 8. See implementation.
+            4       Has 3 bits of parity. See implementation.
+            ======  =================================================
+
         rng : random
             the random number generator to use
         """
