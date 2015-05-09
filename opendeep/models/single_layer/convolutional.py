@@ -26,7 +26,7 @@ from theano.tensor.signal import downsample
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.conv1d_implementations import get_conv1d_function
-from opendeep.utils.decorators import doc
+from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import get_weights, get_weights_gaussian, get_bias, cross_channel_normalization_bc01
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ if theano.config.optimizer_including != "conv_meta":
                 % str(theano.config.optimizer_including))
 
 
+@inherit_docs
 class Conv1D(Model):
     """
     A 1-dimensional convolutional layer (taken from Sander Dieleman's Lasagne framework)
@@ -65,7 +66,7 @@ class Conv1D(Model):
     This means the input is a 3-dimensional tensor of form (batch, channel, input)
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv1d',
-                 input_shape=None, filter_shape=None, stride=None, border_mode='valid',
+                 input_size=None, filter_shape=None, stride=None, border_mode='valid',
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
@@ -84,7 +85,7 @@ class Conv1D(Model):
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_shape : tuple
+        input_size : tuple
             Shape of the incoming data: (batch_size, num_channels, data_dimensionality). Most likely, your channels
             will be 1. For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
             D=dimensionality (chars, words, etc.)
@@ -140,7 +141,6 @@ class Conv1D(Model):
         if self.inputs_hook is not None:
             # make sure inputs_hook is a tuple
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            input_shape = inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
@@ -186,18 +186,18 @@ class Conv1D(Model):
             conved = convolution_func(self.input,
                                       W,
                                       subsample=(stride,),
-                                      image_shape=input_shape,
+                                      image_shape=self.input_size,
                                       filter_shape=filter_shape,
                                       border_mode=border_mode)
         elif border_mode == 'same':
             conved = convolution_func(self.input,
                                       W,
                                       subsample=(stride,),
-                                      image_shape=input_shape,
+                                      image_shape=self.input_size,
                                       filter_shape=filter_shape,
                                       border_mode='full')
             shift = (filter_length - 1) // 2
-            conved = conved[:, :, shift:input_shape[2] + shift]
+            conved = conved[:, :, shift:self.input_size[2] + shift]
 
         else:
             log.error("Invalid border mode: '%s'" % border_mode)
@@ -205,30 +205,27 @@ class Conv1D(Model):
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x'))
 
-    @doc
     def get_inputs(self):
         return [self.input]
 
-    @doc
     def get_outputs(self):
         return self.output
 
-    @doc
     def get_params(self):
         return self.params
 
-    @doc
     def save_args(self, args_file="conv1d_config.pkl"):
         super(Conv1D, self).save_args(args_file)
 
 
+@inherit_docs
 class Conv2D(Model):
     """
     A 2-dimensional convolutional layer (taken from Sander Dieleman's Lasagne framework)
     (https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py)
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv2d',
-                 input_shape=None, filter_shape=None, strides=None, border_mode='valid',
+                 input_size=None, filter_shape=None, strides=None, border_mode='valid',
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
@@ -247,7 +244,7 @@ class Conv2D(Model):
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_shape : tuple
+        input_size : tuple
             Shape of the incoming data: (batch_size, num_channels, input_height, input_width).
         filter_shape : tuple
             (num_filters, num_channels, filter_height, filter_width). This is also the shape of the weights matrix.
@@ -302,7 +299,6 @@ class Conv2D(Model):
         if self.inputs_hook:
             # make sure inputs_hook is a tuple
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            input_shape = inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
@@ -353,38 +349,34 @@ class Conv2D(Model):
             conved = convolution_func(self.input,
                                       W,
                                       subsample=strides,
-                                      image_shape=input_shape,
+                                      image_shape=self.input_size,
                                       filter_shape=filter_shape,
                                       border_mode=border_mode)
         elif border_mode == 'same':
             conved = convolution_func(self.input,
                                       W,
                                       subsample=strides,
-                                      image_shape=input_shape,
+                                      image_shape=self.input_size,
                                       filter_shape=filter_shape,
                                       border_mode='full')
             shift_x = (filter_size[0] - 1) // 2
             shift_y = (filter_size[1] - 1) // 2
-            conved = conved[:, :, shift_x:input_shape[2] + shift_x,
-                            shift_y:input_shape[3] + shift_y]
+            conved = conved[:, :, shift_x:self.input_size[2] + shift_x,
+                            shift_y:self.input_size[3] + shift_y]
         else:
             raise RuntimeError("Invalid border mode: '%s'" % border_mode)
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x', 'x'))
 
-    @doc
     def get_inputs(self):
         return [self.input]
 
-    @doc
     def get_outputs(self):
         return self.output
 
-    @doc
     def get_params(self):
         return self.params
 
-    @doc
     def save_args(self, args_file="conv2d_config.pkl"):
         super(Conv2D, self).save_args(args_file)
 
@@ -400,12 +392,13 @@ class Conv3D(Model):
         raise NotImplementedError("Conv3D not implemented yet.")
 
 
+@inherit_docs
 class ConvPoolLayer(Model):
     """
     This is the ConvPoolLayer used for an AlexNet implementation. It combines a 2D convolution with pooling.
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/convpool',
-                 input_shape=None, filter_shape=None, convstride=4, padsize=0, group=1,
+                 input_size=None, filter_shape=None, convstride=4, padsize=0, group=1,
                  poolsize=3, poolstride=2,
                  weights_init='gaussian', weights_interval='montreal', weights_mean=0, weights_std=.01,
                  bias_init=0,
@@ -426,7 +419,7 @@ class ConvPoolLayer(Model):
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_shape : tuple
+        input_size : tuple
             Shape of the incoming data: (batch_size, num_channels, input_height, input_width).
         filter_shape : tuple
             (num_filters, num_channels, filter_height, filter_width). This is also the shape of the weights matrix.
@@ -466,7 +459,6 @@ class ConvPoolLayer(Model):
         # inputs_hook is a tuple of (Shape, Input)
         if self.inputs_hook:
             assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            input_shape = self.inputs_hook[0] or input_shape
             self.input = inputs_hook[1]
         else:
             self.input = T.ftensor4("X")
@@ -488,7 +480,7 @@ class ConvPoolLayer(Model):
             self.convolution_func = convolution
 
         # expect image_shape to be bc01!
-        self.channel = input_shape[1]
+        self.channel = self.input_size[1]
 
         self.convstride = convstride
         self.padsize = padsize
@@ -501,7 +493,7 @@ class ConvPoolLayer(Model):
         assert self.group in [1, 2], "group argument needs to be 1 or 2 (1 for default conv2d)"
 
         filter_shape = numpy.asarray(filter_shape)
-        input_shape = numpy.asarray(input_shape)
+        self.input_size = numpy.asarray(self.input_size)
 
         if local_response_normalization:
             lrn_func = cross_channel_normalization_bc01
@@ -535,8 +527,8 @@ class ConvPoolLayer(Model):
             filter_shape[0] = filter_shape[0] / 2
             filter_shape[1] = filter_shape[1] / 2
 
-            input_shape[0] = input_shape[0] / 2
-            input_shape[1] = input_shape[1] / 2
+            self.input_size[0] = self.input_size[0] / 2
+            self.input_size[1] = self.input_size[1] / 2
             if self.params_hook:
                 assert len(self.params_hook) == 4, "expected params_hook to have 4 params"
                 self.W0, self.W1, self.b0, self.b1 = self.params_hook
@@ -556,7 +548,7 @@ class ConvPoolLayer(Model):
         if local_response_normalization and lrn_func is not None:
             self.output = lrn_func(self.output)
 
-        log.debug("convpool layer initialized with shape_in: %s", str(input_shape))
+        log.debug("convpool layer initialized with shape_in: %s", str(self.input_size))
 
     def _build_computation_graph(self):
         if self.group == 1:
@@ -597,18 +589,14 @@ class ConvPoolLayer(Model):
                                                 st=(self.poolstride, self.poolstride))
         return output
 
-    @doc
     def get_inputs(self):
         return [self.input]
 
-    @doc
     def get_outputs(self):
         return self.output
 
-    @doc
     def get_params(self):
         return self.params
 
-    @doc
     def save_args(self, args_file="convpool_config.pkl"):
         super(ConvPoolLayer, self).save_args(args_file)

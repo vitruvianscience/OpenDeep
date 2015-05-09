@@ -108,35 +108,11 @@ class GSN(Model):
                  outdir='outputs/gsn/',
                  image_width=None, image_height=None,
                  **kwargs):
-        # the GSN is an unsupervised model, so its output size is the same as the input size. This means we need
-        # to first determine the input size.
-        if inputs_hook is not None:
-            assert len(inputs_hook) == 2, "inputs_hook was expected (shape, input) tuple. " \
-                                               "Found length %s instead" % str(len(inputs_hook))
-            if inputs_hook[0] is not None:
-                input_size = inputs_hook[0]
-        elif input_size is None and (inputs_hook is None or inputs_hook[0] is None):
-            log.critical("Please specify GSN input_size.")
-            raise AssertionError("Please specify GSN input_size.")
-        output_size = input_size
 
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
         super(GSN, self).__init__(**initial_parameters)
-        # configs can now be accessed through self! huzzah!
-
-        # variables from the dataset that are used for initialization and image reconstruction
-        if self.inputs_hook is None:
-            # if no inputs_hook given, look for the dimensionality of the input from the 'input_size' parameter.
-            if self.input_size is None:
-                log.critical("Please specify input_size.")
-                raise AssertionError("Please specify input_size.")
-        else:
-            assert len(self.inputs_hook) == 2, "inputs_hook was expected (shape, input) tuple. " \
-                                               "Found length %s instead" % str(len(self.inputs_hook))
-            # otherwise grab shape from inputs_hook that was given
-            self.input_size = self.inputs_hook[0]
 
         # when the input should be thought of as an image, either use the specified width and height,
         # or try to make as square as possible.
@@ -158,16 +134,16 @@ class GSN(Model):
         # Network specifications #
         ##########################
         # generally, walkbacks should be at least 2*layers
-        if self.layers % 2 == 0:
-            if self.walkbacks < 2*self.layers:
+        if layers % 2 == 0:
+            if walkbacks < 2*layers:
                 log.warning('Not enough walkbacks for the layers! Layers is %s and walkbacks is %s. '
                             'Generaly want 2X walkbacks to layers',
-                            str(self.layers), str(self.walkbacks))
+                            str(layers), str(walkbacks))
         else:
-            if self.walkbacks < 2*self.layers-1:
+            if walkbacks < 2*layers-1:
                 log.warning('Not enough walkbacks for the layers! Layers is %s and walkbacks is %s. '
                             'Generaly want 2X walkbacks to layers',
-                            str(self.layers), str(self.walkbacks))
+                            str(layers), str(walkbacks))
 
         self.noise_annealing = as_floatX(self.noise_annealing)  # noise schedule parameter
         self.hidden_noise_level = sharedX(as_floatX(hidden_noise_level))
@@ -177,20 +153,20 @@ class GSN(Model):
 
         # if there was a hiddens_hook, unpack the hidden layers in the tensor
         if self.hiddens_hook is not None:
-            self.hidden_size = self.hiddens_hook[0]
+            hidden_size = self.hiddens_hook[0]
             self.hiddens_flag = True
         else:
             self.hiddens_flag = False
 
         # determine the sizes of each layer in a list.
         #  layer sizes, from h0 to hK (h0 is the visible layer)
-        hidden_size = list(raise_to_list(self.hidden_size))
+        hidden_size = list(raise_to_list(hidden_size))
         if len(hidden_size) == 1:
-            self.layer_sizes = [self.input_size] + [self.hidden_size] * self.layers
+            self.layer_sizes = [self.input_size] + [hidden_size] * layers
         else:
-            assert len(hidden_size) == self.layers, "Hiddens sizes and number of hidden layers mismatch." + \
-                                                    "Hiddens %d and layers %d" % (len(hidden_size), self.layers)
-            self.layer_sizes = [self.input_size] + list(self.hidden_size)
+            assert len(hidden_size) == layers, "Hiddens sizes and number of hidden layers mismatch." + \
+                                                    "Hiddens %d and layers %d" % (len(hidden_size), layers)
+            self.layer_sizes = [self.input_size] + list(hidden_size)
 
         if self.hiddens_hook is not None:
             self.hiddens = self.unpack_hiddens(self.hiddens_hook[1])
@@ -204,7 +180,7 @@ class GSN(Model):
         self.visible_activation = get_activation_function(self.visible_activation)
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.visible_activation):
-            self.visible_sampling = self.mrg.binomial
+            self.visible_sampling = mrg.binomial
         else:
             # TODO: implement non-binary activation
             log.error("Non-binary visible activation not supported yet!")
@@ -220,47 +196,47 @@ class GSN(Model):
         # make sure to deal with params_hook!
         if self.params_hook is not None:
             # if tied weights, expect layers*2 + 1 params
-            if self.tied_weights:
-                assert len(self.params_hook) == 2*self.layers + 1, \
-                    "Tied weights: expected {0!s} params, found {1!s}!".format(2*self.layers+1, len(self.params_hook))
-                self.weights_list = self.params_hook[:self.layers]
-                self.bias_list = self.params_hook[self.layers:]
+            if tied_weights:
+                assert len(self.params_hook) == 2*layers + 1, \
+                    "Tied weights: expected {0!s} params, found {1!s}!".format(2*layers+1, len(self.params_hook))
+                self.weights_list = self.params_hook[:layers]
+                self.bias_list = self.params_hook[layers:]
             # if untied weights, expect layers*3 + 1 params
             else:
-                assert len(self.params_hook) == 3*self.layers + 1, \
-                    "Untied weights: expected {0!s} params, found {1!s}!".format(3*self.layers+1, len(self.params_hook))
-                self.weights_list = self.params_hook[:2*self.layers]
-                self.bias_list = self.params_hook[2*self.layers:]
+                assert len(self.params_hook) == 3*layers + 1, \
+                    "Untied weights: expected {0!s} params, found {1!s}!".format(3*layers+1, len(self.params_hook))
+                self.weights_list = self.params_hook[:2*layers]
+                self.bias_list = self.params_hook[2*layers:]
         # otherwise, construct our params
         else:
             # initialize a list of weights and biases based on layer_sizes for the GSN
-            self.weights_list = [get_weights(weights_init=self.weights_init,
+            self.weights_list = [get_weights(weights_init=weights_init,
                                              shape=(self.layer_sizes[i], self.layer_sizes[i+1]),
                                              name="W_{0!s}_{1!s}".format(i, i+1),
                                              # if gaussian
-                                             mean=self.weights_mean,
-                                             std=self.weights_std,
+                                             mean=weights_mean,
+                                             std=weights_std,
                                              # if uniform
-                                             interval=self.weights_interval)
-                                 for i in range(self.layers)]
+                                             interval=weights_interval)
+                                 for i in range(layers)]
             # add more weights if we aren't tying weights between layers (need to add for higher-lower layers now)
-            if not self.tied_weights:
+            if not tied_weights:
                 self.weights_list.extend(
-                    [get_weights(weights_init=self.weights_init,
+                    [get_weights(weights_init=weights_init,
                                  shape=(self.layer_sizes[i+1], self.layer_sizes[i]),
                                  name="W_{0!s}_{1!s}".format(i+1, i),
                                  # if gaussian
-                                 mean=self.weights_mean,
-                                 std=self.weights_std,
+                                 mean=weights_mean,
+                                 std=weights_std,
                                  # if uniform
-                                 interval=self.weights_interval)
-                     for i in reversed(range(self.layers))]
+                                 interval=weights_interval)
+                     for i in reversed(range(layers))]
                 )
             # initialize each layer bias to 0's.
             self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
                                        name='b_' + str(i),
-                                       init_values=self.bias_init)
-                              for i in range(self.layers+1)]
+                                       init_values=bias_init)
+                              for i in range(layers+1)]
 
         # build the params of the model into a list
         self.params = self.weights_list + self.bias_list

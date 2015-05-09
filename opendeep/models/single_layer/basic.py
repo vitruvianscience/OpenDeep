@@ -16,7 +16,7 @@ import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep import sharedX
-from opendeep.utils.decorators import doc
+from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function
@@ -26,6 +26,7 @@ from opendeep.utils.noise import get_noise
 log = logging.getLogger(__name__)
 
 
+@inherit_docs
 class BasicLayer(Model):
     """
     This is your basic input -> nonlinear(output) layer. No hidden representation. It is also known as a
@@ -101,7 +102,6 @@ class BasicLayer(Model):
         # grab info from the inputs_hook, or from parameters
         if inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
             assert len(inputs_hook) == 2, 'Expected inputs_hook to be tuple!'  # make sure inputs_hook is a tuple
-            input_size = inputs_hook[0] or input_size
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
@@ -111,7 +111,7 @@ class BasicLayer(Model):
         self.target = T.matrix('Y')
 
         # either grab the output's desired size from the parameter directly, or copy input_size
-        output_size = output_size or input_size
+        self.output_size = self.output_size or self.input_size
 
         # other specifications
         # activation function!
@@ -130,7 +130,7 @@ class BasicLayer(Model):
             W, b = params_hook
         else:
             W = get_weights(weights_init=weights_init,
-                            shape=(input_size, output_size),
+                            shape=(self.input_size, self.output_size),
                             name="W",
                             # if gaussian
                             mean=weights_mean,
@@ -171,40 +171,34 @@ class BasicLayer(Model):
         self.cost = cost_func(output=self.output, target=self.target, **cost_args)
 
         log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s",
-                  str((input_size, output_size)), str(activation))
+                  str((self.input_size, self.output_size)), str(activation))
 
-    @doc
     def get_inputs(self):
         return [self.input]
 
-    @doc
     def get_outputs(self):
         return self.output
 
-    @doc
     def get_targets(self):
         return [self.target]
 
-    @doc
     def get_train_cost(self):
         return self.cost
 
-    @doc
     def get_noise_switch(self):
         if hasattr(self, 'switch'):
             return self.switch
         else:
             return []
 
-    @doc
     def get_params(self):
         return self.params
 
-    @doc
     def save_args(self, args_file="basiclayer_config.pkl"):
         super(BasicLayer, self).save_args(args_file)
 
 
+@inherit_docs
 class SoftmaxLayer(BasicLayer):
     """
     The softmax layer is meant as a last-step prediction layer using the softmax activation function -
@@ -218,7 +212,8 @@ class SoftmaxLayer(BasicLayer):
                  cost='nll', cost_args=None,
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
-                 out_as_probs=False):
+                 out_as_probs=False,
+                 **kwargs):
         """
         Initialize a Softmax layer.
 
@@ -300,7 +295,6 @@ class SoftmaxLayer(BasicLayer):
             self.y = T.vector('y')
             self.cost = self.negative_log_likelihood()
 
-    @doc
     def get_outputs(self):
         # if we aren't asking for the class probabilities, return the argmax (gives the index of highest probability)
         if not self.out_as_probs:
@@ -309,7 +303,6 @@ class SoftmaxLayer(BasicLayer):
         else:
             return self.p_y_given_x
 
-    @doc
     def get_targets(self):
         # return our integer targets, or default to superclass
         if self.target_flag:
@@ -317,7 +310,6 @@ class SoftmaxLayer(BasicLayer):
         else:
             return super(SoftmaxLayer, self).get_targets()
 
-    @doc
     def get_monitors(self):
         # grab the basiclayer's monitors
         monitors = super(SoftmaxLayer, self).get_monitors()
@@ -394,6 +386,5 @@ class SoftmaxLayer(BasicLayer):
         # return the argmax y_pred class
         return self.y_pred
 
-    @doc
     def save_args(self, args_file="softmax_config.pkl"):
         super(SoftmaxLayer, self).save_args(args_file)

@@ -70,7 +70,7 @@ class Model(object):
     """
 
     def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 output_size=None,
+                 input_size=None, output_size=None,
                  outdir=None,
                  **kwargs):
         """
@@ -101,6 +101,9 @@ class Model(object):
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
             have two versions of the model that use the same parameters - such as a training model with dropout applied
             to layers and one without for testing, where the parameters are shared between the two.
+        input_size : int or shape tuple
+            The dimensionality of the input for this model. This is required for stacking models
+            automatically - where the input to one layer is the output of the previous layer.
         output_size : int or shape tuple
             The dimensionality of the output for this model. This is required for stacking models
             automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
@@ -118,8 +121,31 @@ class Model(object):
         self.inputs_hook  = inputs_hook
         self.hiddens_hook = hiddens_hook
         self.params_hook  = params_hook
+        self.input_size   = input_size
         self.output_size  = output_size
         self.outdir       = outdir
+
+        # Combine arguments that could specify input_size -> overwrite input_size with inputs_hook[0] if it exists.
+        if self.inputs_hook and self.inputs_hook[0] is not None:
+            self.input_size = self.inputs_hook[0]
+
+        # Check if the input_size wasn't provided - if this is the case, it could either be a programmer's error
+        # or it could be during the automatic stacking in a Container. Since that is a common use case, set
+        # the input_size to 1 to avoid errors when instantiating the model.
+        if not self.input_size:
+            # Could be error, or more commonly, when adding models to a Container
+            log.warning("No input_size or inputs_hook! Make sure this is done in a Container. Setting input_size"
+                        "=1 for the Container now...")
+            self.input_size = 1
+
+        # Also, check if no output_size was given - this could be the case for generative models. Copy input_size
+        # in that case.
+        if not self.output_size:
+            # Could be an error (hopefully not), so give the warning.
+            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the"
+                        "same as input_size. Setting output_size=input_size now...")
+            self.output_size = self.input_size
+
 
         # copy all of the parameters from the class into an args (configuration) dictionary
         self.args = {}

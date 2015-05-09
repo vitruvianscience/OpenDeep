@@ -24,7 +24,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep.utils.decorators import doc
+from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
@@ -33,6 +33,7 @@ from opendeep.utils.cost import binary_crossentropy
 log = logging.getLogger(__name__)
 
 
+@inherit_docs
 class RBM(Model):
     """
     This is a probabilistic, energy-based model.
@@ -112,14 +113,13 @@ class RBM(Model):
         # grab info from the inputs_hook, hiddens_hook, or from parameters
         if inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
             assert len(inputs_hook) == 2, 'Expected inputs_hook to be tuple!'  # make sure inputs_hook is a tuple
-            input_size = inputs_hook[0] or input_size
             self.input = inputs_hook[1]
         else:
             # make the input a symbolic matrix
             self.input = T.matrix('V')
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
-        hidden_size = hidden_size or input_size
+        hidden_size = hidden_size or self.input_size
 
         # get the number of steps k
         self.k = k
@@ -168,7 +168,7 @@ class RBM(Model):
             hidden_size = self.W.shape[1].eval()
         else:
             self.W = get_weights(weights_init=weights_init,
-                                 shape=(input_size, hidden_size),
+                                 shape=(self.input_size, hidden_size),
                                  name="W",
                                  # if gaussian
                                  mean=weights_mean,
@@ -177,7 +177,7 @@ class RBM(Model):
                                  interval=weights_interval)
 
             # grab the bias vectors
-            self.bv = get_bias(shape=input_size, name="bv", init_values=bias_init)
+            self.bv = get_bias(shape=self.input_size, name="bv", init_values=bias_init)
             self.bh = get_bias(shape=hidden_size, name="bh", init_values=bias_init)
 
         # Finally have the parameters
@@ -187,7 +187,7 @@ class RBM(Model):
         self.cost, self.monitors, self.updates, self.v_sample, self.h_sample = self._build_rbm()
 
         log.debug("Initialized an RBM shape %s",
-                  str((input_size, hidden_size)))
+                  str((self.input_size, hidden_size)))
 
     def _build_rbm(self):
         """
@@ -295,39 +295,30 @@ class RBM(Model):
     ####################
     # Model functions! #
     ####################
-    @doc
     def get_inputs(self):
         return self.input
 
-    @doc
     def get_hiddens(self):
         return self.h_sample
 
-    @doc
     def get_outputs(self):
         return self.v_sample
 
-    @doc
     def generate(self, initial=None):
         log.exception("Generate not implemented yet for the RBM! Feel free to contribute :)")
         raise NotImplementedError("Generate not implemented yet for the RBM! Feel free to contribute :)")
 
-    @doc
     def get_train_cost(self):
         return self.cost
 
-    @doc
     def get_updates(self):
         return self.updates
 
-    @doc
     def get_monitors(self):
         return self.monitors
 
-    @doc
     def get_params(self):
         return self.params
 
-    @doc
     def save_args(self, args_file="rbm_config.pkl"):
         super(RBM, self).save_args(args_file)
