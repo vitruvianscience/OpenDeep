@@ -43,7 +43,7 @@ def run_sequence(sequence=0):
                          batch_size=100,
                          minimum_batch_size=2,
                          learning_rate=1e-6,
-                         save_frequency=20,
+                         save_frequency=1,
                          early_stop_length=200)
     # optimizer = SGD(model=rnngsn,
     #                 dataset=mnist,

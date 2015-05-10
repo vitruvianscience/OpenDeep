@@ -26,7 +26,7 @@ def main():
     _train_args = {"n_epoch": 1000,  # maximum number of times to run through the dataset
                    "batch_size": 100,  # number of examples to process in parallel (minibatch)
                    "minimum_batch_size": 1,  # the minimum number of examples for a batch to be considered
-                   "save_frequency": 10,  # how many epochs between saving parameters
+                   "save_frequency": 1,  # how many epochs between saving parameters
                    "early_stop_threshold": .9995,  # multiplier for how much the train cost to improve to not stop early
                    "early_stop_length": 500,  # how many epochs to wait to see if the threshold has been reached
                    "learning_rate": .25,  # initial learning rate for SGD
@@ -68,7 +68,7 @@ def main():
     # params_to_load = '../../../outputs/gsn/mnist/trained_epoch_395.pkl'
     # gsn.load_params(params_to_load)
 
-    optimizer = SGD(model=gsn, dataset=mnist, config=_train_args)
+    optimizer = SGD(model=gsn, dataset=mnist, **_train_args)
     # optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
     optimizer.train(monitor_channels=recon_cost_channel)
 

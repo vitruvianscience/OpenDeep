@@ -23,6 +23,7 @@ Models
 * Maxout network
 * Deep Q Network
 * RL-NTM http://arxiv.org/abs/1505.00521
+* Highway networks http://arxiv.org/abs/1505.00387
 
 Optimization
 ============

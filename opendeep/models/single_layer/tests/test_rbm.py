@@ -26,13 +26,13 @@ if __name__ == '__main__':
     # create the RBM
     rng = numpy.random.RandomState(1234)
     mrg = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(2**30))
-    rbm = RBM(input_size=28*28, hidden_size=500, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), rng=rng)
+    rbm = RBM(input_size=28*28, hidden_size=500, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), mrg=mrg)
     # rbm.load_params('rbm_trained.pkl')
     # make an optimizer to train it (AdaDelta is a good default)
 
     # optimizer = SGD(model=rbm, dataset=mnist, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False, momentum=False)
 
-    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20)
+    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_frequency=1)
 
     ll = Monitor('pseudo-log', rbm.get_monitors()['pseudo-log'])
 

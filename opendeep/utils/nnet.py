@@ -116,7 +116,6 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
     :raises: NotImplementedError
     """
     interval = interval or default_interval
-
     if rng is None:
         rng = numpy.random
     # If the interval parameter is a string, grab the appropriate formula from the function dictionary,
@@ -137,6 +136,10 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
                   str(shape), str(interval))
     # build the uniform weights tensor
     val = as_floatX(rng.uniform(low=-interval, high=interval, size=shape))
+    # check if a theano rng was used
+    if isinstance(val, T.TensorVariable):
+        val = val.eval()
+    # make it into a shared variable
     return theano.shared(value=val, name=name)
 
 def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
@@ -173,10 +176,17 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
         rng = numpy.random
 
     if std != 0:
-        val = numpy.asarray(rng.normal(loc=mean, scale=std, size=shape), dtype=theano.config.floatX)
+        if isinstance(rng, type(numpy.random)):
+            val = numpy.asarray(rng.normal(loc=mean, scale=std, size=shape), dtype=theano.config.floatX)
+        else:
+            val = numpy.asarray(rng.normal(avg=mean, std=std, size=shape).eval(), dtype=theano.config.floatX)
     else:
         val = as_floatX(mean * numpy.ones(shape, dtype=theano.config.floatX))
 
+    # check if a theano rng was used
+    if isinstance(val, T.TensorVariable):
+        val = val.eval()
+    # make it into a shared variable
     return theano.shared(value=val, name=name)
 
 def get_weights_identity(shape, name="W", add_noise=None):

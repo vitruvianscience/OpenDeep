@@ -13,6 +13,7 @@ __version__ = version.__version__
 
 # third-party libraries
 import theano
+from theano.compat.six import integer_types
 import numpy
 # internal imports
 from opendeep.utils.config import create_dictionary_like
@@ -198,7 +199,7 @@ def as_floatX(variable):
 
     Parameters
     ----------
-    variable: float, numpy array, or tensor
+    variable: int, float, numpy array, or tensor
         The input to convert to type `theano.config.floatX`.
 
     Returns
@@ -206,10 +207,7 @@ def as_floatX(variable):
     numpy array or tensor
         The input `variable` casted as type `theano.config.floatX`.
     """
-    if isinstance(variable, float):
-        return numpy.cast[theano.config.floatX](variable)
-
-    if isinstance(variable, numpy.ndarray):
+    if isinstance(variable, (integer_types, float, numpy.number, numpy.ndarray)):
         return numpy.cast[theano.config.floatX](variable)
 
     return theano.tensor.cast(variable, theano.config.floatX)

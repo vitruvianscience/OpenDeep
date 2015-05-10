@@ -170,6 +170,7 @@ class RBM(Model):
             self.W = get_weights(weights_init=weights_init,
                                  shape=(self.input_size, hidden_size),
                                  name="W",
+                                 rng=mrg,
                                  # if gaussian
                                  mean=weights_mean,
                                  std=weights_std,

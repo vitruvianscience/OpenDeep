@@ -132,6 +132,7 @@ class BasicLayer(Model):
             W = get_weights(weights_init=weights_init,
                             shape=(self.input_size, self.output_size),
                             name="W",
+                            rng=mrg,
                             # if gaussian
                             mean=weights_mean,
                             std=weights_std,

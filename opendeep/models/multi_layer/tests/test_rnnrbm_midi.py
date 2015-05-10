@@ -75,7 +75,7 @@ def run_midi(dataset):
                      # rnn_weights_init='gaussian',
                      # rnn_hidden_activation='tanh',
                      rnn_weights_std=0.0001,
-                     rng=rng,
+                     mrg=mrg,
                      outdir=outdir)
 
     # make an optimizer to train it

@@ -57,9 +57,12 @@ class Model(object):
     inputs_hook : tuple
         Tuple of (shape, input_variable) or None describing the inputs to use for this Model.
     hiddens_hook : tuple
-        Tuple of (shape, hiddens_variable) or None to use as the hidden representaiton for this Model.
+        Tuple of (shape, hiddens_variable) or None to use as the hidden representation for this Model.
     params_hook : list
         A list of SharedVariable representing the parameters to use for this Model.
+    input_size : int or shape tuple
+        The dimensionality of the input for this model. This is required for stacking models
+        automatically - where the input to one layer is the output of the previous layer.
     output_size : int or shape tuple
         Describes the shape of the output dimensionality for this Model.
     outdir : str
@@ -124,6 +127,10 @@ class Model(object):
         self.input_size   = input_size
         self.output_size  = output_size
         self.outdir       = outdir
+
+        # make sure outdir ends in a directory separator
+        if self.outdir[-1] != os.sep:
+            self.outdir += os.sep
 
         # Combine arguments that could specify input_size -> overwrite input_size with inputs_hook[0] if it exists.
         if self.inputs_hook and self.inputs_hook[0] is not None:

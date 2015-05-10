@@ -43,8 +43,8 @@ def run_mlp():
 
     # test the new way to automatically fill in inputs_hook for models
     mlp = Prototype()
-    mlp.add(BasicLayer(input_size=784, output_size=1000, activation='rectifier'))
-    mlp.add(BasicLayer(output_size=1500, activation='tanh'))
+    mlp.add(BasicLayer(input_size=784, output_size=1000, activation='rectifier', noise='dropout'))
+    mlp.add(BasicLayer(output_size=1500, activation='tanh', noise='dropout'))
     mlp.add(SoftmaxLayer(output_size=10))
 
     mnist = MNIST()

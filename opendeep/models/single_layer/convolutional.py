@@ -22,6 +22,7 @@ import numpy
 import theano
 import theano.tensor as T
 from theano.tensor.signal import downsample
+import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
@@ -70,7 +71,8 @@ class Conv1D(Model):
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
-                 convolution='mc0'):
+                 convolution='mc0',
+                 mrg=RNG_MRG.MRG_RandomStreams(1)):
         """
         Initialize a 1-D convolutional layer.
 
@@ -122,6 +124,9 @@ class Conv1D(Model):
             The 1-dimensional convolution implementation to use. The default of 'mc0' is normally fine. See
             opendeep.utils.conv1d_implementations for alternatives. (This is necessary because Theano only
             supports 2D convolutions at the moment).
+        mrg : random
+            A random number generator that is used when adding noise.
+            I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
 
         Notes
         -----
@@ -168,6 +173,7 @@ class Conv1D(Model):
             W = get_weights(weights_init=weights_init,
                             shape=filter_shape,
                             name="W",
+                            rng=mrg,
                             # if gaussian
                             mean=weights_mean,
                             std=weights_std,
@@ -229,7 +235,8 @@ class Conv2D(Model):
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
-                 convolution='conv2d'):
+                 convolution='conv2d',
+                 mrg=RNG_MRG.MRG_RandomStreams(1)):
         """
         Initialize a 2-dimensional convolutional layer.
 
@@ -280,6 +287,9 @@ class Conv2D(Model):
             uses theano's tensor.nnet.conv.conv2d, which cherry-picks the best implementation with a meta-optimizer if
             you set the theano configuration flag 'optimizer_including=conv_meta'. Otherwise, you could pass a
             callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer.
+        mrg : random
+            A random number generator that is used when adding noise.
+            I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
 
         Notes
         -----
@@ -331,6 +341,7 @@ class Conv2D(Model):
             W = get_weights(weights_init=weights_init,
                             shape=filter_shape,
                             name="W",
+                            rng=mrg,
                             # if gaussian
                             mean=weights_mean,
                             std=weights_std,
@@ -404,7 +415,8 @@ class ConvPoolLayer(Model):
                  bias_init=0,
                  local_response_normalization=False,
                  convolution='conv2d',
-                 activation='rectifier'):
+                 activation='rectifier',
+                 mrg=RNG_MRG.MRG_RandomStreams(1)):
         """
         Initialize a convpool layer.
 
@@ -452,6 +464,9 @@ class ConvPoolLayer(Model):
             uses theano's tensor.nnet.conv.conv2d, which cherry-picks the best implementation with a meta-optimizer if
             you set the theano configuration flag 'optimizer_including=conv_meta'. Otherwise, you could pass a
             callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer.
+        mrg : random
+            A random number generator that is used when adding noise.
+            I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
         """
         super(ConvPoolLayer, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
 
@@ -513,6 +528,7 @@ class ConvPoolLayer(Model):
                 self.W = get_weights(weights_init=weights_init,
                                      shape=filter_shape,
                                      name="W",
+                                     rng=mrg,
                                      # if gaussian
                                      mean=weights_mean,
                                      std=weights_std,
@@ -552,24 +568,30 @@ class ConvPoolLayer(Model):
 
     def _build_computation_graph(self):
         if self.group == 1:
-            conv_out = self.convolution_func(img=self.input,
-                                        kerns=self.W,
-                                        subsample=(self.convstride, self.convstride),
-                                        border_mode=(self.padsize, self.padsize))
+            conv_out = self.convolution_func(
+                img=self.input,
+                kerns=self.W,
+                subsample=(self.convstride, self.convstride),
+                border_mode=(self.padsize, self.padsize)
+            )
             conv_out = conv_out + self.b.dimshuffle('x', 0, 'x', 'x')
 
         else:
-            conv_out0 = self.convolution_func(img=self.input[:, :self.channel / 2, :, :],
-                                         kerns=self.W0,
-                                         subsample=(self.convstride, self.convstride),
-                                         border_mode=(self.padsize, self.padsize))
+            conv_out0 = self.convolution_func(
+                img=self.input[:, :self.channel / 2, :, :],
+                kerns=self.W0,
+                subsample=(self.convstride, self.convstride),
+                border_mode=(self.padsize, self.padsize)
+            )
             conv_out0 = conv_out0 + self.b0.dimshuffle('x', 0, 'x', 'x')
 
 
-            conv_out1 = self.convolution_func(img=self.input[:, self.channel / 2:, :, :],
-                                         kerns=self.W1,
-                                         subsample=(self.convstride, self.convstride),
-                                         border_mode=(self.padsize, self.padsize))
+            conv_out1 = self.convolution_func(
+                img=self.input[:, self.channel / 2:, :, :],
+                kerns=self.W1,
+                subsample=(self.convstride, self.convstride),
+                border_mode=(self.padsize, self.padsize)
+            )
             conv_out1 = conv_out1 + self.b1.dimshuffle('x', 0, 'x', 'x')
 
             conv_out = T.concatenate([conv_out0, conv_out1], axis=1)

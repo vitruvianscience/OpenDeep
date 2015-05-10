@@ -71,7 +71,7 @@ def run_midi(dataset):
                          minimum_batch_size=2,
                          # learning_rate=1e-4,
                          learning_rate=1e-6,
-                         save_frequency=10,
+                         save_frequency=1,
                          early_stop_length=100)
 
     ll = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'],test=True)

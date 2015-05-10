@@ -26,9 +26,9 @@ from opendeep import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.convolutional import ConvPoolLayer
 from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import mirror_images
-from opendeep.utils.noise import dropout
-from opendeep.utils.misc import make_time_units_string
+from opendeep.utils.misc import make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,8 @@ if theano.config.optimizer_including != "conv_meta":
                 "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
                 % str(theano.config.optimizer_including))
 
+
+@inherit_docs
 class AlexNet(Model):
     """
     This is the base model for AlexNet, Alex Krizhevsky's efficient deep convolutional net described in:
@@ -60,16 +62,41 @@ class AlexNet(Model):
     Weiguang Ding & Ruoyan Wnag, Fei Mao, Graham Taylor
     http://arxiv.org/pdf/1412.2302.pdf
     """
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 use_data_layer=False, rand_crop=True, batch_size=256, outdir='outputs/alexnet/'):
+    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/alexnet/',
+                 use_data_layer=False, rand_crop=True, batch_size=256):
+        """
+        Initialize AlexNet
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together. For now, you need to include the shape information (normally the
+            dimensionality of the input i.e. input_size).
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables). This parameter is useful when you want to
+            have two versions of the model that use the same parameters - such as a training model with dropout applied
+            to layers and one without for testing, where the parameters are shared between the two.
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        use_data_layer : bool
+            Whether or not to mirror the input images before feeding them into the network.
+        rand_crop : bool
+            If `use_data_layer`, whether to randomize.
+        batch_size : int
+            The batch size (number of images) to process in parallel.
+        """
         # combine everything by passing to Model's init
         super(AlexNet, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
         # configs can now be accessed through self dictionary
 
-        if self.inputs_hook or self.hiddens_hook or self.params_hook:
-            log.error("Inputs_hook, hiddens_hook, and params_hook not implemented yet for AlexNet!")
+        if self.inputs_hook or self.params_hook:
+            log.error("Inputs_hook and params_hook not implemented yet for AlexNet!")
 
-        self.flag_datalayer = self.use_data_layer
+        self.flag_datalayer = use_data_layer
+        self.rand_crop = rand_crop
 
         ####################
         # Theano variables #
@@ -77,18 +104,18 @@ class AlexNet(Model):
         # allocate symbolic variables for the data
         # 'rand' is a random array used for random cropping/mirroring of data
         self.x = T.tensor4('x')
-        self.y = T.lvector('y')
         self.rand = T.vector('rand')
 
         ##########
         # params #
         ##########
         self.params = []
+        self.noise_switches = []
 
         # make the network!
-        self.build_computation_graph()
+        self._build_computation_graph()
 
-    def build_computation_graph(self):
+    def _build_computation_graph(self):
         ###################### BUILD NETWORK ##########################
         # whether or not to mirror the input images before feeding them into the network
         if self.flag_datalayer:
@@ -98,7 +125,7 @@ class AlexNet(Model):
                                           rand=self.rand,
                                           flag_rand=self.rand_crop)
         else:
-            layer_1_input = self.x  # 4D tensor (going to be in c01b format)
+            layer_1_input = self.x  # 4D tensor (going to be in bc01 format)
 
         # Start with 5 convolutional pooling layers
         log.debug("convpool layer 1...")
@@ -177,26 +204,27 @@ class AlexNet(Model):
         log.debug("fully connected layer 1 (model layer 6)...")
         # we want to have dropout applied to the training version, but not the test version.
         fc_layer6_input = T.flatten(convpool_layer5.get_outputs(), 2)
-        fc_layer6 = BasicLayer(inputs_hook=(9216, fc_layer6_input), output_size=4096, config=fc_config)
+        fc_layer6 = BasicLayer(inputs_hook=(9216, fc_layer6_input),
+                               output_size=4096,
+                               noise='dropout',
+                               noise_level=0.5,
+                               **fc_config)
         # Add this layer's parameters!
         self.params += fc_layer6.get_params()
-
-        # now apply dropout to the output for training
-        dropout_layer6 = dropout(fc_layer6.get_outputs(), noise_level=0.5)
+        # Add the dropout noise switch
+        self.noise_switches += fc_layer6.get_noise_switch()
 
         log.debug("fully connected layer 2 (model layer 7)...")
-        fc_layer7       = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()),
-                                     output_size=4096,
-                                     config=fc_config)
-        fc_layer7_train = BasicLayer(inputs_hook=(4096, dropout_layer6),
-                                     output_size=4096,
-                                     params_hook=fc_layer7.get_params(),
-                                     config=fc_config)
+        fc_layer7 = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()),
+                               output_size=4096,
+                               noise='dropout',
+                               noise_level=0.5,
+                               **fc_config)
+
         # Add this layer's parameters!
         self.params += fc_layer7.get_params()
-
-        # apply dropout again for training
-        dropout_layer7 = dropout(fc_layer7_train.get_outputs(), noise_level=0.5)
+        # Add the dropout noise switch
+        self.noise_switches += fc_layer7.get_noise_switch()
 
         # last layer is a softmax prediction output layer
         softmax_config = {
@@ -206,26 +234,24 @@ class AlexNet(Model):
             'bias_init': 0.0
         }
         log.debug("softmax classification layer (model layer 8)...")
-        softmax_layer8       = SoftmaxLayer(inputs_hook=(4096, fc_layer7.get_outputs()),
-                                            output_size=1000,
-                                            config=softmax_config)
-        softmax_layer8_train = SoftmaxLayer(inputs_hook=(4096, dropout_layer7),
-                                            output_size=1000,
-                                            params_hook=softmax_layer8.get_params(),
-                                            config=softmax_config)
+        softmax_layer8 = SoftmaxLayer(inputs_hook=(4096, fc_layer7.get_outputs()),
+                                      output_size=1000,
+                                      **softmax_config)
+
         # Add this layer's parameters!
         self.params += softmax_layer8.get_params()
 
         # finally the softmax output from the whole thing!
         self.output = softmax_layer8.get_outputs()
+        self.targets = softmax_layer8.get_targets()
 
         #####################
         # Cost and monitors #
         #####################
-        self.train_cost = softmax_layer8_train.negative_log_likelihood(self.y)
-        cost = softmax_layer8.negative_log_likelihood(self.y)
-        errors = softmax_layer8.errors(self.y)
-        train_errors = softmax_layer8_train.errors(self.y)
+        self.train_cost = softmax_layer8.negative_log_likelihood()
+        cost = softmax_layer8.negative_log_likelihood()
+        errors = softmax_layer8.errors()
+        train_errors = softmax_layer8.errors()
 
         self.monitors = OrderedDict([('cost', cost), ('errors', errors), ('dropout_errors', train_errors)])
 
@@ -240,64 +266,29 @@ class AlexNet(Model):
         log.debug("compilation took %s", make_time_units_string(time.time() - t))
 
     def get_inputs(self):
-        """
-        This should return the input(s) to the model's computation graph. This is called by the Optimizer when creating
-        the theano train function on the cost expression returned by get_train_cost().
-
-        This should normally return the same theano variable list that is used in the inputs= argument to the f_run
-        function.
-        ------------------
-
-        :return: Theano variables representing the input(s) to the training function.
-        :rtype: List(theano variable)
-        """
         return [self.x]
 
     def get_outputs(self):
-        """
-        This method will return the model's output variable expression from the computational graph.
-        This should be what is given for the outputs= part of the 'f_run' function from self.run().
-
-        This will be used for creating hooks to link models together, where these outputs can be strung as the inputs
-        or hiddens to another model :)
-        ------------------
-
-        :return: theano expression of the outputs from this model's computation
-        :rtype: theano tensor (expression)
-        """
         return self.output
 
-    def get_train_cost(self):
-        """
-        This returns the expression that represents the cost given an input, which is used for the Optimizer during
-        training. The reason we can't just compile a f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the Optimizer object.
-        ------------------
+    def get_targets(self):
+        return self.targets
 
-        :return: theano expression of the model's training cost, from which parameter gradients will be computed.
-        :rtype: theano tensor
-        """
+    def get_noise_switch(self):
+        return self.get_noise_switch()
+
+    def get_train_cost(self):
         return self.train_cost
 
     def get_monitors(self):
-        """
-        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
-        about during training. For every monitor returned by this method, the function will be run on the
-        train/validation/test dataset and its value will be reported.
-        ------------------
-
-        :return: Dictionary of String: theano_function for each monitor variable we care about in the model.
-        :rtype: Dictionary
-        """
         return self.monitors
 
     def get_params(self):
-        """
-        This returns the list of theano shared variables that will be trained by the Optimizer.
-        These parameters are used in the gradient.
-        ------------------
-
-        :return: flattened list of theano shared variables to be trained
-        :rtype: List(shared_variables)
-        """
         return self.params
+
+    def run(self, input):
+        # because we use the splat to account for multiple inputs to the function, make sure input is a list.
+        input = raise_to_list(input)
+        # return the results of the run function!
+        output = self.f_run(*input)
+        return output

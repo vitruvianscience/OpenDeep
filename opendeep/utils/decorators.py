@@ -8,10 +8,13 @@ def inherit_missing_function_docs(cls):
     for name, func in vars(cls).items():
         if not func.__doc__:
             for parent in cls.__bases__:
-                parfunc = getattr(parent, name)
-                if parfunc and getattr(parfunc, '__doc__', None):
-                    func.__doc__ = parfunc.__doc__
-                    break
+                try:
+                    parfunc = getattr(parent, name)
+                    if parfunc and getattr(parfunc, '__doc__', None):
+                        func.__doc__ = parfunc.__doc__
+                        break
+                except AttributeError:
+                    pass
     return cls
 
 #########################################################
