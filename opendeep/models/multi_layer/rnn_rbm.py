@@ -1,7 +1,5 @@
 """
-.. module:: rnn_rbm
-
-This module provides the RNN-RBM.
+This module provides the RNN-RBM: an unsupervised, probabilistic, generative recurrent model.
 http://deeplearning.net/tutorial/rnnrbm.html
 """
 
@@ -17,7 +15,6 @@ import logging
 import os
 import cPickle as pickle
 # third party libraries
-import numpy
 import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
@@ -31,55 +28,101 @@ from opendeep.utils import file_ops
 
 log = logging.getLogger(__name__)
 
+
 class RNN_RBM(Model):
     """
+    The Recurrent RBM (RNN-RBM) is defined in the following tutorial:
     http://deeplearning.net/tutorial/rnnrbm.html
     """
-    default = {
-            # recurrent parameters
-            'rnn_hidden_size': None,
-            'rnn_hidden_activation': 'relu',  # type of activation to use for recurrent hidden activation
-            'rnn_weights_init': 'identity',  # how to initialize weights
-            'rnn_weights_mean': 0,  # mean for gaussian weights init
-            'rnn_weights_std': 0.005,  # standard deviation for gaussian weights init
-            'rnn_weights_interval': 'montreal',  # how to initialize from uniform
-            'rnn_bias_init': 0.0,  # how to initialize the bias parameter
-            'generate_n_steps': 200,  # how many steps to generate
-            # rbm parameters
-            'input_size': None,
-            'hidden_size': None,
-            'visible_activation': 'sigmoid',  # type of activation to use for visible activation
-            'hidden_activation': 'sigmoid',  # type of activation to use for hidden activation
-            'weights_init': 'uniform',  # either 'gaussian' or 'uniform' - how to initialize weights
-            'weights_mean': 0,  # mean for gaussian weights init
-            'weights_std': 0.005,  # standard deviation for gaussian weights init
-            'weights_interval': 'montreal',  # if the weights_init was 'uniform', how to initialize from uniform
-            'bias_init': 0.0,  # how to initialize the bias parameter
-            'k': 15,  # the k steps used for CD-k or PCD-k with Gibbs sampling
-            # general parameters
-            'mrg': RNG_MRG.MRG_RandomStreams(1),  # default random number generator from Theano
-            'rng': numpy.random.RandomState(1),  #default random number generator from Numpy
-            'outdir': 'outputs/rnnrbm/',  # the output directory for this model's outputs
-    }
-
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 config=None, defaults=default,
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/rnnrbm/',
                  input_size=None, hidden_size=None,
-                 visible_activation=None, hidden_activation=None,
-                 weights_init=None, weights_mean=None, weights_std=None, weights_interval=None, bias_init=None,
-                 mrg=None, rng=None,
-                 k=None,
-                 outdir=None,
-                 rnn_hidden_size=None, rnn_hidden_activation=None,
-                 rnn_weights_init=None, rnn_weights_mean=None, rnn_weights_std=None, rnn_weights_interval=None,
-                 rnn_bias_init=None, generate_n_steps=None):
-        # init Model to combine the defaults and config dictionaries with the initial parameters.
+                 visible_activation='sigmoid', hidden_activation='sigmoid',
+                 weights_init='uniform',
+                 weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 bias_init=0, mrg=RNG_MRG.MRG_RandomStreams(1),
+                 k=15,
+                 rnn_hidden_size=None, rnn_hidden_activation='rectifier',
+                 rnn_weights_init='identity',
+                 rnn_weights_mean=0, rnn_weights_std=5e-3, rnn_weights_interval='montreal',
+                 rnn_bias_init=0,
+                 generate_n_steps=200):
+        """
+        Initialize the RNN-RBM.
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together. For now, it needs to include the shape information (normally the
+            dimensionality of the input i.e. input_size).
+        hiddens_hook : Tuple of (shape, variable)
+            Routing information for the model to accept its hidden representation from elsewhere.
+            This is used for linking different models together. For now, it needs to include the shape
+            information (normally the dimensionality of the hiddens i.e. hidden_size).
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables).
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        input_size : int
+            The size (dimensionality) of the input to the RBM. If shape is provided in `inputs_hook`, this is optional.
+            The :class:`Model` requires an `output_size`, which gets set to this value because the RBM is an
+            unsupervised model. The output is a reconstruction of the input.
+        hidden_size : int
+            The size (dimensionality) of the hidden layer for the RBM.
+        visible_activation : str or callable
+            The nonlinear (or linear) visible activation to perform after the dot product from hiddens -> visible layer.
+            This activation function should be appropriate for the input unit types, i.e. 'sigmoid' for binary inputs.
+            See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
+            your own function to be used as long as it is callable.
+        hidden_activation : str or callable
+            The nonlinear (or linear) hidden activation to perform after the dot product from visible -> hiddens layer.
+            See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
+            your own function to be used as long as it is callable.
+        weights_init : str
+            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+        weights_interval : str or float
+            If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        weights_mean : float
+            If Gaussian `weights_init`, the mean value to use.
+        weights_std : float
+            If Gaussian `weights_init`, the standard deviation to use.
+        bias_init : float
+            The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
+        mrg : random
+            A random number generator that is used when sampling. The RBM is a probabilistic model, so it relies a lot
+            on sampling. I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
+        k : int
+            The k number of steps used for CD-k or PCD-k with Gibbs sampling. Basically, the number of samples
+            generated from the model to train against reconstructing the original input.
+        rnn_hidden_size : int
+            The number of hidden units (dimensionality) to use in the recurrent layer.
+        rnn_hidden_activation : str or Callable
+            The activation function to apply to recurrent units. See opendeep.utils.activation for options.
+        rnn_weights_init : str
+            Determines the method for initializing recurrent weights. See opendeep.utils.nnet for options. 'Identity'
+            works well with 'rectifier' `rnn_hidden_activation`.
+        rnn_weights_mean : float
+            If Gaussian `rnn_weights_init`, the mean value to use.
+        rnn_weights_std : float
+            If Gaussian `rnn_weights_init`, the standard deviation to use.
+        rnn_weights_interval : str or float
+            If Uniform `rnn_weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        rnn_bias_init : float
+            The initial value to use for the recurrent bias parameter. Most often, the default of 0.0 is preferred.
+        generate_n_steps : int
+            When generating from the model, how many steps to generate.
+        """
         super(RNN_RBM, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
-        # all configuration parameters are now in self!
 
         ##################
         # specifications #
         ##################
+        self.mrg = mrg
+        self.k = k
+        self.generate_n_steps = generate_n_steps
+
         # grab info from the inputs_hook, hiddens_hook, or from parameters
         if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
             raise NotImplementedError("Inputs_hook not implemented yet for RNN-RBM")
@@ -88,13 +131,13 @@ class RNN_RBM(Model):
             self.input = T.matrix('Vs')
 
         # set an initial value for the recurrent hiddens
-        self.u0 = T.zeros((self.rnn_hidden_size,))
+        self.u0 = T.zeros((rnn_hidden_size,))
 
         # make a symbolic vector for the initial recurrent hiddens value to use during generation for the model
         self.generate_u0 = T.vector("generate_u0")
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
-        self.hidden_size = self.hidden_size or self.input_size
+        self.hidden_size = hidden_size or self.input_size
 
         # deal with hiddens_hook
         if self.hiddens_hook is not None:
@@ -103,7 +146,7 @@ class RNN_RBM(Model):
 
         # other specifications
         # visible activation function!
-        self.visible_activation_func = get_activation_function(self.visible_activation)
+        self.visible_activation_func = get_activation_function(visible_activation)
 
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.visible_activation_func):
@@ -114,7 +157,7 @@ class RNN_RBM(Model):
             raise NotImplementedError("Non-binary visible activation not supported yet!")
 
         # hidden activation function!
-        self.hidden_activation_func = get_activation_function(self.hidden_activation)
+        self.hidden_activation_func = get_activation_function(hidden_activation)
 
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.hidden_activation_func):
@@ -125,10 +168,11 @@ class RNN_RBM(Model):
             raise NotImplementedError("Non-binary hidden activation not supported yet!")
 
         # recurrent hidden activation function!
-        self.rnn_hidden_activation_func = get_activation_function(self.rnn_hidden_activation)
+        self.rnn_hidden_activation_func = get_activation_function(rnn_hidden_activation)
 
         # symbolic scalar for how many recurrent steps to use during generation from the model
         self.n_steps = T.iscalar("generate_n_steps")
+
 
         ####################################################
         # parameters - make sure to deal with params_hook! #
@@ -142,62 +186,62 @@ class RNN_RBM(Model):
             self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu = self.params_hook
         else:
             # RBM weight params
-            self.W = get_weights(weights_init=self.weights_init,
+            self.W = get_weights(weights_init=weights_init,
                                  shape=(self.input_size, self.hidden_size),
                                  name="W",
-                                 rng=self.rng,
+                                 rng=self.mrg,
                                  # if gaussian
-                                 mean=self.weights_mean,
-                                 std=self.weights_std,
+                                 mean=weights_mean,
+                                 std=weights_std,
                                  # if uniform
-                                 interval=self.weights_interval)
+                                 interval=weights_interval)
             # RNN weight params
-            self.Wuh = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.hidden_size),
+            self.Wuh = get_weights(weights_init=rnn_weights_init,
+                                   shape=(rnn_hidden_size, self.hidden_size),
                                    name="Wuh",
-                                   rng=self.rng,
+                                   rng=self.mrg,
                                    # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
+                                   mean=rnn_weights_mean,
+                                   std=rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval)
+                                   interval=rnn_weights_interval)
 
-            self.Wuv = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.input_size),
+            self.Wuv = get_weights(weights_init=rnn_weights_init,
+                                   shape=(rnn_hidden_size, self.input_size),
                                    name="Wuv",
-                                   rng=self.rng,
+                                   rng=self.mrg,
                                    # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
+                                   mean=rnn_weights_mean,
+                                   std=rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval)
+                                   interval=rnn_weights_interval)
 
-            self.Wvu = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.input_size, self.rnn_hidden_size),
+            self.Wvu = get_weights(weights_init=rnn_weights_init,
+                                   shape=(self.input_size, rnn_hidden_size),
                                    name="Wvu",
-                                   rng=self.rng,
+                                   rng=self.mrg,
                                    # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
+                                   mean=rnn_weights_mean,
+                                   std=rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval)
+                                   interval=rnn_weights_interval)
 
-            self.Wuu = get_weights(weights_init=self.rnn_weights_init,
-                                   shape=(self.rnn_hidden_size, self.rnn_hidden_size),
+            self.Wuu = get_weights(weights_init=rnn_weights_init,
+                                   shape=(rnn_hidden_size, rnn_hidden_size),
                                    name="Wuu",
-                                   rng=self.rng,
+                                   rng=self.mrg,
                                    # if gaussian
-                                   mean=self.rnn_weights_mean,
-                                   std=self.rnn_weights_std,
+                                   mean=rnn_weights_mean,
+                                   std=rnn_weights_std,
                                    # if uniform
-                                   interval=self.rnn_weights_interval)
+                                   interval=rnn_weights_interval)
 
             # grab the bias vectors
             # rbm biases
-            self.bv = get_bias(shape=self.input_size, name="bv", init_values=self.bias_init)
-            self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=self.bias_init)
+            self.bv = get_bias(shape=self.input_size, name="bv", init_values=bias_init)
+            self.bh = get_bias(shape=self.hidden_size, name="bh", init_values=bias_init)
             # rnn bias
-            self.bu = get_bias(shape=self.rnn_hidden_size, name="bu", init_values=self.rnn_bias_init)
+            self.bu = get_bias(shape=rnn_hidden_size, name="bu", init_values=rnn_bias_init)
 
         # Finally have the parameters
         self.params = [self.W, self.bv, self.bh, self.Wuh, self.Wuv, self.Wvu, self.Wuu, self.bu]
@@ -230,12 +274,11 @@ class RNN_RBM(Model):
 
         rbm = RBM(inputs_hook=(self.input_size, self.input),
                   params_hook=(self.W, bv_ts[:], bh_ts[:]),
-                  visible_activation=self.visible_activation,
-                  hidden_activation=self.hidden_activation,
+                  visible_activation=self.visible_activation_func,
+                  hidden_activation=self.hidden_activation_func,
                   k=self.k,
                   outdir=os.path.join(self.outdir, 'rbm'),
-                  mrg=self.mrg,
-                  rng=self.rng)
+                  mrg=self.mrg)
         v_sample    = rbm.get_outputs()
         cost        = rbm.get_train_cost()
         monitors    = rbm.get_monitors()
@@ -246,8 +289,7 @@ class RNN_RBM(Model):
                   params_hook=(self.W, bv_ts[1:], bh_ts[1:]),
                   k=self.k,
                   outdir=os.path.join(self.outdir, 'rbm'),
-                  mrg=self.mrg,
-                  rng=self.rng)
+                  mrg=self.mrg)
 
         v_prediction    = rbm.get_outputs()
         updates_predict = rbm.get_updates()
@@ -290,12 +332,11 @@ class RNN_RBM(Model):
         if generate:
             rbm = RBM(inputs_hook=(self.input_size, T.zeros((self.input_size,))),
                       params_hook=(self.W, bv_t, bh_t),
-                      visible_activation=self.visible_activation,
-                      hidden_activation=self.hidden_activation,
+                      visible_activation=self.visible_activation_func,
+                      hidden_activation=self.hidden_activation_func,
                       k=self.k,
                       outdir=os.path.join(self.outdir, 'rbm'),
-                      mrg=self.mrg,
-                      rng=self.rng)
+                      mrg=self.mrg)
             v_t = rbm.get_outputs()
             updates = rbm.get_updates()
 

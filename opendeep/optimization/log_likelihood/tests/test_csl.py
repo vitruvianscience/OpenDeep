@@ -21,7 +21,7 @@ def test_bernoulli_csl(switch=0):
 
     means = as_floatX(test_x).eval()
     means = numpy.clip(a=means, a_min=1e-10, a_max=(1 - (1e-5)))
-    #means = numpy.random.uniform(size=(10000,784)).astype('float32') * 0 + 0.5
+    #means = as_floatX(numpy.random.uniform(size=(10000,784))) * 0 + 0.5
 
     minibatches = as_floatX(test_x_b.reshape((1000, 10, 784))).eval()
 

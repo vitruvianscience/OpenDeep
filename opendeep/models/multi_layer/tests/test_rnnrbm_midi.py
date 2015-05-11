@@ -1,8 +1,7 @@
-"""
-produce results from here:
-http://deeplearning.net/tutorial/rnnrbm.html
-"""
+# produce results from here:
+# http://deeplearning.net/tutorial/rnnrbm.html
 
+from __future__ import print_function
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
@@ -22,10 +21,8 @@ try:
     import pylab
     has_pylab = True
 except ImportError:
-    print (
-        "pylab isn't available."
-    )
-    print "It can be installed with 'pip install -q Pillow'"
+    print("pylab isn't available.")
+    print("It can be installed with 'pip install -q Pillow'")
     has_pylab = False
 
 import logging
@@ -78,7 +75,7 @@ def run_midi(dataset):
                      # rnn_weights_init='gaussian',
                      # rnn_hidden_activation='tanh',
                      rnn_weights_std=0.0001,
-                     rng=rng,
+                     mrg=mrg,
                      outdir=outdir)
 
     # make an optimizer to train it

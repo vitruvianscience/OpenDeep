@@ -1,6 +1,4 @@
 '''
-.. module:: log_likelihood
-
 General interface for creating a log-likelihood score object.
 '''
 __authors__ = "Markus Beissinger"

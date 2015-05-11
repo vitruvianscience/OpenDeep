@@ -1,13 +1,11 @@
 """
-.. module: conv1d_implementations
-
-Alternative convolution implementations for Theano
+Alternative 1-dimensional convolution implementations.
 
 These 1-dimensional convolutions were taken from the Sander Dieleman's Lasagne framework:
 https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py
 """
 __authors__ = "Sander Dieleman"
-__credits__ = ["Sander Dieleman", "Daniel Nouri", "Colin Raffel"]
+__credits__ = ["Sander Dieleman", "Daniel Nouri", "Colin Raffel", "Markus Beissinger"]
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
 __email__ = "opendeep-dev@googlegroups.com"
@@ -17,6 +15,7 @@ import logging
 # third party libraries
 import numpy
 import theano
+from theano.compat import six
 import theano.tensor as T
 
 log = logging.getLogger(__name__)
@@ -40,7 +39,9 @@ if theano.config.optimizer_including != "conv_meta":
 def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
               border_mode='valid', subsample=(1,)):
     """
-    using conv2d with a single input channel
+    Using conv2d with a single input channel.
+
+    border_mode has to be 'valid' at the moment.
     """
     if border_mode != 'valid':
         log.error("Unsupported border_mode for conv1d_sc: "
@@ -73,7 +74,7 @@ def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
 def conv1d_mc0(input, filters, image_shape=None, filter_shape=None,
                border_mode='valid', subsample=(1,)):
     """
-    using conv2d with width == 1
+    Using conv2d with width == 1.
     """
     if image_shape is None:
         image_shape_mc0 = None
@@ -100,7 +101,7 @@ def conv1d_mc0(input, filters, image_shape=None, filter_shape=None,
 def conv1d_mc1(input, filters, image_shape=None, filter_shape=None,
                border_mode='valid', subsample=(1,)):
     """
-    using conv2d with height == 1
+    Using conv2d with height == 1.
     """
     if image_shape is None:
         image_shape_mc1 = None
@@ -128,10 +129,12 @@ def conv1d_unstrided(input, filters, image_shape, filter_shape,
                      border_mode='valid', subsample=(1,),
                      implementation=conv1d_sc):
     """
-    perform a strided 1D convolution by reshaping input and filters so that the
+    Perform a strided 1D convolution by reshaping input and filters so that the
     stride becomes 1. This function requires that the filter length is a
     multiple of the stride. It also truncates the input to have a length
     that is a multiple of the stride.
+
+    border_mode has to be 'valid' at the moment.
     """
     batch_size, num_input_channels, input_length = image_shape
     num_filters, num_input_channels_, filter_length = filter_shape
@@ -180,7 +183,9 @@ def conv1d_unstrided(input, filters, image_shape, filter_shape,
 def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
               subsample=(1,)):
     """
-    using a single dot product
+    Using a single dot product.
+
+    border_mode has to be 'valid' at the moment.
     """
     if border_mode != 'valid':
         log.error("Unsupported border_mode for conv1d_sd: "
@@ -244,7 +249,9 @@ def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
 def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
               subsample=(1,)):
     """
-    using multiple dot products
+    Using multiple dot products.
+
+    border_mode has to be 'valid' at the moment.
     """
     if border_mode != 'valid':
         log.error("Unsupported border_mode for conv1d_md: "
@@ -292,4 +299,58 @@ def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
     return conved
 
 
-# TODO: conv1d_md_channelslast?
+# TODO: conv1d_md_channelslast? (from lasagne)
+
+############# keep conv1d functions above this line, and add them to the dictionary below #############
+# this is a dictionary containing a string keyword mapping to the conv1d function -
+# used for get_conv1d_function(name)
+_conv1d = {'sc': conv1d_sc,
+           'mc0': conv1d_mc0,
+           'mc1': conv1d_mc1,
+           'md': conv1d_md,
+           'sd': conv1d_sd,
+           'unstrided': conv1d_unstrided}
+
+def get_conv1d_function(name):
+    """
+    This helper method returns the appropriate 1-dimensional convolution function given a string name.
+    It looks up the appropriate function from the internal _conv1d dictionary.
+
+    Parameters
+    ----------
+    name : str or Callable
+        String representation of the function you want. If callable, assumes you are using your own function and
+        returns that.
+
+    Returns
+    -------
+    function
+        The appropriate 1-dimensional convolution function, or raise NotImplementedError if it isn't found.
+
+    Raises
+    ------
+    NotImplementedError
+        When the name cannot be found in the internal dictionary.
+    """
+    # return the function itself if it is a Callable
+    if callable(name):
+        return name
+    # otherwise if it is a string
+    elif isinstance(name, six.string_types):
+        # standardize the input to be lowercase
+        name = name.lower()
+        # grab the appropriate activation function from the dictionary of activations
+        func = _conv1d.get(name)
+        # if it couldn't find the function (key didn't exist), raise a NotImplementedError
+        if func is None:
+            log.critical("Did not recognize conv1d %s! Please use one of: ", str(name), str(_conv1d.keys()))
+            raise NotImplementedError(
+                "Did not recognize conv1d {0!s}! Please use one of: {1!s}".format(name, _conv1d.keys())
+            )
+        # return the found function
+        return func
+    # else we don't know what to do so throw error
+    else:
+        log.critical("Convolution function not implemented for %s with type %s", str(name), str(type(name)))
+        raise NotImplementedError("Convolution function not implemented for %s with type %s",
+                                  str(name), str(type(name)))

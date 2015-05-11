@@ -1,7 +1,7 @@
 '''
-.. module:: piano_midi_de
+Object for the Piano-midi.de midi dataset.
 
-Object for the Piano-midi.de midi dataset
+Pre-processed from here: http://www-etud.iro.umontreal.ca/~boulanni/icml2012
 '''
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -29,6 +29,22 @@ class PianoMidiDe(FileDataset):
     '''
     Object for the Piano-midi.de midi dataset. Pickled file of midi piano roll provided by Montreal's
     Nicolas Boulanger-Lewandowski into train, valid, and test sets.
+
+    Attributes
+    ----------
+    train_shapes : list(tuple)
+        List of the shapes for all the training sequences. List of (N, D) tuples for N elements in sequence
+        and D dimensionality for each sequence.
+    valid_shapes : list(tuple)
+        List of the shapes for all the validation sequences.
+    test_shapes : list(tuple)
+        List of the shapes for all the testing sequences.
+    train : shared variable
+        The shared variable of all the training sequences concatenated into one matrix.
+    valid : shared variable
+        The shared variable of all the validation sequences concatenated into one matrix.
+    test : shared variable
+        The shared variable of all the testing sequences concatenated into one matrix.
     '''
     def __init__(self, dataset_dir='../../datasets'):
         filename = 'Piano-midi.de.zip'
@@ -60,6 +76,19 @@ class PianoMidiDe(FileDataset):
         self.test = dataset_shared(numpy.concatenate(test_datasets), name='piano_test', borrow=True)
 
     def getSubset(self, subset):
+        """
+        Returns the (x, None) pair of shared variables for the given train, validation, or test subset.
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            (x, None) tuple of shared variables holding the dataset input, or None if the subset doesn't exist.
+        """
         if subset is datasets.TRAIN:
             return self.train, None
         elif subset is datasets.VALID:
@@ -69,14 +98,21 @@ class PianoMidiDe(FileDataset):
         else:
             return None, None
 
-    def hasSubset(self, subset):
-        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
-        else:
-            # it has train valid and test
-            return True
-
     def getDataShape(self, subset):
+        '''
+        Returns the shape of the input data for the given subset
+
+        Parameters
+        ----------
+        subset : int
+            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
+
+        Returns
+        -------
+        tuple
+            Return the list of shapes of this dataset's subset sequences. This will separate out the shapes for each
+            sequence individually as items in the list, while the dataset is still concatenated into a single matrix.
+        '''
         if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
             log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
             return None

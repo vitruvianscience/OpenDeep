@@ -1,7 +1,10 @@
 """
-.. module:: config
-
 Methods used for parsing various configurations (dictionaries, json, yaml, etc.)
+
+Attributes
+----------
+has_pyyaml : bool
+    Whether the user has the PyYAML library installed (for parsing YAML files).
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -31,14 +34,21 @@ def create_dictionary_like(input):
     This takes in either an object or filename and parses it into a dictionary. Mostly useful for parsing JSON or YAML
     config files, and returning the dictionary representation.
 
-    :param input: Dictionary-like object (implements collections.Mapping), JSON filename, or YAML filename.
-    :type input: collections.Mapping or String
+    Parameters
+    ----------
+    input : collections.Mapping or str
+        Dictionary-like object (implements collections.Mapping), JSON filename, or YAML filename.
 
-    :return: the parsed dictionary-like object, or None if it could not be parsed.
-    :rtype: collections.Mapping or None
+    Returns
+    -------
+    collections.Mapping
+        The parsed dictionary-like object, or None if it could not be parsed.
 
-    :note: YAML is parsed by the pyyaml library, which would be an optional dependency.
-    Install with 'pip install pyyaml' if you want YAML-parsing capabilities.
+    .. note::
+
+        YAML is parsed by the pyyaml library, which would be an optional dependency.
+        Install with 'pip install pyyaml' if you want YAML-parsing capabilities.
+
     """
     if input is None:
         log.debug('Input to create_dictionary_like was None.')
@@ -72,14 +82,18 @@ def combine_config_and_defaults(config=None, defaults=None):
     This method takes two configuration dictionaries (or JSON/YAML filenames), and combines them.
     One will serve as the 'defaults' for the configuration, while the other will override any defaults when combined.
 
-    :param config: dictionary-like object or filepath to a JSON or YAML configuration file
-    :type config: collections.Mapping or String
+    Parameters
+    ----------
+    config : collections.Mapping or str
+        Dictionary-like object or filepath to a JSON or YAML configuration file.
+    defaults : collections.Mapping or str
+        Dictionary-like object or filepath to a JSON or YAML configuration file.
 
-    :param defaults: dictionary-like object or filepath to a JSON or YAML configuration file
-    :type defaults: collections.Mapping or String
-
-    :return: dictionary-like object that combines the defaults and the config
-    :rtype: collections.Mapping
+    Returns
+    -------
+    collections.Mapping
+        Dictionary-like object that combines the defaults and the config into one object, overriding any values
+        found in defaults with values found in config.
     """
     # make sure the config is like a dictionary
     config_dict = copy.deepcopy(create_dictionary_like(config))

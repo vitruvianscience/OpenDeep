@@ -1,7 +1,19 @@
 """
-.. module:: monitor
+This module sets up monitors for keeping track of some values during training/testing.
 
-This module sets up a Monitor object for keeping track of some values during training/testing
+In essence, it is a wrapper around shared variables that allows you to output their values to different
+locations, such as files, databases, or plots.
+
+Attributes
+----------
+COLLAPSE_SEPARATOR : str
+    The string separator to use when collapsing monitor names from monitor channels.
+TRAIN_MARKER : str
+    The string indicator to append to collapsed monitor names to indicate they should be used on training data.
+VALID_MARKER : str
+    The string indicator to append to collapsed monitor names to indicate they should be used on validation data.
+TEST_MARKER : str
+    The string indicator to append to collapsed monitor names to indicate they should be used on testing data.
 """
 
 __authors__ = "Markus Beissinger"
@@ -29,13 +41,28 @@ TEST_MARKER = 'test'
 
 class MonitorsChannel(object):
     """
-    A MonitorsChannel is a list of monitors that belong together
+    A :class:`MonitorsChannel` is a list of monitors that logically belong together. For example, the means of model
+    weight matrices.
+
+    Attributes
+    ----------
+    name : str
+        The channel's unique name.
+    monitors : list
+        The list of :class:`Monitor` in this channel.
     """
     def __init__(self, name, monitors=None):
         """
-        Initializes a channel with name and a potential starting list of monitors to include.
+        Initializes a channel with `name` and a potential starting list of :class:`Monitor` to include.
 
         Names of channels have to be unique from each other.
+
+        Parameters
+        ----------
+        name : str
+            The unique name to give this channel.
+        monitors : Monitor, list(Monitor), optional
+            The starting monitor(s) to use for this channel.
         """
         monitors = raise_to_list(monitors)
         if monitors is not None:
@@ -54,7 +81,13 @@ class MonitorsChannel(object):
 
     def add(self, monitor):
         """
-        Adds a monitor (or list of monitors) to the channel
+        Adds a :class:`Monitor` (or list of monitors) to the channel.
+
+        This will append `monitor` to `self.monitors`.
+
+        Parameters
+        ----------
+        monitor : Monitor or list(Monitor)
         """
         monitors = raise_to_list(monitor)
         # make sure the input monitors are actually Monitors
@@ -82,7 +115,17 @@ class MonitorsChannel(object):
 
     def pop(self, name):
         """
-        returns a monitor with the name and removes it from the list
+        Returns a :class:`Monitor` with the name `name` and removes it from the `self.monitors` list.
+
+        Parameters
+        ----------
+        name : str
+            Name of the monitor to pop from the channel.
+
+        Returns
+        -------
+        Monitor
+            The monitor with `name`, otherwise None.
         """
         for monitor in self.monitors:
             if monitor.name.lower() == name.lower():
@@ -93,7 +136,12 @@ class MonitorsChannel(object):
 
     def remove(self, name):
         """
-        removes a monitor with the name from the list
+        Removes a :class:`Monitor` with the name `name` from the `self.monitors` list.
+
+        Parameters
+        ----------
+        name : str
+            Name of the monitor to remove from the channel.
         """
         for monitor in self.monitors:
             if monitor.name.lower() == name.lower():
@@ -101,21 +149,83 @@ class MonitorsChannel(object):
         log.error("Couldn't find monitor %s in channel %s.", name, self.name)
 
     def get_monitor_names(self):
+        """
+        Returns the list of names of the Monitors in this channel.
+
+        Returns
+        -------
+        list
+            List of string names for the monitors in this channel.
+        """
         return [monitor.name for monitor in self.monitors]
 
     def get_monitor_expressions(self):
+        """
+        Returns the list of computation expressions (or variable) of the Monitors in this channel.
+
+        Returns
+        -------
+        list
+            List of theano expressions for the monitors in this channel.
+        """
         return [monitor.expression for monitor in self.monitors]
 
     def get_train_monitors(self):
+        """
+        Returns the list of monitors with `train_flag` set to True in this channel. (The monitors to be run
+        on training data).
+
+        Returns
+        -------
+        list
+            List of monitors with `train_flag=True`.
+        """
         return [monitor for monitor in self.monitors if monitor.train_flag]
 
     def get_valid_monitors(self):
+        """
+        Returns the list of monitors with `valid_flag` set to True in this channel. (The monitors to be run
+        on validation data).
+
+        Returns
+        -------
+        list
+            List of monitors with `valid_flag=True`.
+        """
         return [monitor for monitor in self.monitors if monitor.valid_flag]
 
     def get_test_monitors(self):
+        """
+        Returns the list of monitors with `test_flag` set to True in this channel. (The monitors to be run
+        on testing data).
+
+        Returns
+        -------
+        list
+            List of monitors with `test_flag=True`.
+        """
         return [monitor for monitor in self.monitors if monitor.test_flag]
 
     def get_monitors(self, train=None, valid=None, test=None):
+        """
+        Returns the list of monitors with the given flags. If all input flags set to None (left at their default
+        values), this will just return the full `self.monitors` list. For multiple flags, this returns the
+        union of the sets of monitors with each flag.
+
+        Parameters
+        ----------
+        train : bool, optional
+            Whether to return monitors with `train_flag=True`.
+        valid : bool, optional
+            Whether to return monitors with `valid_flag=True`.
+        test : bool, optional
+            Whether to return monitors with `test_flag=True`.
+
+        Returns
+        -------
+        list
+            List of monitors containing the appropriate flags.
+        """
         # if all the flags not given, just return all the monitors
         if train is None and valid is None and test is None:
             return self.monitors
@@ -140,16 +250,44 @@ class MonitorsChannel(object):
 
 class Monitor(object):
     """
-    A Monitor to make managing values to output during training/testing easy.
+    A :class:`Monitor` is a way to make managing values to output during training/testing easy.
+
+    It associates a friendly name with a variable or expression, what dataset(s) to evaluate the variable or expression,
+    and where to output the result.
+
+    Attributes
+    ----------
+    name : str
+        Unique name to represent the monitor.
+    expression : theano expression/variable.
+        The computation for the value of the Monitor.
+    train_flag : bool
+        Whether to run this monitor on training data.
+    valid_flag : bool
+        Whether to run this monitor on validation data.
+    test_flag : bool
+        Whether to run this monitor on testing data.
+    out_service : OutService
+        The :class:`OutService` to for this monitor - where its output goes.
     """
     def __init__(self, name, expression, out_service=None, train=True, valid=False, test=False):
         """
-        This initializes a Monitor representation.
+        This initializes a :class:`Monitor` representation.
 
-        :param name: a string of what to call the monitor
-        :type name: str
-
-        :param expression:
+        Parameters
+        ----------
+        name : str
+            Unique name to represent the monitor.
+        expression : theano expression/variable.
+            The computation for the value of the Monitor.
+        out_service : OutService
+            The :class:`OutService` to for this monitor - where its output goes.
+        train_flag : bool
+            Whether to run this monitor on training data.
+        valid_flag : bool
+            Whether to run this monitor on validation data.
+        test_flag : bool
+            Whether to run this monitor on testing data.
         """
         # make sure the monitor name is a string
         assert isinstance(name, string_types), "name needs to be a string. found %s" % str(type(name))
@@ -170,13 +308,27 @@ class Monitor(object):
 
 def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     """
-    This function takes a list of monitor channels and collapses them into a
-    list of tuples (collapsed_name, expression, out_service)
+    This function takes a list of :class:`MonitorsChannel` and flattens them into a
+    list of tuples (collapsed_name, expression, out_service).
 
-    :param monitor_channels: list of MonitorsChannels or Monitors to collapse
-    :type monitor_channels: list of MonitorsChannel or Monitor
-    :return: list of tuples
-    :rtype: list of tuples
+    Names are collapsed according to the convention:
+    `COLLAPSE_SEPARATOR`.join([channel_name, monitor_name]).append(train/valid/test marker)
+
+    Parameters
+    ----------
+    monitor_channels : list(MonitorsChannel or Monitor)
+        The list of MonitorsChannel or Monitor to collapse.
+    train : bool, optional
+        Whether to collapse the monitors to be used on training data.
+    valid : bool, optional
+        Whether to collapse the monitors to be used on validation data.
+    test : bool, optional
+        Whether to collapse the monitors to be used on testing data.
+
+    Returns
+    -------
+    list
+        List of (collapsed_monitor_name, monitor_expression, out_service) tuples.
     """
     monitor_channels = raise_to_list(monitor_channels)
     collapsed = []

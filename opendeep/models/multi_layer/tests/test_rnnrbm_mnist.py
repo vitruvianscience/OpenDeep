@@ -32,7 +32,7 @@ def run_sequence(sequence=0):
                      rnn_weights_init='identity',
                      rnn_hidden_activation='relu',
                      rnn_weights_std=1e-4,
-                     rng=rng,
+                     mrg=mrg,
                      outdir=outdir)
     # load pretrained rbm on mnist
     # rnnrbm.load_params(outdir + 'trained_epoch_200.pkl')

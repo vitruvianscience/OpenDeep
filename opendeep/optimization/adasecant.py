@@ -1,7 +1,5 @@
 """
-.. module:: adasecant
-
-Implementation of ADASECANT trainig algorithm
+Implementation of ADASECANT training algorithm
 
 'ADASECANT: Robust Adaptive Secant Method for Stochastic Gradient'
 Caglar Gulcehre, Yoshua Bengio
@@ -12,15 +10,16 @@ https://github.com/caglar/adasecant_wshp_paper
 
 From the author
 <http://www.reddit.com/r/MachineLearning/comments/2w6bfl/ask_ml_has_anyone_tried_to_reproduce_adasecant/>:
-'This implementation on github is slightly different from the one mentioned in the paper,
-there are some minor differences (outlier detection mechanism is slightly different). But in principle those
-shouldn't change the results too much... The important point to care about in the implementation of this algorithm,
-is the initialization of the accumulators. You can check the code to see how I initialized it.
-Please also check my comments as well. Note that it is important to keep the rms statistics of gamma as well
-(it should not be negative).
+    This implementation on github is slightly different from the one mentioned in the paper,
+    there are some minor differences (outlier detection mechanism is slightly different). But in principle those
+    shouldn't change the results too much... The important point to care about in the implementation of this algorithm,
+    is the initialization of the accumulators. You can check the code to see how I initialized it.
+    Please also check my comments as well. Note that it is important to keep the rms statistics of gamma as well
+    (it should not be negative).
 
-Please note that this was just a workshop paper and the algorithm is still work in progress.
-We plan to publish another paper related to that with some collaborators.'
+    Please note that this was just a workshop paper and the algorithm is still work in progress.
+    We plan to publish another paper related to that with some collaborators.
+
 """
 
 __authors__ = "Markus Beissinger"
@@ -42,6 +41,7 @@ from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
 
+
 # All AdaSecant needs to do is implement the get_updates() method for stochastic gradient descent
 class AdaSecant(Optimizer):
     """
@@ -52,85 +52,111 @@ class AdaSecant(Optimizer):
             "ADASECANT: Robust Adaptive Secant Method for Stochastic Gradient."
             arXiv preprint arXiv:1412.7419 (2014).
     There are some small changes in this code.
-    Parameters
-    ----------
-
-    gamma_clip : float, optional
-        The clipping threshold for the gamma. In general 1.8 seems to
-        work fine for several tasks.
-    decay : float, optional
-        Decay rate :math:`\\rho` in Algorithm 1 of the aforementioned
-        paper. Decay 0.95 seems to work fine for several tasks.
-    start_var_reduction: float, optional,
-        How many updates later should the variance reduction start from?
-    delta_clip: float, optional,
-        The threshold to clip the deltas after.
-    grad_clip: float, optional,
-        Apply gradient clipping for RNNs (not necessary for feedforward networks). But this is
-        a constraint on the norm of the gradient per layer.
-        Based on:
-            Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
-            recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
-    use_adagrad: bool, optional
-        Either to use clipped adagrad or not.
-    use_corrected_grad: bool, optional
-        Either to use correction for gradients (referred as variance
-        reduction in the workshop paper).
     """
-    # Default values to use for some training parameters
-    defaults = {
-        'decay': 0.95,
-        'gamma_clip': 1.8,
-        'damping': 1e-7,
-        'grad_clip': None,
-        'start_var_reduction': 0,
-        'delta_clip': None,
-        'use_adagrad': False,
-        'skip_nan_inf': False,
-        'upper_bound_tau': 1e8,
-        'lower_bound_tau': 1.5,
-        'use_corrected_grad': True,
-        'learning_rate': 1e-6  # epsilon
-    }
-
     def __init__(self, model, dataset,
-                 config=None, defaults=defaults,
-                 n_epoch=None, batch_size=None, minimum_batch_size=None,
+                 n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
-                 learning_rate=None, lr_decay=None, lr_factor=None,
-                 decay=None, gamma_clip=None, damping=None, grad_clip=None, start_var_reduction=None,
-                 delta_clip=None, use_adagrad=None, skip_nan_inf=None, upper_bound_tau=None,
-                 lower_bound_tau=None, use_corrected_grad=None):
+                 learning_rate=1e-6, lr_decay=None, lr_factor=None,
+                 decay=0.95, gamma_clip=1.8, damping=1e-7, grad_clip=None, start_var_reduction=0,
+                 delta_clip=None, use_adagrad=False, skip_nan_inf=False,
+                 upper_bound_tau=1e8, lower_bound_tau=1.5, use_corrected_grad=True):
+        """
+        Initialize AdaSecant.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to train.
+        dataset : Dataset
+            The Dataset to use when training the Model.
+        n_epoch : int
+            how many training iterations over the dataset to go.
+        batch_size : int
+            How many examples from the training dataset to use in parallel.
+        minimum_batch_size : int
+            The minimum number of examples required at a time (for things like time series, this would be > 1).
+        save_frequency : int
+            How many epochs to train between each new save of the Model's parameters.
+        early_stop_threshold : float
+            The factor by how much the best validation training score needs to improve to determine early stopping.
+        early_stop_length : int
+            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        learning_rate : float
+            The multiplicative amount to adjust parameters based on their gradient values.
+        lr_decay : str
+            The type of decay function to use for changing the learning rate over epochs. See
+            `opendeep.utils.decay` for options.
+        lr_factor : float
+            The amount to use for the decay function when changing the learning rate over epochs. See
+            `opendeep.utils.decay` for its effect for given decay functions.
+        decay : float, optional
+            Decay rate :math:`\\rho` in Algorithm 1 of the aforementioned
+            paper. Decay 0.95 seems to work fine for several tasks.
+        gamma_clip : float, optional
+            The clipping threshold for the gamma. In general 1.8 seems to
+            work fine for several tasks.
+        start_var_reduction: float, optional,
+            How many updates later should the variance reduction start from?
+        delta_clip: float, optional,
+            The threshold to clip the deltas after.
+        grad_clip: float, optional,
+            Apply gradient clipping for RNNs (not necessary for feedforward networks). But this is
+            a constraint on the norm of the gradient per layer.
+            Based on:
+                Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
+                recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
+        use_adagrad: bool, optional
+            Either to use clipped adagrad or not.
+        use_corrected_grad: bool, optional
+            Either to use correction for gradients (referred as variance
+            reduction in the workshop paper).
+        """
         # get everything together with the Optimizer class
-        super(AdaSecant, self).__init__(model, dataset, config=config, defaults=defaults,
-                                        n_epoch=n_epoch, batch_size=batch_size, minimum_batch_size=minimum_batch_size,
-                                        save_frequency=save_frequency, early_stop_length=early_stop_length,
-                                        early_stop_threshold=early_stop_threshold, learning_rate=learning_rate,
-                                        lr_decay=lr_decay, lr_factor=lr_factor, decay=decay, gamma_clip=gamma_clip,
-                                        damping=damping, grad_clip=grad_clip, start_var_reduction=start_var_reduction,
-                                        delta_clip=delta_clip, use_adagrad=use_adagrad, skip_nan_inf=skip_nan_inf,
-                                        upper_bound_tau=upper_bound_tau, lower_bound_tau=lower_bound_tau,
-                                        use_corrected_grad=use_corrected_grad)
+        initial_parameters = locals().copy()
+        initial_parameters.pop('self')
+        super(AdaSecant, self).__init__(**initial_parameters)
+
+        assert decay >= 0., "Decay needs to be >=0."
+        assert decay < 1., "Decay needs to be <1."
+        self.decay = sharedX(decay, "decay")
+
+        self.damping = damping
+        self.skip_nan_inf = skip_nan_inf
+
+        if grad_clip:
+            assert grad_clip > 0.
+            assert grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
+        self.grad_clip = grad_clip
+
+        self.use_adagrad = use_adagrad
+        self.use_corrected_grad = use_corrected_grad
+        self.gamma_clip = gamma_clip
+        self.start_var_reduction = start_var_reduction
+        self.delta_clip = delta_clip
 
         # We have to bound the tau to prevent it to
         # grow to an arbitrarily large number, oftenwise
         # that causes numerical instabilities for very deep
         # networks. Note that once tau become very large, it will keep,
         # increasing indefinitely.
+        self.lower_bound_tau = lower_bound_tau
+        self.upper_bound_tau = upper_bound_tau
 
-        assert self.decay >= 0., "Decay needs to be >=0."
-        assert self.decay < 1., "Decay needs to be <1."
-        self.decay = sharedX(self.decay, "decay")
-
-    def get_updates(self, grads):
+    def get_updates(self, gradients):
         """
-        .. todo::
-            WRITEME
+        Compute AdaSecant updates (see the paper for details).
+
         Parameters
         ----------
-        grads : dict
+        gradients : dict
             A dictionary mapping from the model's parameters to their
             gradients.
+
+        Returns
+        -------
+        updates : OrderdDict
+            A dictionary mapping from the old model parameters, to their new
+            values after a single iteration of the learning rule.
         """
 
         updates = OrderedDict({})
@@ -140,27 +166,25 @@ class AdaSecant(Optimizer):
         if self.skip_nan_inf:
             #If norm of the gradients of a parameter is inf or nan don't update that parameter
             #That might be useful for RNNs.
-            grads = OrderedDict({p: T.switch(T.or_(T.isinf(grads[p]),
-                T.isnan(grads[p])), 0, grads[p]) for
-                p in grads.keys()})
+            gradients = OrderedDict({p: T.switch(T.or_(T.isinf(gradients[p]),
+                T.isnan(gradients[p])), 0, gradients[p]) for
+                p in gradients.keys()})
 
         #Block-normalize gradients:
-        grads = OrderedDict({p: grads[p] / (grads[p].norm(2) + eps) for p in grads.keys()})
-        nparams = len(grads.keys())
+        gradients = OrderedDict({p: gradients[p] / (gradients[p].norm(2) + eps) for p in gradients.keys()})
+        nparams = len(gradients.keys())
 
         #Apply the gradient clipping, this is only necessary for RNNs and sometimes for very deep
         #networks
         if self.grad_clip:
-            assert self.grad_clip > 0.
-            assert self.grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
-            gnorm = sum([g.norm(2) for g in grads.values()])
+            gnorm = sum([g.norm(2) for g in gradients.values()])
 
-            grads = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
+            gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
                                  g * self.grad_clip * nparams / gnorm , g)\
-                                 for p, g in grads.iteritems()})
+                                 for p, g in gradients.iteritems()})
 
-        for param in grads.keys():
-            grads[param].name = "grad_%s" % param.name
+        for param in gradients.keys():
+            gradients[param].name = "grad_%s" % param.name
             mean_grad = sharedX(param.get_value() * 0. + eps, name="mean_grad_%s" % param.name)
             # mean_corrected_grad = sharedX(param.get_value() * 0 + eps, name="mean_corrected_grad_%s" % param.name)
             slow_constant = 2.1
@@ -207,7 +231,7 @@ class AdaSecant(Optimizer):
             mean_dx = sharedX(param.get_value() * 0.)
 
             # Block-wise normalize the gradient:
-            norm_grad = grads[param]
+            norm_grad = gradients[param]
 
             #For the first time-step, assume that delta_x_t := norm_grad
             cond = T.eq(step, 0)

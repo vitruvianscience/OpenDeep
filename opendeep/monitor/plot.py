@@ -1,9 +1,14 @@
 """
-.. module:: plot
-
 This module sets up plotting for values during training/testing.
 
+It uses bokeh-server to create a local endpoint for serving graphs of data in the browser.
+
 Adapted from Blocks: https://github.com/bartvm/blocks/blob/master/blocks/extensions/plot.py
+
+Attributes
+----------
+BOKEH_AVAILABLE : bool
+    Whether or not the user has Bokeh installed (calculated when it tries to import bokeh).
 """
 
 __authors__ = "Markus Beissinger"
@@ -73,52 +78,53 @@ class Plot(object):
        ``start_server_flag`` set to ``True``, because it can't run two servers
        at the same time.
 
-    Parameters
-    ----------
-    bokeh_doc_name : str
-        The name of the Bokeh document. Use a different name for each
-        experiment if you are storing your plots.
-    channels : list of lists of strings
-        The names of the monitor channels that you want to plot. The
-        channels in a single sublist will be plotted together in a single
-        figure, so use e.g. ``[['test_cost', 'train_cost'],
-        ['weight_norms']]`` to plot a single figure with the training and
-        test cost, and a second figure for the weight norms.
-    open_browser : bool, optional
-        Whether to try and open the plotting server in a browser window.
-        Defaults to ``True``. Should probably be set to ``False`` when
-        running experiments non-locally (e.g. on a cluster or through SSH).
-    start_server_flag : bool, optional
-        Whether to try and start the Bokeh plotting server. Defaults to
-        ``False``. The server started is not persistent i.e. after shutting
-        it down you will lose your plots. If you want to store your plots,
-        start the server manually using the ``bokeh-server`` command. Also
-        see the warning above.
-    server_url : str, optional
-        Url of the bokeh-server. Ex: when starting the bokeh-server with
-        ``bokeh-server --ip 0.0.0.0`` at ``alice``, server_url should be
-        ``http://alice:5006``. When not specified the default configured
-        to ``http://localhost:5006/``.
-
     """
     # Tableau 10 colors
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
               '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
-    defaults = {
-        'colors': colors
-    }
-
-    def __init__(self, bokeh_doc_name, monitor_channels=[], open_browser=False,
+    def __init__(self, bokeh_doc_name, monitor_channels=None, open_browser=False,
                  start_server=False, server_url='http://localhost:5006/',
-                 colors=None, defaults=defaults):
+                 colors=colors):
+        """
+        Initialize a Bokeh plot!
+
+        Parameters
+        ----------
+        bokeh_doc_name : str
+            The name of the Bokeh document. Use a different name for each
+            experiment if you are storing your plots.
+        channels : list(MonitorsChannel or Monitor)
+            The monitor channels and monitors that you want to plot. The
+            monitors within a :class:`MonitorsChannel` will be plotted together in a single
+            figure.
+        open_browser : bool, optional
+            Whether to try and open the plotting server in a browser window.
+            Defaults to ``True``. Should probably be set to ``False`` when
+            running experiments non-locally (e.g. on a cluster or through SSH).
+        start_server_flag : bool, optional
+            Whether to try and start the Bokeh plotting server. Defaults to
+            ``False``. The server started is not persistent i.e. after shutting
+            it down you will lose your plots. If you want to store your plots,
+            start the server manually using the ``bokeh-server`` command. Also
+            see the warning above.
+        server_url : str, optional
+            Url of the bokeh-server. Ex: when starting the bokeh-server with
+            ``bokeh-server --ip 0.0.0.0`` at ``alice``, server_url should be
+            ``http://alice:5006``. When not specified the default configured
+            to ``http://localhost:5006/``.
+        colors : list(str)
+            The list of string hex codes for colors to cycle through when creating new lines on the same figure.
+        """
         # Make sure Bokeh is available
         if BOKEH_AVAILABLE:
             monitor_channels = raise_to_list(monitor_channels)
+            if monitor_channels is None:
+                monitor_channels = []
 
             self.channels = monitor_channels
             self.plots = {}
-            self.colors = colors or defaults['colors']
+            self.colors = colors
             self.bokeh_doc_name = bokeh_doc_name
             self.server_url = server_url
             self.start_server(start_server_flag=start_server)
@@ -181,6 +187,20 @@ class Plot(object):
                 show(self.figures)
 
     def update_plots(self, epoch, monitors):
+        """
+        Given the calculated monitors (collapsed name and value tuple), add its datapoint to the appropriate figure
+        and update the figure in bokeh-server.
+
+        Parameters
+        ----------
+        epoch : int
+            The epoch (x-axis value in the figure).
+        monitors : dict
+            The dictionary of monitors calculated at this epoch. The dictionary is of the form
+            {collapsed_monitor_name: value}. The name is the same that was used in the creation of the
+            figures in the plot, so it is used as the key to finding the appropriate figure to add the
+            data.
+        """
         if BOKEH_AVAILABLE:
             for key, value in monitors.items():
                 if key in self.figure_indices:
@@ -212,6 +232,14 @@ class Plot(object):
             push()
 
     def start_server(self, start_server_flag):
+        """
+        Starts a bokeh-server at the default URL location.
+
+        Parameters
+        ----------
+        start_server_flag : bool
+            Whether to start the bokeh server.
+        """
         if BOKEH_AVAILABLE:
             if start_server_flag:
                 def preexec_fn():

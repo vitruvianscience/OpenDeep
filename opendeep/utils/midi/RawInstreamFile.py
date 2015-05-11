@@ -1,21 +1,18 @@
 # -*- coding: ISO-8859-1 -*-
 
 # standard library imports
+from __future__ import print_function
 from types import StringType
-from struct import unpack
 
 # custom import
 from DataTypeConverters import readBew, readVar, varLen
 
 
 class RawInstreamFile:
-    
     """
-    
     It parses and reads data from an input file. It takes care of big 
     endianess, and keeps track of the cursor position. The midi parser 
     only reads from this object. Never directly from the file.
-    
     """
     
     def __init__(self, infile=''):
@@ -96,13 +93,12 @@ class RawInstreamFile:
 
 
 if __name__ == '__main__':
-
     test_file = 'test/midifiles/minimal.mid'
     fis = RawInstreamFile(test_file)
-    print fis.nextSlice(len(fis.data))
+    print(fis.nextSlice(len(fis.data)))
 
     test_file = 'test/midifiles/cubase-minimal.mid'
     cubase_minimal = open(test_file, 'rb')
     fis2 = RawInstreamFile(cubase_minimal)
-    print fis2.nextSlice(len(fis2.data))
+    print(fis2.nextSlice(len(fis2.data)))
     cubase_minimal.close()

@@ -1,3 +1,4 @@
+from __future__ import print_function
 from MidiOutStream import MidiOutStream
 from MidiInFile import MidiInFile
 
@@ -12,7 +13,7 @@ class Transposer(MidiOutStream):
     
     def note_on(self, channel=0, note=0x40, velocity=0x40):
         if channel == 0:
-            print channel, note, velocity, self.rel_time()
+            print(channel, note, velocity, self.rel_time())
 
 
 event_handler = Transposer()

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # standard imports
+from __future__ import print_function
 import time
 # third-party imports
 from theano import function, config, shared
@@ -14,17 +15,17 @@ def main():
     rng = numpy.random.RandomState(22)
     x = shared(numpy.asarray(rng.rand(vlen), config.floatX))
     f = function([], T.exp(x))
-    print f.maker.fgraph.toposort()
+    print(f.maker.fgraph.toposort())
     t0 = time.time()
     for i in xrange(iters):
         r = f()
     t1 = time.time()
-    print 'Looping %d times took' % iters, t1 - t0, 'seconds'
-    print 'Result is', r
+    print('Looping %d times took' % iters, t1 - t0, 'seconds')
+    print('Result is', r)
     if numpy.any([isinstance(x.op, T.Elemwise) for x in f.maker.fgraph.toposort()]):
-        print 'Used the cpu'
+        print('Used the cpu')
     else:
-        print 'Used the gpu'
+        print('Used the gpu')
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,4 @@
-
+from __future__ import print_function
 import numpy
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_gsn import RNN_GSN
@@ -18,10 +18,8 @@ try:
     import pylab
     has_pylab = True
 except ImportError:
-    print (
-        "pylab isn't available."
-    )
-    print "It can be installed with 'pip install -q Pillow'"
+    print("pylab isn't available.")
+    print("It can be installed with 'pip install -q Pillow'")
     has_pylab = False
 
 import logging
@@ -73,7 +71,7 @@ def run_midi(dataset):
                          minimum_batch_size=2,
                          # learning_rate=1e-4,
                          learning_rate=1e-6,
-                         save_frequency=10,
+                         save_frequency=1,
                          early_stop_length=100)
 
     ll = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'],test=True)

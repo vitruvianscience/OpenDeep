@@ -1,13 +1,3 @@
-'''
-Unit testing for the logger class
-'''
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import unittest
 import os
@@ -18,7 +8,6 @@ import logging
 import opendeep.log.logger as logger
 
 class TestLogger(unittest.TestCase):
-
     def setUp(self):
         # change sys.stdout to StringIO for the duration of the test to test console output
         self.saved_stdout = sys.stdout

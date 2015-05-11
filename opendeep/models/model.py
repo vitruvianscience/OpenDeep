@@ -1,10 +1,9 @@
 """
-.. module:: model
-
 This module defines the generic Model class -
 which represents everything from a single layer to a full-blown deep network.
 
-Models are the reusable, modular building blocks for the deep networks.
+Models are the reusable, modular building blocks for deep networks. Their power comes from
+their ability to connect with other Models.
 """
 
 __authors__ = "Markus Beissinger"
@@ -24,9 +23,8 @@ import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 from opendeep import function
-from opendeep.utils.config import combine_config_and_defaults
 from opendeep.utils import file_ops
-from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
+from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
 from opendeep.utils.file_ops import mkdir_p
 
 try:
@@ -34,152 +32,144 @@ try:
 except ImportError:
     import pickle
 
-
 log = logging.getLogger(__name__)
 
-OUTDIR_DEFAULT = 'outputs/'
 
 class Model(object):
     """
     The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
-    (which can be a combination of multiple models linked through input_hooks and hidden_hooks).
+    (which can be a combination of multiple models linked through input_hooks, hidden_hooks, and params_hooks).
 
-    Think of a Model like Legos - you can attach single pieces together as well as multi-piece units together.
+    Think of a :class:`Model` like Legos - you can attach single pieces together as well as multi-piece units together.
     The main vision of OpenDeep is to provide a lightweight, highly modular structure that makes creating and
     experimenting with new models as easy as possible. Much of current deep learning progress has come from
-    combining multiple deep models together for complex tasks - such as the image captioning system with
-    convolutional networks + recurrent networks.
+    combining multiple deep models together for complex tasks.
 
-    When creating Theano functions inside of models, use the opendeep.function wrapper instead of the basic
-    theano.function - this changes unused inputs from an error to a warning. Most likely, unused inputs
+    When creating Theano functions inside of models, use the `opendeep.function` wrapper instead of the basic
+    `theano.function` - this changes unused inputs from an error to a warning. Most likely, unused inputs
     shouldn't be a breaking error.
+
+    Attributes
+    ----------
+    args : dict
+        This is a dictionary containing all the input parameters that initialize the Model. Think of it
+        as the configuration for initializing a :class:`Model`.
+    inputs_hook : tuple
+        Tuple of (shape, input_variable) or None describing the inputs to use for this Model.
+    hiddens_hook : tuple
+        Tuple of (shape, hiddens_variable) or None to use as the hidden representation for this Model.
+    params_hook : list
+        A list of SharedVariable representing the parameters to use for this Model.
+    input_size : int or shape tuple
+        The dimensionality of the input for this model. This is required for stacking models
+        automatically - where the input to one layer is the output of the previous layer.
+    output_size : int or shape tuple
+        Describes the shape of the output dimensionality for this Model.
+    outdir : str
+        The filepath to save outputs for this Model (such as pickled parameters created during training,
+        visualizations, etc.).
+    f_run : function
+        Theano function for running the model's computation on an input. This gets set during compile_run_fn().
     """
 
-    def __init__(self, config=None, defaults=None,
-                 inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 output_size=None,
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 input_size=None, output_size=None,
                  outdir=None,
                  **kwargs):
         """
-        This creates the model's combined configuration params from config and defaults into a self.args
-        dictionary-like object (meaning it implements collections.Mapping and you can use self.args.get('parameter')
-        to access something).
+        Initialize a new Model.
 
-        Further, your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
+        Your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
         to set your inputs and hidden representation in a modular fashion, allowing models to link together.
         inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
         hiddens_hook is a tuple of (shape, variable) that should replace the default model hidden representation
         (which means you need to adapt creating your computation graph to not care about the inputs and to instead
         run outputs directly from the hidden variable provided).
         You can also accept a params_hook to share model parameters rather than instantiate a new set of parameters.
-        ------------------
 
-        :param config: A dictionary-like object containing all the necessary user-defined parameters for the model.
-        This means it either implements collections.Mapping or is a file path to a JSON or YAML configuration file.
-        :type config: collections.Mapping object or String (.json file path or .yaml file path)
-
-        :param defaults: A dictionary-like object containing all the necessary default parameters for the model.
-        This means it either implements collections.Mapping or is a file path to a JSON or YAML configuration file.
-        :type defaults: collections.Mapping object or String (.json file path or .yaml file path)
-
-        :param inputs_hook: Routing information for the model to accept inputs from elsewhere. This is used for linking
-        different models together (e.g. setting the Sigmoid model's input layer to the DAE's hidden layer gives a
-        newly supervised classification model). For now, you need to include the shape information (normally the
-        dimensionality of the input i.e. n_in).
-        :type inputs_hook: Tuple of (shape, variable)
-
-        :param hiddens_hook: Routing information for the model to accept its hidden representation from elsewhere.
-        This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
-        output layer gives the RNN-GSN model, a deep recurrent model.) For now, you need to include the shape
-        information (normally the dimensionality of the hiddens i.e. n_hidden).
-        :type hiddens_hook: Tuple of (shape, variable)
-
-        :param params_hook: A list of model parameters (shared theano variables) that you should use when constructing
-        this model (instead of initializing your own shared variables). This parameter is useful when you want to have
-        two versions of the model that use the same parameters - such as a training model with dropout applied to layers
-        and one without for testing, where the parameters are shared between the two.
-        :type params_hook: List(theano shared variable)
-
-        :param output_size: the dimensionality of the output for this model. This is required for stacking models
-        automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
-        run the size from Theano's graph, so it needs to be explicit. This parameter can be None if it is specified
-        in the default or config dictionaries.
-        :type output_size: int
-
-        :param outdir: the directory you want outputs (parameters, images, etc.) to save to.
-        :type outdir: string
-
-        :param kwargs: this will be all the other left-over parameters passed to the class as a dictionary of
-        {param: value}. We will use the kwargs to finally combine defaults, config, and passed parameters together
-        into the self.args dict, making each model's parameters accessible by name in self.args
-        :type kwargs: dict
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
+            newly supervised classification model). For now, it needs to include the shape information (normally the
+            dimensionality of the input i.e. n_in).
+        hiddens_hook : Tuple of (shape, variable)
+            Routing information for the model to accept its hidden representation from elsewhere.
+            This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
+            output layer gives the RNN-GSN model, a deep recurrent model.) For now, it needs to include the shape
+            information (normally the dimensionality of the hiddens i.e. n_hidden).
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables). This parameter is useful when you want to
+            have two versions of the model that use the same parameters - such as a training model with dropout applied
+            to layers and one without for testing, where the parameters are shared between the two.
+        input_size : int or shape tuple
+            The dimensionality of the input for this model. This is required for stacking models
+            automatically - where the input to one layer is the output of the previous layer.
+        output_size : int or shape tuple
+            The dimensionality of the output for this model. This is required for stacking models
+            automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
+            run the size from Theano's graph, so it needs to be explicit.
+        outdir : str
+            The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
+            be saved.
+        kwargs : dict
+            This will be all the other left-over keyword parameters passed to the class as a
+            dictionary of {param: value}. These get created into `self.args` along with outdir and output_size.
         """
         log.info("Creating a new instance of %s", str(type(self)))
 
-        # set self.args to be the combination of the defaults and the config dictionaries
-        self.args = combine_config_and_defaults(config, defaults)
+        # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
+        self.inputs_hook  = inputs_hook
+        self.hiddens_hook = hiddens_hook
+        self.params_hook  = params_hook
+        self.input_size   = input_size
+        self.output_size  = output_size
+        self.outdir       = outdir
 
-        # if the args are none, make it a blank dictionary
-        if self.args is None:
-            self.args = {}
+        # make sure outdir ends in a directory separator
+        if self.outdir and self.outdir[-1] != os.sep:
+            self.outdir += os.sep
 
-        # now, go through the inputs_hook, hiddens_hook, params_hook, and output_size to add them to self.args
-        # if the variable isn't None, override the argument from config/default. (or add it if it doesn't exist)
-        if inputs_hook is not None or 'inputs_hook' not in self.args:
-            self.args['inputs_hook'] = inputs_hook
+        # Combine arguments that could specify input_size -> overwrite input_size with inputs_hook[0] if it exists.
+        if self.inputs_hook and self.inputs_hook[0] is not None:
+            self.input_size = self.inputs_hook[0]
 
-        if hiddens_hook is not None or 'hiddens_hook' not in self.args:
-            self.args['hiddens_hook'] = hiddens_hook
+        # Check if the input_size wasn't provided - if this is the case, it could either be a programmer's error
+        # or it could be during the automatic stacking in a Container. Since that is a common use case, set
+        # the input_size to 1 to avoid errors when instantiating the model.
+        if not self.input_size:
+            # Could be error, or more commonly, when adding models to a Container
+            log.warning("No input_size or inputs_hook! Make sure this is done in a Container. Setting input_size"
+                        "=1 for the Container now...")
+            self.input_size = 1
 
-        if params_hook is not None or 'params_hook' not in self.args:
-            self.args['params_hook'] = params_hook
+        # Also, check if no output_size was given - this could be the case for generative models. Copy input_size
+        # in that case.
+        if not self.output_size:
+            # Could be an error (hopefully not), so give the warning.
+            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the"
+                        "same as input_size. Setting output_size=input_size now...")
+            self.output_size = self.input_size
 
-        if output_size is not None or 'output_size' not in self.args:
-            self.args['output_size'] = output_size
+        # copy all of the parameters from the class into an args (configuration) dictionary
+        self.args = {}
+        self.args = add_kwargs_to_dict(kwargs.copy(), self.args)
 
-        # set the overall default outdir to outputs/
-        if outdir is not None or 'outdir' not in self.args:
-            self.args['outdir'] = outdir
-
-        if self.args['outdir'] is None:
-            self.args['outdir'] = OUTDIR_DEFAULT
+        self.args['output_size'] = self.output_size
 
         # Now create the directory for outputs of the model
         # set up base path for the outputs of the model during training, etc.
+        self.args['outdir'] = self.outdir
         if self.args['outdir']:
             mkdir_p(self.args['outdir'])
-
-
-        # now that our required variables are out of the way, do the same thing for everything else passed via kwargs
-        for arg, val in kwargs.items():
-            if (val is not None or str(arg) not in self.args) and str(arg) != 'kwargs':
-                self.args[str(arg)] = val
-            # flatten kwargs if it was passed as a variable
-            elif str(arg) == 'kwargs':
-                inner_kwargs = kwargs['kwargs']
-                for key, item in inner_kwargs.items():
-                    if item is not None or str(key) not in self.args:
-                        self.args[str(key)] = item
-
-        # Magic! Now self.args contains the combination of all the initialization variables, overridden like so:
-        # defaults < config < kwargs (explicits passed to model's __init__)
-
-        # Do a check if both input_size and inputs_hook are None (this should only happen in Prototype)
-        if self.args.get("input_size") is None and self.args.get('inputs_hook') is None:
-            log.warning("Both input_size and inputs_hook are None! Make sure this is only happening in a Prototype! "
-                        "Setting input_size to 1 for convenience to the Prototype.")
-            self.args['input_size'] = 1
-
-        # Finally, to make things really easy, update the class 'self' with everything in self.args to make
-        # all the parameters accessible via self.<param>
-        self.__dict__.update(self.args)
 
         # log the arguments.
         log.info("%s self.args: %s", str(type(self)), str(self.args))
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
-
 
     ######################################################################
     # Methods for the symbolic inputs, hiddens, and outputs of the model #
@@ -189,109 +179,156 @@ class Model(object):
         This should return the input(s) to the model's computation graph as a list. This only includes inputs for the
         run function, not any inputs used for supervised training.
 
-        Note: This should normally return the same theano variable list that is used in the inputs= argument to the
-        f_run function.
-        ------------------
+        .. note::
+            This should normally return the same theano variable list that is used in the inputs= argument to the
+            f_run function when running the Model on an input.
 
-        :return: Theano variables representing the input(s) to the model's 'run' computation.
-        :rtype: theano variable or List(theano variable)
+        Returns
+        -------
+        Theano variable or List(theano variable)
+            Theano variables representing the input(s) to the model's 'run' computation.
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.critical("%s does not have a get_inputs function!", str(type(self)))
         raise NotImplementedError("Please implement a get_inputs method for %s" % str(type(self)))
 
-
     def get_hiddens(self):
         """
         This method will return the model's hidden representation expression (if applicable)
-        from the computational graph.
+        from the computational graph. This is normally useful for unsupervised models, whose hidden units
+        learn the representation of the input.
 
         This will also be used for creating hooks to link models together, where these hidden variables can be strung
         as the inputs or hiddens to another model :)
-        ------------------
 
-        :return: theano expression of the hidden representation from this model's computation
-        :rtype: theano tensor (expression)
+        Returns
+        -------
+        theano expression
+            Theano expression of the hidden representation from this model's computation.
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.critical("%s get_hiddens method not implemented!", str(type(self)))
         raise NotImplementedError("Please implement a get_hiddens method for %s" % str(type(self)))
 
-
     def get_outputs(self):
         """
         This method will return the model's output variable expression from the computational graph.
-        This should be what is given for the outputs= part of the 'f_run' function from self.run().
+        This should be what is given for the outputs= part of the 'f_run' function from `self.run()`.
 
         This will be used for creating hooks to link models together,
         where these outputs can be strung as the inputs or hiddens to another model :)
 
-        Example: gsn = GSN()
-                 softmax = SoftmaxLayer(inputs_hook=gsn.get_outputs())
-        ------------------
+        Returns
+        -------
+        theano expression
+            Theano expression of the outputs from this model's computation graph.
 
-        :return: theano expression of the outputs from this model's computation
-        :rtype: theano tensor (expression)
+        Examples
+        --------
+        Here is an example showing the `get_outputs()` method in the GSN model used in an `inputs_hook`
+        to a SoftmaxLayer model::
+
+            from opendeep.models.multi_layer.generative_stochastic_network import GSN
+            from opendeep.models.single_layer.basic import SoftmaxLayer
+            gsn = GSN(input_size=28*28, hidden_size=1000, layers=2, walkbacks=4)
+            softmax = SoftmaxLayer(inputs_hook=(gsn.output_size, gsn.get_outputs()), output_size=10)
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.critical("%s get_outputs method not implemented!", str(type(self)))
         raise NotImplementedError("Please implement a get_outputs method for %s" % str(type(self)))
 
-
     #############################################
     # Methods for running the model on an input #
     #############################################
-    def run(self, input):
+    def compile_run_fn(self):
         """
-        This method will return the model's output (run through the function), given an input. In the case that
-        input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
+        This is a helper function to compile the f_run function for computing the model's outputs given inputs.
+        Compile and set the f_run function used for `run()`.
 
-        Try to avoid re-compiling the theano function created for run - check a hasattr(self, 'f_run') or
-        something similar first. I recommend creating your theano f_run in a create_computation_graph method
-        to be called after the class initializes.
-        ------------------
+        It sets the `self.f_run` attribute to the f_run function.
 
-        :param input: Theano/numpy tensor-like object that is the input into the model's computation graph.
-        :type input: tensor
+        .. note::
+            The run function defaults like so::
 
-        :return: Theano/numpy tensor-like object that is the output of the model's computation graph.
-        :rtype: tensor
+                self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
+                                      outputs = self.get_outputs(),
+                                      updates = self.get_updates(),
+                                      name    = 'f_run')
         """
-        # set any noise switches to zero
-        if len(self.get_noise_switch()) > 0:
-            vals = [switch.get_value() for switch in self.get_noise_switch()]
-            [switch.set_value(0.) for switch in self.get_noise_switch()]
-
-        # check if the run function is already compiled, otherwise compile it!
         if not hasattr(self, 'f_run'):
             log.debug("Compiling f_run...")
             t = time.time()
             self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
                                   outputs = self.get_outputs(),
-                                  updates = self.get_updates())
+                                  updates = self.get_updates(),
+                                  name    = 'f_run')
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
+        else:
+            log.warn('f_run already exists!')
+
+    def run(self, input):
+        """
+        This method will return the model's output (run through the function), given an input. In the case that
+        input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
+
+        .. note::
+            If the Model doesn't have an f_run attribute,
+            it will run `compile_run_fn()` to compile the appropriate function.
+
+        Parameters
+        ----------
+        input : tensor
+            Theano/numpy tensor-like object that is the input into the model's computation graph.
+
+        Returns
+        -------
+        array_like
+            Array_like object that is the output of the model's computation graph run on the given input.
+        """
+        # check if the run function is already compiled, otherwise compile it!
+        if not hasattr(self, 'f_run'):
+            self.compile_run_fn()
 
         # because we use the splat to account for multiple inputs to the function, make sure input is a list.
         input = raise_to_list(input)
         # return the results of the run function!
-        output =  self.f_run(*input)
-
-        # reset the noise switches
-        if len(self.get_noise_switch()) > 0:
-            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), vals)]
+        output = self.f_run(*input)
 
         return output
 
     def generate(self, initial=None):
         """
-        This method starts generating samples from the model (if it is a generative model)
+        This method starts generating samples from the model (if it is a generative model).
 
-        :param initial: the starting point for generation (if applicable)
-        :type initial: tensor
+        Parameters
+        ----------
+        initial : array_like, optional
+            The starting point for generation (if applicable). Defaults to None.
 
-        :return: the list of generations
-        :rtype: list
+        Returns
+        -------
+        list
+            The list of generated values from the Model (starting from `initial` if applicable).
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.exception("Generate method not implemented for Model %s", str(type(self)))
         raise NotImplementedError("Generate method not implemented for Model %s" % str(type(self)))
-
 
     #########################################
     # Methods to do with training the model #
@@ -299,13 +336,16 @@ class Model(object):
     def get_targets(self):
         """
         This function returns the list of inputs that are used for supervised training. It should be the 'correct' or
-        'target' variables to compare against the output of the model's computation.
+        'target' variables to compare against the output of the model's computation. This method needs to be
+        implemented for supervised models.
 
-        Example: the labels [Y] for a classification problem.
-        ------------------
+        Example: the labels Y for a classification problem.
 
-        :return: Theano variables representing the target(s) to the model's computation.
-        :rtype: theano variable or List(theano variable)
+        Returns
+        -------
+        theano variable or List(theano variable)
+            Theano variables representing the target(s) to the model's computation. Defaults to returning an empty
+            list, which assumes the model is unsupervised.
         """
         # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
         # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost
@@ -315,21 +355,25 @@ class Model(object):
     def get_train_cost(self):
         """
         This returns the expression that represents the cost given an input, which is used during training.
-        The reason we can't just compile a f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the Optimizer object.
+        The reason we can't just compile an f_train theano function is because updates need to be calculated
+        for the parameters during gradient descent - and these updates are created in the :class:`Optimizer` object.
 
         In the specialized case of layer-wise pretraining (or any version of pretraining in the model), you should
         return a list of training cost expressions in order you want training to happen. This way the optimizer
         will train each cost in sequence for your model, allowing for easy layer-wise pretraining in the model.
-        ------------------
 
-        :return: theano expression (or list of theano expressions)
-        of the model's training cost, from which parameter gradients will be computed.
-        :rtype: theano tensor or list(theano tensor)
+        Returns
+        -------
+        theano expression or list of theano expressions
+            The model's training cost(s), from which parameter gradients will be computed.
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.critical("%s does not have a get_train_cost function!", str(type(self)))
         raise NotImplementedError("Please implement a get_train_cost method for %s" % str(type(self)))
-
 
     def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
         """
@@ -338,20 +382,27 @@ class Model(object):
 
         Theano's subgraph gradient function specified here:
         http://deeplearning.net/software/theano/library/gradient.html#theano.gradient.subgraph_grad
-        warning: If the gradients of cost with respect to any of the start variables is already part of the
-        start dictionary, then it may be counted twice with respect to wrt and end.
+
+        .. warning::
+            If the gradients of cost with respect to any of the start variables is already part of the
+            start dictionary, then it may be counted twice with respect
+            to wrt (`get_params()`) and end (`get_inputs()`).
 
         You should only implement this method if you want to manually define your gradients for the model.
-        --------------------
 
-        :param starting_gradient: the starting, known gradients for variables
-        :type starting_gradient: dictionary of {variable: known_gradient}
+        Parameters
+        ----------
+        starting_gradient : dictionary of {variable: known_gradient}, optional
+            The starting, known gradients for parameters.
+        cost : theano expression, optional
+            The cost expression to use when calculating the gradients. Defaults to `get_train_cost()`.
+        additional_cost : theano expression, optional
+            Any additional cost to add to the gradient.
 
-        :param additional_cost: any additional cost to add to the gradient
-        :type additional_cost: theano expression
-
-        :return: tuple of gradient with respect to params, and with respect to inputs
-        :rtype:
+        Returns
+        -------
+        tuple
+            (Gradient with respect to params, gradient with respect to inputs)
         """
         # check if starting gradients was provided.
         # if there are known gradients to start, use those instead of the cost for this model
@@ -374,20 +425,21 @@ class Model(object):
         return (OrderedDict(zip(self.get_params(), params_grad)),
                 OrderedDict(zip(raise_to_list(self.get_inputs()), next_starting_grad)))
 
-
     def get_updates(self):
         """
         This should return any theano updates from the model (used for things like random number generators).
         Most often comes from theano's 'scan' op. Check out its documentation at
         http://deeplearning.net/software/theano/library/scan.html.
 
-        This is used with the optimizer to create the training function - the 'updates=' part of the theano function.
-        ------------------
+        This is used with the :class:`Optimizer` to create the training function - the 'updates='
+        part of the theano function.
 
-        :return: updates from the theano computation for the model to be used during Optimizer.train()
-        (but not including training parameter updates - those are calculated by the Optimizer)
-        These are expressions for new SharedVariable values.
-        :rtype: (iterable over pairs (shared_variable, new_expression). List, tuple, or dict.)
+        Returns
+        -------
+        iterable over pairs (shared_variable, new_expression)
+            Updates from the theano computation for the model to be used during Optimizer.train()
+            (but not including training parameter updates - those are calculated by the :class:`Optimizer`)
+            These are expressions for new SharedVariable values.
         """
         # TODO: should we do the parameter decays from get_decay_params() in the model updates?
         # TODO: Right now I'm not because it seems less modular
@@ -395,62 +447,67 @@ class Model(object):
         # by default, assume the model doesn't have updates - it's your job to return them in this method.
         return None
 
-
     def get_monitors(self):
         """
         This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
-        about during training. For every monitor returned by this method, the function will be run on the
-        train/validation/test dataset and its value will be reported.
+        about during training. Often times, this is a log-likelihood estimator, mean squared error, weights
+        statistics, etc. The actual training cost value used in `get_train_cost()` does not need to be included -
+        it will automatically be monitored.
 
-        Again, please avoid recompiling the monitor functions every time - check your hasattr to see if they already
-        exist!
-        ------------------
-
-        :return: Dictionary of String: theano expression for each monitor variable we care about in the model.
-        :rtype: Dictionary
+        Returns
+        -------
+        dict
+            Dictionary of {string name: theano expression} for each monitor variable we care about in the model.
         """
         # no monitors by default
         return {}
 
-
     def get_decay_params(self):
         """
         If the model requires any of its internal parameters to decay over time during training, return the list
-        of the DecayFunction objects here so the Optimizer can decay them each epoch. An example is the noise
-        amount in a Generative Stochastic Network - we decay the noise over time when implementing noise scheduling.
+        of the :class:`DecayFunction` (from opendeep.utils.decay) objects here so the :class:`Optimizer` can decay
+        them each epoch. An example is the noise amount in a Generative Stochastic Network - we decay the noise
+        over time when implementing noise scheduling.
 
         Most models don't need to decay parameters, so we return an empty list by default. Please override this method
         if you need to decay some variables.
-        ------------------
 
-        :return: List of opendeep.utils.decay_functions.DecayFunction objects of the parameters to decay for this model.
-        :rtype: List
+        Returns
+        -------
+        list(:class:`DecayFunction`)
+            List of opendeep.utils.decay_functions.DecayFunction objects of the parameters to decay for this model.
+            Defaults to an empty list - no decay parameters.
         """
         # no decay parameters by default
         return []
 
-
     def get_lr_scalers(self):
         """
-        This method lets you scale the overall learning rate in the Optimizer to individual parameters.
-        Returns a dictionary mapping model_parameter: learning_rate_scaling_factor. Default is no scaling.
-        ------------------
+        This method lets you scale the overall learning rate in the :class:`Optimizer` to individual parameters.
+        Returns a dictionary mapping model_parameter: learning_rate_scaling_factor. Default is an empty
+        dictionary which means no scaling.
 
-        :return: dictionary mapping the model parameters to their learning rate scaling factor
-        :rtype: Dictionary(shared_variable: float)
+        Returns
+        -------
+        dict
+            Dictionary mapping the model parameters to their learning rate scaling factor {SharedVariable: float}.
         """
         # By default, no learning rate scaling.
         return {}
 
-
     def get_noise_switch(self):
         """
-        This method returns a list of shared theano variables representing switches for adding noise in the model.
+        This method returns a list of shared theano variables representing switches for values in the model that
+        get turned on for training and turned off for testing.
         The variables should be set to either 0. or 1.
+        These switch variables are used in theano Switch operations, such as adding noise during training and removing
+        it during testing.
         For a usage example, see the BasicLayer in opendeep.models.single_layer.basic package.
 
-        :return: list of shared variable
-        :rtype: list
+        Returns
+        -------
+        list
+            List of SharedVariable used to set the Switches. Defaults to an empty list.
         """
         return []
 
@@ -459,29 +516,45 @@ class Model(object):
     #######################################
     def get_params(self):
         """
-        This returns the list of theano shared variables that will be trained by the Optimizer.
+        This returns the list of theano shared variables that will be trained by the :class:`Optimizer`.
         These parameters are used in the gradient.
-        ------------------
 
-        :return: flattened list of theano shared variables to be trained
-        :rtype: List(shared_variables)
+        Returns
+        -------
+        list(SharedVariable)
+            Flattened list of theano shared variables to be trained with an :class:`Optimizer`. These are the
+            parameters for the model.
+
+        Raises
+        ------
+        NotImplementedError
+            If the function hasn't been implemented for the specific model.
         """
         log.critical("%s does not have a get_params function!", str(type(self)))
         raise NotImplementedError("Please implement a get_params method for %s" % str(type(self)))
-
 
     def get_param_values(self, borrow=True):
         """
         This returns a list of the parameter values for the model.
         This method is useful when you want to save the model parameters, or are doing distributed programming
         and want to train parallel models.
-        ------------------
 
-        :param borrow: theano 'borrow' parameter for get_value() method on shared variables
-        :type borrow: Boolean
+        Parameters
+        ----------
+        borrow : bool, optional
+            Theano 'borrow' parameter for get_value() method on shared variables. Defaults to True.
 
-        :return: list of theano/numpy arrays of values for the model parameters
-        :rtype: List(array)
+        Returns
+        -------
+        list(array_like)
+            List of theano/numpy arrays of values for the model parameters.
+
+        Raises
+        ------
+        NotImplementedError
+            If `get_params()` hasn't been implemented.
+        AttributeError
+            If a parameter isn't a SharedVariable.
         """
         # try to use theano's get_value() on each parameter returned by get_params()
         try:
@@ -497,7 +570,6 @@ class Model(object):
 
         return params
 
-
     def set_param_values(self, param_values, borrow=True):
         """
         This sets the model parameters from the list of values given.
@@ -505,17 +577,19 @@ class Model(object):
         want to train parallel models.
 
         The order of param_values matters! It must be the same as the order of parameters returned from
-        self.get_params()!
-        ------------------
+        `self.get_params()`!
 
-        :param param_values: list of theano/numpy arrays of values for the model parameters
-        :type param_values: List(array)
+        Parameters
+        ----------
+        param_values : list(array_like)
+            List of theano/numpy arrays of values to use for the model parameters.
+        borrow : bool
+            Theano 'borrow' parameter for `set_value()` method on shared variables.
 
-        :param borrow: theano 'borrow' parameter for set_value() method on shared variables
-        :type borrow: Boolean
-
-        :return: whether or not successful
-        :rtype: Boolean
+        Returns
+        -------
+        bool
+            Whether or not successfully set parameters.
         """
         params = self.get_params()
 
@@ -536,22 +610,22 @@ class Model(object):
 
         return True
 
-
     def save_params(self, param_file):
         """
-        This saves the model's parameters to the param_file (pickle file)
-        ------------------
+        This saves the model's parameters (pickles them) to the `param_file` (pickle file)
 
-        :param param_file: filename of pickled params file
-        :type param_file: String
+        Parameters
+        ----------
+        param_file : str
+            Filename of pickled params file to save to.
 
-        :return: whether or not successful
-        :rtype: Boolean
+        Returns
+        -------
+        bool
+            Whether or not successfully saved the file.
         """
-        if not hasattr(self, 'outdir'):
-            self.outdir = OUTDIR_DEFAULT
         # make sure outdir was not set to false (no saving or outputs)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             # By default, try to dump all the values from get_param_values into a pickle file.
             params = self.get_param_values()
 
@@ -580,17 +654,19 @@ class Model(object):
         else:
             return False
 
-
     def load_params(self, param_file):
         """
         This loads the model's parameters from the param_file (pickle file)
-        ------------------
 
-        :param param_file: filename of pickled params file
-        :type param_file: String
+        Parameters
+        ----------
+        param_file : str
+            Filename of pickled params file (the file holding the pickled model parameters).
 
-        :return: whether or not successful
-        :rtype: Boolean
+        Returns
+        -------
+        bool
+            Whether or not successfully loaded parameters.
         """
         param_file = os.path.realpath(param_file)
 
@@ -615,19 +691,20 @@ class Model(object):
 
     def save_args(self, args_file="config.pkl"):
         """
-        This saves the model's initial configuration (self.args) in a pickle file.
-        -------------------
+        This saves the model's initial configuration parameters (`self.args`) in a pickle file.
 
-        :param args_file: filename of pickled configs
-        :type args_file: string
+        Parameters
+        ----------
+        args_file : str, optional
+            Filename of pickled configuration parameters. Defaults to 'config.pkl'.
 
-        :return: whether or not successful
-        :rtype: bool
+        Returns
+        -------
+        bool
+            Whether or not successfully saved the file.
         """
-        if not hasattr(self, 'outdir'):
-            self.outdir = OUTDIR_DEFAULT
         # make sure outdir is not set to False (no outputs/saving)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             args_path = os.path.join(self.outdir, args_file)
             args_file = os.path.realpath(args_path)
 
