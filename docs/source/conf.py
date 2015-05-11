@@ -166,7 +166,7 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_logo = image_path+'OpenDeep_logo_name.png'
 
 # The name of an image file (within the static path) to use as favicon of the
-# doc.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
+# docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
 html_favicon = image_path+'favicon.ico'
 

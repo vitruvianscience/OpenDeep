@@ -1,7 +1,7 @@
-.. image:: readme_images/OpenDeep_logo_name.png
-   :scale: 50 %
-   :alt: OpenDeep
-   :align: center
+.. OpenDeep documentation master file, created by
+   sphinx-quickstart on Fri May  1 15:20:40 2015.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
 
 ==============================================================
 OpenDeep: a fully modular & extensible deep learning framework
@@ -32,7 +32,7 @@ Quick example usage
 ===================
 Train and evaluate a Multilayer Perceptron (MLP - your generic feedforward neural network for classification)
 on the MNIST handwritten digit dataset::
-	
+
     from opendeep.models.container import Prototype
     from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
     from opendeep.optimization.adadelta import AdaDelta
@@ -195,3 +195,19 @@ Why OpenDeep?
 - **Ease of use**. Many libraries require a lot of familiarity with deep learning or their specific package structures. OpenDeep's goal is to be the best-documented deep learning library and have smart enough default code that someone without a background can start training models, while experienced practitioners can easily create and customize their own algorithms.
 
 - **State of the art**. A side effect of modularity and ease of use, OpenDeep aims to maintain state-of-the-art performance as new algorithms and papers get published. As a research library, citing and accrediting those authors and code used is very important to the library.
+
+=========
+Contents:
+=========
+.. toctree::
+   :maxdepth: 3
+
+   opendeep
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

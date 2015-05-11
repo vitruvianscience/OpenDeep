@@ -17,29 +17,13 @@ class DenoisingAutoencoder(Model):
     """
     A denoising autoencoder will corrupt an input (add noise) and try to reconstruct it.
     """
-    # Best practice to define all the default parameters up here
-    # Provide comments when giving parameters so people know what they are for!
-    _defaults = {
-        "input_size": 28*28,  # dimensionality of input - works for MNIST
-        "hidden_size": 1000,  # number of hidden units
-        "corruption_level": 0.4,  # how much noise to add to the input
-        "hidden_activation": 'tanh',  # the nonlinearity to apply to hidden units
-        "visible_activation": 'sigmoid',  # the nonlinearity to apply to visible units
-        "cost_function": 'binary_crossentropy'  # the cost function to use during training
-    }
-    def __init__(self, config=None, defaults=_defaults,
-                 inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 input_size=None, hidden_size=None, corruption_level=None,
-                 hidden_activation=None, visible_activation=None, cost_function=None):
-        # Now, initialize with Model class to combine config and defaults!
-        # Here, defaults is defined via a dictionary. However, you could also
-        # pass a filename to a JSON or YAML file with the same format.
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
+                 input_size=28*28, hidden_size=1000, noise_level=0.4,
+                 hidden_activation='tanh', visible_activation='sigmoid', cost_function='binary_crossentropy'):
+        # initialize the Model superclass
         super(DenoisingAutoencoder, self).__init__(
             **{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'}
         )
-        # Any parameter from the 'config' will overwrite the 'defaults' dictionary, which will be overwritten if the
-        # parameter is passed directly to __init__.
-        # These parameters are now accessible from the 'self' variable!
 
         # Define model hyperparameters
         # deal with the inputs_hook and hiddens_hook for the size parameters!
@@ -50,15 +34,15 @@ class DenoisingAutoencoder(Model):
 
         if self.hiddens_hook is not None:
             assert len(self.hiddens_hook) == 2, "was expecting hiddens_hook to be a tuple."
-            self.hidden_size = hiddens_hook[0]
+            hidden_size = hiddens_hook[0]
 
 
         # use the helper methods to grab appropriate activation functions from names!
-        hidden_activation  = get_activation_function(self.hidden_activation)
-        visible_activation = get_activation_function(self.visible_activation)
+        hidden_activation  = get_activation_function(hidden_activation)
+        visible_activation = get_activation_function(visible_activation)
 
         # do the same for the cost function
-        cost_function = get_cost_function(self.cost_function)
+        cost_function = get_cost_function(cost_function)
 
         # Now, define the symbolic input to the model (Theano)
         # We use a matrix rather than a vector so that minibatch processing can be done in parallel.
@@ -77,14 +61,14 @@ class DenoisingAutoencoder(Model):
             assert len(self.params_hook) == 3, "Not correct number of params to DAE, needs 3!"
             W, b0, b1 = self.params_hook
         else:
-            W  = get_weights_uniform(shape=(self.input_size, self.hidden_size), name="W")
+            W  = get_weights_uniform(shape=(self.input_size, hidden_size), name="W")
             b0 = get_bias(shape=self.input_size, name="b0")
-            b1 = get_bias(shape=self.hidden_size, name="b1")
+            b1 = get_bias(shape=hidden_size, name="b1")
         self.params = [W, b0, b1]
 
         # Perform the computation for a denoising autoencoder!
         # first, add noise (corrupt) the input
-        corrupted_input = salt_and_pepper(input=x, corruption_level=self.corruption_level)
+        corrupted_input = salt_and_pepper(input=x, noise_level=noise_level)
         # next, run the hidden layer given the inputs (the encoding function)
         # We don't need to worry about hiddens_hook during training, because we can't
         # run a cost without having the input!

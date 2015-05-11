@@ -1,6 +1,4 @@
 """
-.. module:: activation
-
 These functions provide the nonlinearities used as activation functions for the visible, hidden,
 or output units in a deep net.
 """
@@ -26,13 +24,18 @@ def sigmoid(x):
     See the Theano documentation.
     Returns the element-wise standard sigmoid nonlinearity applied to x
 
-    :param x: symbolic Tensor (or compatible)
-    :type x: Tensor
+    Parameters
+    ----------
+    x : tensor
+        Symbolic Tensor (or compatible).
 
-    :return: element-wise sigmoid: sigmoid(x) = 1/(1+exp(-x))
-    :rtype: same as x
+    Returns
+    -------
+    tensor
+        Element-wise sigmoid: sigmoid(x) = 1/(1+exp(-x)) applied to `x`
 
-    :note:
+    .. note::
+
         You might want to try T.nnet.ultra_fast_sigmoid() or T.nnet.hard_sigmoid() for faster versions.
         Speed comparison for 100M float64 elements on a Core2 Duo @ 3.16 GHz:
             hard_sigmoid: 1.0s
@@ -41,6 +44,7 @@ def sigmoid(x):
             sigmoid (without amdlibm): 3.7s
 
         Precision: sigmoid(without or without amdlibm) > ultra_fast_sigmoid > hard_sigmoid.
+
     """
     # return T.nnet.hard_sigmoid(x)
     # return T.nnet.ultra_fast_sigmoid(x)
@@ -51,11 +55,15 @@ def softmax(x):
     See the Theano documentation.
     Returns the row-wise softmax function of x
 
-    :param x: symbolic 2D Tensor (or compatible)
-    :type x: 2D Tensor
+    Parameters
+    ----------
+    x : 2D tensor
+        Symbolic 2D Tensor (or compatible).
 
-    :return: row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik}))
-    :rtype: same as x
+    Returns
+    -------
+    2D tensor
+        Row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik})) applied to `x`.
     """
     return T.nnet.softmax(x)
 
@@ -64,11 +72,15 @@ def softplus(x):
     See the Theano documentation.
     Returns the element-wise softplus nonlinearity applied to x.
 
-    :param x: symbolic tensor (or compatible)
-    :type x: Tensor
+    Parameters
+    ----------
+    x : tensor
+        Symbolic tensor (or compatible).
 
-    :return: element-wise softplus(x) = log_e (1 + exp(x))
-    :rtype: same as x
+    Returns
+    -------
+    tensor
+        Element-wise softplus(x) = log_e (1 + exp(x)) applied to `x`.
     """
     return T.nnet.softplus(x)
 
@@ -76,16 +88,22 @@ def rectifier(x):
     """
     Returns the element-wise rectifier (ReLU) applied to x.
 
-    :param x: symbolic Tensor (or compatible)
-    :type x: Tensor
+    Parameters
+    ----------
+    x : tensor
+        Symbolic Tensor (or compatible).
 
-    :return: element-wise rectifier: rectifier(x) = max(0,x)
-    :rtype: same as x
+    Returns
+    -------
+    tensor
+        Element-wise rectifier: rectifier(x) = max(0,x) applied to `x`.
 
-    :note:
+    .. note::
+
         This implementation uses rectifier(x) = (x + abs(x)) / 2
         which is faster than max(0,x)
         See https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
+
     """
     # return T.maximum(as_floatX(0), x)
     # below fix is taken from Lasagne framework:
@@ -99,11 +117,15 @@ def tanh(x):
     """
     Returns the element-wise hyperbolic tangent (tanh) applied to x.
 
-    :param x: symbolic Tensor (or compatible)
-    :type x: Tensor
+    Parameters
+    ----------
+    x : tensor
+        Symbolic Tensor (or compatible).
 
-    :return: element-wise tanh: tanh(x) = (1 - exp(-2x))/(1 + exp(-2x))
-    :rtype: same as x
+    Returns
+    -------
+    tensor
+        Element-wise tanh: tanh(x) = (1 - exp(-2x))/(1 + exp(-2x)) applied to `x`.
     """
     return T.tanh(x)
 
@@ -112,10 +134,15 @@ def linear(x):
     Returns the linear function of x, which is just x. This method effectively does nothing, but counts as a name for
     readability elsewhere when constructing layers.
 
-    :param x: input
-    :type x: Object
-    :return: x
-    :rtype: same as x
+    Parameters
+    ----------
+    x : object
+        Input to return the identity of.
+
+    Returns
+    -------
+    object
+        Returns `x` without altering.
     """
     return x
 
@@ -126,7 +153,7 @@ _activations = {'sigmoid': sigmoid,
                 'softmax': softmax,
                 'softplus': softplus,
                 'rectifier': rectifier,
-                'relu': rectifier,
+                'relu': rectifier,  # shorter alternative name for rectifier
                 'tanh': tanh,
                 'linear': linear}
 
@@ -134,11 +161,15 @@ def is_binary(activation):
     """
     returns if the activation function is binary
 
-    :param activation: the activation function to compare
-    :type activation: function
+    Parameters
+    ----------
+    activation : function
+        The activation function to see if it is binary.
 
-    :return: boolean if it is binary (default to False)
-    :rtype: bool
+    Returns
+    -------
+    bool
+        Boolean if it is a binary function (within range [0,1] (default to False).
     """
     binary = False
     if activation == sigmoid or activation == softmax:
@@ -151,14 +182,21 @@ def get_activation_function(name):
     This helper method returns the appropriate activation function given a string name. It looks up the appropriate
     function from the internal _activations dictionary.
 
-    :param name: String representation of the function you want (normally grabbed from a config file)
-    Or, it could be a function (Callable)
-    :type name: String or Callable
+    Parameters
+    ----------
+    name : str or Callable
+        String representation of the function you want (see options in the _activations dictionary).
+        Or, it could already be a function (Callable).
 
-    :return: The appropriate activation function, or raise NotImplementedError if it isn't found.
-    :rtype: Method
+    Returns
+    -------
+    function
+        The appropriate activation function.
 
-    :raises: NotImplementedError
+    Raises
+    ------
+    NotImplementedError
+        If the function was not found in the dictionary.
     """
     # if the activation is None, return identity function (no activation)
     if name is None:

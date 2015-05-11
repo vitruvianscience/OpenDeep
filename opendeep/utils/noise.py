@@ -1,7 +1,7 @@
 """
-.. module:: noise
 This module provides the important noise functions - mostly used for regularization purposes to prevent the
 deep nets from overfitting.
+
 Based on code from Li Yao (University of Montreal)
 https://github.com/yaoli/GSN
 """
@@ -29,13 +29,17 @@ log = logging.getLogger(__name__)
 
 def get_noise(name, *args, **kwargs):
     """
-    Helper function to return a partially applied noise
+    Helper function to return a partially applied noise functions - all you need to do is apply them to an input.
 
-    :param name: name of noise
-    :type name: string
+    Parameters
+    ----------
+    name : str
+        Name of noise function to use (key in a function dictionary).
 
-    :return: partial function
-    :rtype: partial
+    Returns
+    -------
+    partial
+        Partially applied function with the input arguments.
     """
     noise_lookup = {
         'dropout': dropout,
@@ -56,16 +60,22 @@ def get_noise(name, *args, **kwargs):
 def dropout(input, noise_level=0.5, mrg=None, rescale=True):
     """
     This is the dropout function.
-    :param input: tensor to apply dropout to
-    :type input: tensor
-    :param corruption_level: probability level for dropping an element (used in binomial distribution)
-    :type corruption_level: float
-    :param mrg: random number generator with a .binomial method
-    :type mrg: random
-    :param rescale: whether to rescale the output after dropout
-    :type rescale: boolean
-    :return: tensor with dropout applied
-    :rtype: tensor
+
+    Parameters
+    ----------
+    input : tensor
+        Tensor to apply dropout to.
+    corruption_level : float
+        Probability level for dropping an element (used in binomial distribution).
+    mrg : random
+        Random number generator with a .binomial method.
+    rescale : bool
+        Whether to rescale the output after dropout.
+
+    Returns
+    -------
+    tensor
+        Tensor with dropout applied.
     """
     if mrg is None:
         mrg = theano_random
@@ -84,17 +94,19 @@ def add_gaussian(input, noise_level=1, mrg=None):
     """
     This takes an input tensor and adds Gaussian noise to its elements with mean zero and provided standard deviation.
 
-    :param input: tensor to add Gaussian noise to
-    :type input: tensor
+    Parameters
+    ----------
+    input : tensor
+        Tensor to add Gaussian noise to.
+    noise_level : float
+        Standard deviation to use.
+    mrg : random
+        Random number generator with a .normal method.
 
-    :param noise_level: standard deviation to use
-    :type noise_level: float
-
-    :param mrg: random number generator with a .normal method
-    :type mrg: random
-
-    :return: tensor with Gaussian noise added
-    :rtype: tensor
+    Returns
+    -------
+    tensor
+        Tensor with Gaussian noise added.
     """
     if mrg is None:
         mrg = theano_random
@@ -106,14 +118,20 @@ def add_gaussian(input, noise_level=1, mrg=None):
 def add_uniform(input, noise_level, mrg=None):
     """
     This takes an intput tensor and adds noise drawn from a Uniform distribution from +- interval.
-    :param input: tensor to add uniform noise to.
-    :type input: tensor
-    :param noise_level: range for noise to be drawn from (+- interval)
-    :type noise_level: float
-    :param mrg: random number generator with a .uniform method
-    :type mrg: random
-    :return: tensor with uniform noise added
-    :rtype: tensor
+
+    Parameters
+    ----------
+    input : tensor
+        Tensor to add uniform noise to.
+    noise_level : float
+        Range for noise to be drawn from (+- interval).
+    mrg : random
+        Random number generator with a .uniform method.
+
+    Returns
+    -------
+    tensor
+        Tensor with uniform noise added.
     """
     if mrg is None:
         mrg = theano_random
@@ -126,17 +144,19 @@ def salt_and_pepper(input, noise_level=0.2, mrg=None):
     """
     This applies salt and pepper noise to the input tensor - randomly setting bits to 1 or 0.
 
-    :param input: the tensor to apply salt and pepper noise to
-    :type input: tensor
+    Parameters
+    ----------
+    input : tensor
+        The tensor to apply salt and pepper noise to.
+    noise_level : float
+        The amount of salt and pepper noise to add.
+    mrg : random
+        Random number generator with .binomial method.
 
-    :param noise_level: the amount of salt and pepper noise to add
-    :type noise_level: float
-
-    :param mrg: random number generator with .binomial method
-    :type mrg: random
-
-    :return: tensor with salt and pepper noise applied
-    :rtype: tensor
+    Returns
+    -------
+    tensor
+        Tensor with salt and pepper noise applied.
     """
     if mrg is None:
         mrg = theano_random

@@ -28,7 +28,7 @@ class DenoisingAutoencoder(Model):
 
         # Perform the computation for a denoising autoencoder!
         # first, add noise (corrupt) the input
-        corrupted_input = salt_and_pepper(input=x, corruption_level=0.4)
+        corrupted_input = salt_and_pepper(input=x, noise_level=0.4)
         # next, run the hidden layer given the inputs (the encoding function)
         hiddens = tanh(T.dot(corrupted_input, W) + b1)
         # finally, create the reconstruction from the hidden layer (we tie the weights with W.T)

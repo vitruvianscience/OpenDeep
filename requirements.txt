@@ -1,0 +1,15 @@
+# Main requirements
+numpy>=1.9.2
+scipy>=0.15.1
+# Pillow is the successor to PIL for image processing
+Pillow>=2.8.1
+# The latest bleeding-edge Theano
+--allow-external theano
+--allow-unverified theano
+git+https://github.com/Theano/Theano.git#egg=theano
+
+# Optional requirements
+# PyYAML for YAML parsing capability
+PyYAML>=3.11
+# Bokeh for plotting (with bokeh-server)
+bokeh>=0.8.2

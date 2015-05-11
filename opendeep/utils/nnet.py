@@ -1,10 +1,10 @@
 """
-.. module:: nnet
+Provides various methods for neural net layers, such as initializing shared weights and bias variables.
 
 Based on code from Li Yao (University of Montreal)
 https://github.com/yaoli/GSN
 
-and theano_alexnet (https://github.com/uoguelph-mlrg/theano_alexnet)
+And theano_alexnet (https://github.com/uoguelph-mlrg/theano_alexnet)
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -42,35 +42,33 @@ _uniform_interval = {
     # this is the default for the GSN code from Li Yao
     'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
 }
-default_interval = 'montreal'
 
 def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noise=None, rng=None, name="W", **kwargs):
     """
-    This will initialize the weights from the method passed from weights_init with the arguments in kwargs
+    This will initialize the weights from the method passed from weights_init with the arguments in kwargs.
 
-    :param weights_init: string of the method for creating weights
-    :type weights_init: string
+    Parameters
+    ----------
+    weights_init : str
+        String name of the method for creating weights.
+    shape : tuple
+        Tuple of the shape you want the weight matrix.
+    mean : float
+        Mean value for using gaussian weights.
+    std : float
+        Standard deviation for using gaussian weights
+    interval : float or str
+        +- interval to use for uniform weights. If a string, it will look up the appropriate method in the
+        _uniform_interval dictionary.
+    rng : random
+        Theano or numpy random number generator to use for sampling.
+    name : str
+        Name for the returned tensor shared variable.
 
-    :param shape: tuple of the shape you want the weight matrix
-    :type shape: tuple or ndarray
-
-    :param mean: mean if using gaussian weights
-    :type mean: float
-
-    :param std: std if using gaussian weights
-    :type std: float
-
-    :param interval: +- interval to use for uniform weights
-    :type interval: float or string
-
-    :param rng: random number generator to use for sampling
-    :type rng: numpy or theano rng
-
-    :param name: name for the returned tensor
-    :type name: string
-
-    :return: theano tensor (shared variable) for the weights
-    :rtype: shared tensor
+    Returns
+    -------
+    shared variable
+        Theano tensor (shared variable) for the weights.
     """
     # make sure the weights_init is a string to the method to use
     if isinstance(weights_init, six.string_types):
@@ -90,7 +88,7 @@ def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noi
     raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian, uniform, or identity" %
                               str(weights_init))
 
-def get_weights_uniform(shape, interval=None, name="W", rng=None):
+def get_weights_uniform(shape, interval='montreal', name="W", rng=None):
     """
     This initializes a shared variable with a given shape for weights drawn from a Uniform distribution with
     low = -interval and high = interval.
@@ -98,24 +96,27 @@ def get_weights_uniform(shape, interval=None, name="W", rng=None):
     Interval can either be a number to use, or a string key to one of the predefined formulas in the
     _uniform_interval dictionary.
 
-    :param shape: a tuple giving the shape information for this weight matrix
-    :type shape: Tuple
+    Parameters
+    ----------
+    shape : tuple
+        A tuple giving the shape information for this weight matrix.
+    interval : float or str
+        Either a number for your own custom interval, or a string key to one of the predefined formulas.
+    name : str
+        The name to give the shared variable.
+    rng : random
+        The random number generator to use with a .uniform method.
 
-    :param interval: either a number for your own custom interval, or a string key to one of the predefined formulas
-    :type interval: Float or String
+    Returns
+    -------
+    shared variable
+        The theano shared variable with given shape and name drawn from a uniform distribution.
 
-    :param name: the name to give the shared variable
-    :type name: String
-
-    :param rng: the random number generator to use with a .uniform method
-    :type rng: random
-
-    :return: the theano shared variable with given shape and name drawn from a uniform distribution
-    :rtype: shared variable
-
-    :raises: NotImplementedError
+    Raises
+    ------
+    NotImplementedError
+        If the string name for the interval couldn't be found in the dictionary.
     """
-    interval = interval or default_interval
     if rng is None:
         rng = numpy.random
     # If the interval parameter is a string, grab the appropriate formula from the function dictionary,
@@ -147,23 +148,23 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
     This initializes a shared variable with the given shape for weights drawn from a
     Gaussian distribution with mean and std.
 
-    :param shape: a tuple giving the shape information for this weight matrix
-    :type shape: Tuple
+    Parameters
+    ----------
+    shape : tuple
+        A tuple giving the shape information for this weight matrix.
+    mean : float
+        The mean to use for the Gaussian distribution.
+    std : float
+        The standard deviation to use dor the Gaussian distribution.
+    name : str
+        The name to give the shared variable.
+    rng : random
+        A given random number generator to use with .normal method.
 
-    :param mean: the mean to use for the Gaussian distribution
-    :type mean: float
-
-    :param std: the standard deviation to use dor the Gaussian distribution
-    :type std: float
-
-    :param name: the name to give the shared variable
-    :type name: String
-
-    :param rng: a given random number generator to use with .normal method
-    :type rng: random
-
-    :return: the theano shared variable with given shape and drawn from a Gaussian distribution
-    :rtype: shared variable
+    Returns
+    -------
+    shared variable
+        The theano shared variable with given shape and drawn from a Gaussian distribution.
     """
     default_mean = 0
     default_std  = 0.05
@@ -196,14 +197,17 @@ def get_weights_identity(shape, name="W", add_noise=None):
 
     Identity matrix for weights is useful for RNNs with ReLU! http://arxiv.org/abs/1504.00941
 
-    :param shape: tuple giving the shape information for the weight matrix
-    :type shape: Tuple
+    Parameters
+    ----------
+    shape : tuple
+        Tuple giving the shape information for the weight matrix.
+    name : str
+        Name to give the shared variable.
 
-    :param name: name to give the shared variable
-    :type name: string
-
-    :return: the theano shared variable with given shape
-    :rtype: shared tensor
+    Returns
+    -------
+    shared variable
+        The theano shared variable identity matrix with given shape.
     """
     weights = numpy.eye(N=shape[0], M=shape[1], k=0, dtype=theano.config.floatX)
 
@@ -221,17 +225,19 @@ def get_bias(shape, name="b", init_values=None):
     This creates a theano shared variable for the bias parameter - normally initialized to zeros,
     but you can specify other values
 
-    :param shape: the shape to use for the bias vector/matrix
-    :type shape: Tuple
+    Parameters
+    ----------
+    shape : tuple
+        The shape to use for the bias vector/matrix.
+    name : str
+        The name to give the shared variable.
+    offset : float or array_like
+        Values to add to the zeros, if you want a nonzero bias initially.
 
-    :param name: the name to give the shared variable
-    :type name: String
-
-    :param offset: values to add to the zeros, if you want a nonzero bias initially
-    :type offset: float/vector
-
-    :return: the theano shared variable with given shape
-    :rtype: shared variable
+    Returns
+    -------
+    shared variable
+        The theano shared variable with given shape.
     """
     default_init = 0
 
@@ -247,23 +253,23 @@ def mirror_images(input, image_shape, cropsize, rand, flag_rand):
     This takes an input batch of images (normally the input to a convolutional net),
     and augments them by mirroring and concatenating.
 
-    :param input: the input 4D tensor of images
-    :type input: Tensor4D
+    Parameters
+    ----------
+    input : Tensor4D
+        The input 4D tensor of images.
+    image_shape : tuple
+        The shape of the 4D tensor input.
+    cropsize : int
+        What size to crop to.
+    rand : vector
+        A vector representing a random array for cropping/mirroring the data.
+    flag_rand : bool
+        Whether to randomize the mirror.
 
-    :param image_shape: the shape of the 4D tensor input
-    :type image_shape: Tuple
-
-    :param cropsize: what size to crop to
-    :type cropsize: Integer
-
-    :param rand: a vector representing a random array for cropping/mirroring the data
-    :type rand: vector
-
-    :param flag_rand: to randomize the mirror
-    :type flag_rand: Boolean
-
-    :return: tensor4D representing the mirrored/concatenated input
-    :rtype: same as input
+    Returns
+    -------
+    Tensor4D
+        Tensor4D representing the mirrored/concatenated input.
     """
     # The random mirroring and cropping in this function is done for the
     # whole batch.
@@ -296,11 +302,15 @@ def bc01_to_c01b(input):
     This helper method uses dimshuffle on a 4D input tensor assumed to be bc01 format (batch, channels, rows, cols)
     and outputs it in c01b format (channels, rows, cols, batch). This operation is used for convolutions.
 
-    :param input: a 4D input tensor assumed to be in bc01 ordering
-    :type input: 4D tensor
+    Parameters
+    ----------
+    input : Tensor4D
+        A 4D input tensor assumed to be in bc01 ordering. (batch, channels, rows, cols)
 
-    :return: a 4D tensor in c01b ordering
-    :rtype: 4D tensor
+    Returns
+    -------
+    Tensor4D
+        A 4D tensor in c01b ordering. (channels, rows, cols, batch)
     """
     # make sure it is a 4d tensor:
     assert input.ndim == 4
@@ -312,11 +322,15 @@ def c01b_to_bc01(input):
     This helper method uses dimshuffle on a 4D input tensor assumed to be c01b format (channels, rows, cols, batch)
     and outputs it in bc01 format (batch, channels, rows, cols). This operation is used for convolutions.
 
-    :param input: a 4D input tensor assumed to be in c01b ordering
-    :type input: 4D tensor
+    Parameters
+    ----------
+    input : Tensor4D
+        A 4D input tensor assumed to be in c01b ordering. (channels, rows, cols, batch)
 
-    :return: a 4D tensor in bc01 ordering
-    :rtype: 4D tensor
+    Returns
+    -------
+    Tensor4D
+        A 4D tensor in bc01 ordering. (batch, channels, rows, cols)
     """
     # make sure it is a 4d tensor:
     assert input.ndim == 4

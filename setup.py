@@ -40,11 +40,11 @@ class opendeep_install(install):
 setup(
     name='opendeep',
     version=version,
-    description='A modular deep learning library built on Theano.',
+    description='A modular and extensible deep learning library built on Theano.',
     long_description=read('README.rst'),
-    keywords='opendeep theano modular deep learning neural',
+    keywords='opendeep theano modular deep learning neural net ai',
 
-    url='https://github.com/vitruvianscience/opendeep',
+    url='https://github.com/vitruvianscience/opendeep/',
 
     author='Vitruvian Science',
     author_email='opendeep-dev@googlegroups.com',
@@ -54,16 +54,23 @@ setup(
     classifiers=[
         'Programming Language :: Python',
         'Natural Language :: English',
+        'License :: OSI Approved :: Apache Software License',
         # How mature is this project? Common values are
         # 3 - Alpha
         # 4 - Beta
         # 5 - Production/Stable
         'Development Status :: 3 - Alpha',
         # Indicate who your project is intended for
-        'Intended Audience :: Developers'],
+        'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
+        'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        'Topic :: Scientific/Engineering :: Image Recognition',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+        'Topic :: Software Development :: Libraries :: Application Frameworks'
+    ],
 
     dependency_links=['git+http://github.com/Theano/Theano.git#egg=Theano'],
-    install_requires=['numpy>=1.5', "Theano"],
+    install_requires=["numpy>=1.9.2", "scipy>=0.15.1", "Theano>=0.7.0", "Pillow>=2.8.1"],
 
     packages=find_packages(),
     # If there are data files included in your packages that need to be

@@ -1,9 +1,6 @@
-'''
-.. module:: stochastic_gradient_descent
-
+"""
 Generic stochastic gradient descent optimization with momentum (Nesterov acceleration) and annealing.
-This also serves as the base class for other learning rate update algorithms, such as ADADELTA or RMSProp.
-'''
+"""
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
@@ -23,50 +20,78 @@ from opendeep.utils.decay import get_decay_function
 
 log = logging.getLogger(__name__)
 
-class SGD(Optimizer):
-    '''
-    Stochastic gradient descent for training a model - includes lr decay and momentum
-    '''
-    # Default values to use for some training parameters
-    defaults = {"learning_rate": 0.25,
-                "lr_decay": "exponential",
-                "lr_factor": .995,
-                "momentum": 0.5,
-                'momentum_decay': 'linear',
-                'momentum_factor': 0,
-                'nesterov_momentum': True}
 
+class SGD(Optimizer):
+    """
+    Stochastic gradient descent for training a model - includes learning rate decay and momentum.
+    """
     def __init__(self, model, dataset,
-                 config=None, defaults=defaults,
-                 n_epoch=None, batch_size=None, minimum_batch_size=None,
+                 n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
-                 learning_rate=None, lr_decay=None, lr_factor=None,
-                 momentum=None, momentum_decay=None, momentum_factor=None, nesterov_momentum=None):
+                 learning_rate=.1, lr_decay="exponential", lr_factor=.995,
+                 momentum=0.5, momentum_decay="linear", momentum_factor=0, nesterov_momentum=True):
+        """
+        Initialize SGD.
+
+        Parameters
+        ----------
+        model : Model
+            The Model to train.
+        dataset : Dataset
+            The Dataset to use when training the Model.
+        n_epoch : int
+            how many training iterations over the dataset to go.
+        batch_size : int
+            How many examples from the training dataset to use in parallel.
+        minimum_batch_size : int
+            The minimum number of examples required at a time (for things like time series, this would be > 1).
+        save_frequency : int
+            How many epochs to train between each new save of the Model's parameters.
+        early_stop_threshold : float
+            The factor by how much the best validation training score needs to improve to determine early stopping.
+        early_stop_length : int
+            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        learning_rate : float
+            The multiplicative amount to adjust parameters based on their gradient values.
+        lr_decay : str
+            The type of decay function to use for changing the learning rate over epochs. See
+            `opendeep.utils.decay` for options.
+        lr_factor : float
+            The amount to use for the decay function when changing the learning rate over epochs. See
+            `opendeep.utils.decay` for its effect for given decay functions.
+        momentum : float
+            The momentum to use during gradient updates.
+        momentum_decay : str
+            The type of decay function to use for changing the momentum over epochs. See
+            `opendeep.utils.decay` for options.
+        momentum_factor : float
+            The amount to use for the decay function when changing the momentum over epochs. See
+            `opendeep.utils.decay` for its effect for given decay functions.
+        nesterov_momentum : bool
+            Whether or not to use Nesterov momentum.
+        """
         # superclass init
-        super(SGD, self).__init__(model, dataset, config=config, defaults=defaults,
-                                  n_epoch=n_epoch, batch_size=batch_size, minimum_batch_size=minimum_batch_size,
-                                  save_frequency=save_frequency, early_stop_length=early_stop_length,
-                                  early_stop_threshold=early_stop_threshold, learning_rate=learning_rate,
-                                  lr_decay=lr_decay, lr_factor=lr_factor, momentum=momentum,
-                                  momentum_decay=momentum_decay, momentum_factor=momentum_factor,
-                                  nesterov_momentum=nesterov_momentum)
-        # everything is in self! yay!
+        initial_parameters = locals().copy()
+        initial_parameters.pop('self')
+        super(SGD, self).__init__(**initial_parameters)
 
         # Momentum - smoothing over the parameter changes (see Hinton)
-        if self.momentum:
-            self.momentum = sharedX(self.momentum, 'momentum')
-            if self.momentum_decay is not None and \
-                            self.momentum_decay is not False and \
-                            self.momentum_factor is not None:
-                self.momentum_decay = get_decay_function(self.momentum_decay,
+        if momentum:
+            self.momentum = sharedX(momentum, 'momentum')
+            if momentum_decay is not None and \
+                            momentum_decay is not False and \
+                            momentum_factor is not None:
+                self.momentum_decay = get_decay_function(momentum_decay,
                                                          self.momentum,
                                                          self.momentum.get_value(),
-                                                         self.momentum_factor)
+                                                         momentum_factor)
             else:
                 self.momentum_decay = False
         else:
             self.momentum = 0
             self.momentum_decay = False
+
+        self.nesterov_momentum = nesterov_momentum
 
     def get_updates(self, gradients):
         """
@@ -82,10 +107,17 @@ class SGD(Optimizer):
 
         Also has the option to implement Nesterov momentum (accelerated momentum), which works better in a lot of cases.
 
-        :param gradients: OrderedDict
-        An OrderedDict of (parameter, gradient) for the model's gradients
-        :return: OrderedDict
-        Updates at each training step
+        Parameters
+        ----------
+        gradients : dict
+            A dictionary mapping from the model's parameters to their
+            gradients.
+
+        Returns
+        -------
+        updates : OrderdDict
+            A dictionary mapping from the old model parameters, to their new
+            values after a single iteration of the learning rule.
         """
         log.debug('Setting up Stochastic Gradient Descent with momentum for optimizer...')
         updates = OrderedDict()
@@ -113,9 +145,13 @@ class SGD(Optimizer):
 
     def get_decay_params(self):
         """
-        returns a list of all the Decay objects to decay during training.
-        :return:
-        :rtype:
+        Returns a list of all the Decay objects to decay during training.
+
+        Returns
+        -------
+        list
+            List of Decay objects to use after each training epoch - in this case the possibility to add
+            momentum decay to the learning rate decay from the base optimizer class.
         """
         decay_params = super(SGD, self).get_decay_params()
         if hasattr(self, 'momentum_decay') and self.momentum_decay:

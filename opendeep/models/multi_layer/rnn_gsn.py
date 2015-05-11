@@ -198,6 +198,9 @@ class RNN_GSN(Model):
         self.hidden_noise_level = hidden_noise_level
         self.input_noise = input_noise
         self.input_noise_level = input_noise_level
+        self.image_width = image_width
+        self.image_height = image_height
+
 
         # grab info from the inputs_hook, hiddens_hook, or from parameters
         if self.inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
@@ -213,7 +216,7 @@ class RNN_GSN(Model):
         self.generate_u0 = T.vector("generate_u0")
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
-        self.hidden_size = self.hidden_size or self.input_size
+        self.hidden_size = hidden_size or self.input_size
 
         # deal with hiddens_hook
         if self.hiddens_hook is not None:
@@ -238,7 +241,7 @@ class RNN_GSN(Model):
         self.rnn_hidden_activation_func = get_activation_function(rnn_hidden_activation)
 
         # Cost function
-        self.cost_function = get_cost_function(self.cost_function)
+        self.cost_function = get_cost_function(cost_function)
         self.cost_args = cost_args
 
         # symbolic scalar for how many recurrent steps to use during generation from the model
@@ -279,64 +282,64 @@ class RNN_GSN(Model):
         # otherwise, construct our params
         else:
             # initialize a list of weights and biases based on layer_sizes for the GSN
-            self.weights_list = [get_weights(weights_init=self.weights_init,
+            self.weights_list = [get_weights(weights_init=weights_init,
                                              shape=(self.layer_sizes[i], self.layer_sizes[i + 1]),
                                              name="W_{0!s}_{1!s}".format(i, i + 1),
                                              # if gaussian
-                                             mean=self.weights_mean,
-                                             std=self.weights_std,
+                                             mean=weights_mean,
+                                             std=weights_std,
                                              # if uniform
-                                             interval=self.weights_interval)
+                                             interval=weights_interval)
                                  for i in range(self.layers)]
             # add more weights if we aren't tying weights between layers (need to add for higher-lower layers now)
             if not self.tied_weights:
                 self.weights_list.extend(
-                    [get_weights(weights_init=self.weights_init,
+                    [get_weights(weights_init=weights_init,
                                  shape=(self.layer_sizes[i + 1], self.layer_sizes[i]),
                                  name="W_{0!s}_{1!s}".format(i + 1, i),
                                  # if gaussian
-                                 mean=self.weights_mean,
-                                 std=self.weights_std,
+                                 mean=weights_mean,
+                                 std=weights_std,
                                  # if uniform
-                                 interval=self.weights_interval)
+                                 interval=weights_interval)
                      for i in reversed(range(self.layers))]
                 )
             # initialize each layer bias to 0's.
             self.bias_list = [get_bias(shape=(self.layer_sizes[i],),
                                        name='b_' + str(i),
-                                       init_values=self.bias_init)
+                                       init_values=bias_init)
                               for i in range(self.layers + 1)]
 
             self.recurrent_to_gsn_weights_list = [
-                get_weights(weights_init=self.rnn_weights_init,
-                            shape=(self.rnn_hidden_size, self.layer_sizes[layer]),
+                get_weights(weights_init=rnn_weights_init,
+                            shape=(rnn_hidden_size, self.layer_sizes[layer]),
                             name="W_u_h{0!s}".format(layer),
                             # if gaussian
-                            mean=self.rnn_weights_mean,
-                            std=self.rnn_weights_std,
+                            mean=rnn_weights_mean,
+                            std=rnn_weights_std,
                             # if uniform
-                            interval=self.rnn_weights_interval)
+                            interval=rnn_weights_interval)
                 for layer in range(self.layers + 1) if layer % 2 != 0
             ]
-            self.W_u_u = get_weights(weights_init=self.rnn_weights_init,
-                                     shape=(self.rnn_hidden_size, self.rnn_hidden_size),
+            self.W_u_u = get_weights(weights_init=rnn_weights_init,
+                                     shape=(rnn_hidden_size, rnn_hidden_size),
                                      name="W_u_u",
                                      # if gaussian
-                                     mean=self.rnn_weights_mean,
-                                     std=self.rnn_weights_std,
+                                     mean=rnn_weights_mean,
+                                     std=rnn_weights_std,
                                      #if uniform
-                                     interval=self.rnn_weights_interval)
-            self.W_x_u = get_weights(weights_init=self.rnn_weights_init,
-                                     shape=(self.input_size, self.rnn_hidden_size),
+                                     interval=rnn_weights_interval)
+            self.W_x_u = get_weights(weights_init=rnn_weights_init,
+                                     shape=(self.input_size, rnn_hidden_size),
                                      name="W_x_u",
                                      # if gaussian
-                                     mean=self.rnn_weights_mean,
-                                     std=self.rnn_weights_std,
+                                     mean=rnn_weights_mean,
+                                     std=rnn_weights_std,
                                      # if uniform
-                                     interval=self.rnn_weights_interval)
-            self.recurrent_bias = get_bias(shape=(self.rnn_hidden_size,),
+                                     interval=rnn_weights_interval)
+            self.recurrent_bias = get_bias(shape=(rnn_hidden_size,),
                                            name="b_u",
-                                           init_values=self.rnn_bias_init)
+                                           init_values=rnn_bias_init)
 
         # build the params of the model into a list
         self.gsn_params = self.weights_list + self.bias_list

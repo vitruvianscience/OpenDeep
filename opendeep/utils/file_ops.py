@@ -1,7 +1,22 @@
 """
-.. module:: file_ops
-
 These are basic utilities for working with files and filepaths.
+
+Attributes
+----------
+DIRECTORY : int
+    Directory marker.
+ZIP : int
+    Zip file marker.
+GZ : int
+    GZ file marker.
+PKL : int
+    Pickle file marker.
+TAR : int
+    Tarfile marker.
+NPY : int
+    Numpy save file marker.
+UNKNOWN : int
+    Unknown file type marker.
 """
 
 __authors__ = "Markus Beissinger"
@@ -30,7 +45,21 @@ TAR       = 4
 NPY       = 5
 UNKNOWN   = 6
 
+
 def get_filetype_string(filetype):
+    """
+    Given an integer depicting the filetype, return the string of the attribute.
+
+    Parameters
+    ----------
+    filetype : int
+        The filetype attribute from this class to get the string name.
+
+    Returns
+    -------
+    str
+        The string representation such as 'ZIP', 'PKL', 'UNKNOWN', etc.
+    """
     if filetype is DIRECTORY:
         return 'DIRECTORY'
     elif filetype is ZIP:
@@ -51,12 +80,17 @@ def get_filetype_string(filetype):
 
 def mkdir_p(path):
     """
-    This function will create a filesystem path if it doesn't already exist (mkdir in unix)
+    This function will create a filesystem path if it doesn't already exist (like mkdir in unix).
 
-    :param path: the filesystem path to create
-    :type path: String
+    Parameters
+    ----------
+    path : str
+        The filesystem path to create.
 
-    :raises OSError
+    Raises
+    ------
+    OSError
+        If there was an OS error making the directory.
     """
     path = os.path.realpath(path)
     log.debug('Attempting to make directory %s', path)
@@ -76,8 +110,10 @@ def init_empty_file(filename):
     This function will create an empty file (containing an empty string) with the given filename. This is similar to
     the 'touch' command in unix.
 
-    :param filename: the file to create
-    :type filename: String
+    Parameters
+    ----------
+    filename : str
+        The file to create (initialize as an empty file).
     """
     with open(filename, 'w') as f:
         f.write("")
@@ -87,14 +123,17 @@ def download_file(url, destination):
     """
     This will download whatever is on the internet at 'url' and save it to 'destination'.
 
-    :param url: the URL to download from
-    :type url: String
+    Parameters
+    ----------
+    url : str
+        The URL to download from.
+    destination : str
+        The filesystem path (including file name) to download the file to.
 
-    :param destination: the filesystem path (including file name) to download the file to
-    :type destination: String
-
-    :return: whether or not the operation was successful
-    :rtype: Boolean
+    Returns
+    -------
+    bool
+        Whether or not the operation was successful.
     """
     destination = os.path.realpath(destination)
     log.debug('Downloading data from %s to %s', url, destination)
@@ -116,11 +155,15 @@ def get_file_type(file_path):
     global variables above.
     Currently, can be .zip, .gz, .tar, .pkl, .p, or .pickle.
 
-    :param file_path: the filesystem path to the file in question
-    :type file_path: String
+    Parameters
+    ----------
+    file_path : str
+        The filesystem path to the file in question.
 
-    :return: the integer code to the file type defined in file_ops.py, or None if the file doesn't exist.
-    :rtype: Integer or None
+    Returns
+    -------
+    int
+        The integer code to the file type defined in file_ops.py, or None if the file doesn't exist.
     """
     file_path = os.path.realpath(file_path)
     if os.path.exists(file_path):
@@ -156,14 +199,17 @@ def unzip(source_filename, destination_dir='.'):
     """
     This will unzip a source file (.zip) to a destination directory.
 
-    :param source_filename: Filesystem path to the file to unzip
-    :type source_filename: String
+    Parameters
+    ----------
+    source_filename : str
+        Filesystem path to the file to unzip.
+    destination_dir : str
+        Filesystem directory path for the file to unzip into.
 
-    :param destination_dir: Filesystem directory path for the file to unzip into
-    :type destination_dir: String
-
-    :return: Whether or not it was successful
-    :rtype: Boolean
+    Returns
+    -------
+    bool
+        Whether or not it was successful.
     """
     source_filename = os.path.realpath(source_filename)
     destination_dir = os.path.realpath(destination_dir)
@@ -181,14 +227,17 @@ def untar(source_filename, destination_dir='.'):
     """
     This will unzip a tarball (.tar.gz) to a destination directory.
 
-    :param source_filename: Filesystem path to the file to un-tar
-    :type source_filename: String
+    Parameters
+    ----------
+    source_filename : str
+        Filesystem path to the file to un-tar.
+    destination_dir : str
+        Filesystem path for the file to un-tar into.
 
-    :param destination_dir: Filesystem path for the file to un-tar into
-    :type destination_dir: String
-
-    :return: Whether or not it was successful
-    :rtype: Boolean
+    Returns
+    -------
+    bool
+        Whether or not it was successful.
     """
     source_filename = os.path.realpath(source_filename)
     destination_dir = os.path.realpath(destination_dir)

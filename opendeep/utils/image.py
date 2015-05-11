@@ -1,6 +1,4 @@
 """ 
-.. module:: image
-
 This module contains different utility functions that are not connected
 in anyway to the networks presented in the tutorials, but rather help in
 processing the outputs into a more understandable way.
@@ -22,7 +20,21 @@ __email__ = "opendeep-dev@googlegroups.com"
 import numpy
 
 def scale_to_unit_interval(ndar, eps=1e-8):
-    """ Scales all values in the ndarray 'ndar' to be between 0 and 1 """
+    """
+    Scales all values in the ndarray 'ndar' to be between 0 and 1.
+
+    Parameters
+    ----------
+    ndar : numpy.ndarray
+        The input array to scale values.
+    eps : float
+        Small value to avoid divide-by-zero when scaling.
+
+    Returns
+    -------
+    numpy.ndarray
+        The input array scaled to be between 0 and 1.
+    """
     ndar = ndar.copy()
     ndar -= ndar.min()
     ndar *= 1.0 / (ndar.max() + eps)
@@ -40,26 +52,25 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
     and also columns of matrices for transforming those rows
     (such as the first layer of a neural net).
 
-    :type X: a 2-D ndarray or a tuple of 4 channels, elements of which can
-    be 2-D ndarrays or None;
-    :param X: a 2-D array in which every row is a flattened image.
+    Parameters
+    ----------
+    X : 2D ndarray or a tuple of 4 channels, elements of which can be 2D ndarrays or None
+        A 2D array in which every row is a flattened image.
+    img_shape : tuple
+        The original (height, width) shape of each image.
+    tile_shape : tuple
+        The number of images to tile (rows, cols).
+    tile_spacing : tuple
+        The amount of pixels to put between image tiles (like a border size).
+    scale_rows_to_unit_interval : bool
+        If the values need to be scaled before being plotted to [0,1] or not.
+    output_pixel_vals : bool
+        If output should be pixel values (i.e. int8 values) or floats.
 
-    :type img_shape: tuple; (height, width)
-    :param img_shape: the original shape of each image
-
-    :type tile_shape: tuple; (rows, cols)
-    :param tile_shape: the number of images to tile (rows, cols)
-
-    :param output_pixel_vals: if output should be pixel values (i.e. int8
-    values) or floats
-
-    :param scale_rows_to_unit_interval: if the values need to be scaled before
-    being plotted to [0,1] or not
-
-
-    :returns: array suitable for viewing as an image.
-    (See:`PIL.Image.fromarray`.)
-    :rtype: a 2-d array with same dtype as X.
+    Returns
+    -------
+    2D array
+        Array suitable for viewing as an image. (See:`PIL.Image.fromarray`.)
     """
 
     assert len(img_shape) == 2

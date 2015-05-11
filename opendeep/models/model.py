@@ -24,7 +24,7 @@ from theano.compat.python2x import OrderedDict  # use this compatibility Ordered
 # internal references
 from opendeep import function
 from opendeep.utils import file_ops
-from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list
+from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
 from opendeep.utils.file_ops import mkdir_p
 
 try:
@@ -129,7 +129,7 @@ class Model(object):
         self.outdir       = outdir
 
         # make sure outdir ends in a directory separator
-        if self.outdir[-1] != os.sep:
+        if self.outdir and self.outdir[-1] != os.sep:
             self.outdir += os.sep
 
         # Combine arguments that could specify input_size -> overwrite input_size with inputs_hook[0] if it exists.
@@ -153,10 +153,9 @@ class Model(object):
                         "same as input_size. Setting output_size=input_size now...")
             self.output_size = self.input_size
 
-
         # copy all of the parameters from the class into an args (configuration) dictionary
         self.args = {}
-        self._add_kwargs_to_dict(kwargs.copy(), self.args)
+        self.args = add_kwargs_to_dict(kwargs.copy(), self.args)
 
         self.args['output_size'] = self.output_size
 
@@ -171,22 +170,6 @@ class Model(object):
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
-
-        # Make the parameters accessible by the self dictionary representation.
-        # Not encouraged to rely on this because it is harder to debug.
-        # Better practice to set each self. parameter individually in the model implementation.
-        self.__dict__.update(self.args)
-
-    # helper kwargs processing function
-    def _add_kwargs_to_dict(self, kwargs, dictionary):
-        # Recursively add any kwargs into the given dictionary.
-        for arg, val in kwargs.items():
-            if arg not in dictionary and arg != 'kwargs':
-                dictionary[arg] = val
-            # flatten kwargs if it was passed as a variable
-            elif arg == 'kwargs':
-                inner_kwargs = kwargs['kwargs']
-                self._add_kwargs_to_dict(inner_kwargs, dictionary)
 
     ######################################################################
     # Methods for the symbolic inputs, hiddens, and outputs of the model #
@@ -642,7 +625,7 @@ class Model(object):
             Whether or not successfully saved the file.
         """
         # make sure outdir was not set to false (no saving or outputs)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             # By default, try to dump all the values from get_param_values into a pickle file.
             params = self.get_param_values()
 
@@ -721,7 +704,7 @@ class Model(object):
             Whether or not successfully saved the file.
         """
         # make sure outdir is not set to False (no outputs/saving)
-        if self.outdir:
+        if hasattr(self, 'outdir') and self.outdir:
             args_path = os.path.join(self.outdir, args_file)
             args_file = os.path.realpath(args_path)
 

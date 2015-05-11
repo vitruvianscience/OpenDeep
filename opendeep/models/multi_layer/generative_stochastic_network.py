@@ -187,10 +187,13 @@ class GSN(Model):
 
         # when the input should be thought of as an image, either use the specified width and height,
         # or try to make as square as possible.
-        if self.image_height is None and self.image_width is None:
+        if image_height is None and image_width is None:
             (_h, _w) = closest_to_square_factors(self.input_size)
             self.image_width  = _w
             self.image_height = _h
+        else:
+            self.image_height = image_height
+            self.image_width = image_width
 
         ############################
         # Theano variables and RNG #
@@ -254,9 +257,9 @@ class GSN(Model):
         # Activation functions! #
         #########################
         # hidden unit activation
-        self.hidden_activation = get_activation_function(self.hidden_activation)
+        self.hidden_activation = get_activation_function(hidden_activation)
         # Visible layer activation
-        self.visible_activation = get_activation_function(self.visible_activation)
+        self.visible_activation = get_activation_function(visible_activation)
         # make sure the sampling functions are appropriate for the activation functions.
         if is_binary(self.visible_activation):
             self.visible_sampling = mrg.binomial
@@ -266,7 +269,7 @@ class GSN(Model):
             raise NotImplementedError("Non-binary visible activation not supported yet!")
 
         # Cost function
-        self.cost_function = get_cost_function(self.cost_function)
+        self.cost_function = get_cost_function(cost_function)
         self.cost_args = cost_args or dict()
 
         ###############

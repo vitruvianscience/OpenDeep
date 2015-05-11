@@ -1,6 +1,4 @@
 """
-.. module:: statistics
-
 This module is used for computing statistics such as mean, variance, mode, regularization values, etc.
 """
 
@@ -23,13 +21,18 @@ log = logging.getLogger(__name__)
 
 def get_stats(input, stat=None):
     """
-    returns a dictionary mapping the name of the statistic to the result on the input
+    Returns a dictionary mapping the name of the statistic to the result on the input.
+    Currently gets mean, var, std, min, max, l1, l2.
 
-    :param input: theano tensor
-    :type input: tensor
+    Parameters
+    ----------
+    input : tensor
+        Theano tensor to grab stats for.
 
-    :return: dictionary of all the statistics expressions
-    :rtype: dict(string: theano expression)
+    Returns
+    -------
+    dict
+        Dictionary of all the statistics expressions {string_name: theano expression}
     """
     stats = {
         'mean': T.mean(input),

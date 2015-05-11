@@ -137,7 +137,7 @@ class RNN_RBM(Model):
         self.generate_u0 = T.vector("generate_u0")
 
         # either grab the hidden's desired size from the parameter directly, or copy n_in
-        self.hidden_size = self.hidden_size or self.input_size
+        self.hidden_size = hidden_size or self.input_size
 
         # deal with hiddens_hook
         if self.hiddens_hook is not None:
