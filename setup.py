@@ -75,7 +75,7 @@ setup(
     ],
 
     dependency_links=['git+http://github.com/Theano/Theano.git#egg=Theano'],
-    install_requires=["numpy>=1.9.2", "scipy>=0.13.3", "Theano>=0.7.0", "Pillow>=2.8.1"],
+    install_requires=["numpy", "theano", "pillow"],
 
     packages=find_packages(),
     # If there are data files included in your packages that need to be
