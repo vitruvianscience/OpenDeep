@@ -24,6 +24,7 @@ class Recurrent(Model):
     """
     Your run-of-the-mill recurrent model. Normally not as good as LSTM/GRU, but it is simplest.
     """
-    # TODO: recurrent model
-    log.error("Recurrent not implemented!")
-    raise NotImplementedError("Recurrent not implemented!")
+    def __init__(self):
+        # TODO: recurrent model
+        log.error("Recurrent not implemented!")
+        raise NotImplementedError("Recurrent not implemented!")

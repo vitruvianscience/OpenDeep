@@ -248,21 +248,20 @@ class RNN_RBM(Model):
 
         # Create the RNN-RBM graph!
         self.v_sample, self.cost, self.monitors, self.updates_train, self.v_ts, self.updates_generate, self.u_t = \
-            self.build_rnnrbm()
+            self._build_rnnrbm()
 
         log.info("Initialized an RNN-RBM!")
 
-    def build_rnnrbm(self):
+    def _build_rnnrbm(self):
         """
-        Creates the updates and other return variables for the computation graph
+        Creates the updates and other return variables for the computation graph.
 
-        :return: the sample at the end of the computation graph,
-        the train cost function,
-        the train monitors,
-        the computation updates,
-        the generated visible list,
-        the generated computation updates
-        :rtype: List
+        Returns
+        -------
+        List
+            the sample at the end of the computation graph, the train cost function, the train monitors,
+            the computation updates, the generated visible list, the generated computation updates, the ending
+            recurrent states
         """
         # For training, the deterministic recurrence is used to compute all the
         # {bv_t, bh_t, 1 <= t <= T} given v. Conditional RBMs can then be trained
@@ -314,14 +313,18 @@ class RNN_RBM(Model):
         """
         The single recurrent step for the model
 
-        :param v_t: the visible layer at time t
-        :type v_t: tensor
+        Parameters
+        ----------
+        v_t : tensor
+            The input (visible layer) at time t.
+        u_tm1 : tensor
+            The previous timestep (t-1) recurrent hiddens.
 
-        :param u_tm1: the recurrent hidden layer at time t-1
-        :type u_tm1: tensor
-
-        :return: tuple of current v_t and updates if generating from model, otherwise, current u_t and rbm bias params
-        :rtype: tuple
+        Returns
+        -------
+        tuple
+            Current generated visible v_t, recurrent u_t, and computation updates if generating
+            (no v_t given as parameter), otherwise current recurrent u_t, visible bias bv_t, and hiddens bias bh_t.
         """
         # generate the current rbm bias params
         bv_t = self.bv + T.dot(u_tm1, self.Wuv)

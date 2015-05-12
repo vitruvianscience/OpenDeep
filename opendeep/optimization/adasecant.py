@@ -8,8 +8,9 @@ http://arxiv.org/abs/1412.7419
 Code adapted from Caglar Gulcehre:
 https://github.com/caglar/adasecant_wshp_paper
 
-From the author
-<http://www.reddit.com/r/MachineLearning/comments/2w6bfl/ask_ml_has_anyone_tried_to_reproduce_adasecant/>:
+.. note::
+    From the author
+    <http://www.reddit.com/r/MachineLearning/comments/2w6bfl/ask_ml_has_anyone_tried_to_reproduce_adasecant/>:
     This implementation on github is slightly different from the one mentioned in the paper,
     there are some minor differences (outlier detection mechanism is slightly different). But in principle those
     shouldn't change the results too much... The important point to care about in the implementation of this algorithm,
@@ -47,10 +48,10 @@ class AdaSecant(Optimizer):
     """
     Taken from https://github.com/caglar/adasecant_wshp_paper:
     Adasecant:
-        Based on the paper:
-            Gulcehre, Caglar, and Yoshua Bengio.
-            "ADASECANT: Robust Adaptive Secant Method for Stochastic Gradient."
-            arXiv preprint arXiv:1412.7419 (2014).
+    Based on the paper:
+    Gulcehre, Caglar, and Yoshua Bengio.
+    "ADASECANT: Robust Adaptive Secant Method for Stochastic Gradient."
+    arXiv preprint arXiv:1412.7419 (2014).
     There are some small changes in this code.
     """
     def __init__(self, model, dataset,
@@ -103,8 +104,8 @@ class AdaSecant(Optimizer):
             Apply gradient clipping for RNNs (not necessary for feedforward networks). But this is
             a constraint on the norm of the gradient per layer.
             Based on:
-                Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
-                recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
+            Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
+            recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
         use_adagrad: bool, optional
             Either to use clipped adagrad or not.
         use_corrected_grad: bool, optional
@@ -149,16 +150,14 @@ class AdaSecant(Optimizer):
         Parameters
         ----------
         gradients : dict
-            A dictionary mapping from the model's parameters to their
-            gradients.
+            A dictionary mapping from the model's parameters to their gradients.
 
         Returns
         -------
-        updates : OrderdDict
-            A dictionary mapping from the old model parameters, to their new
-            values after a single iteration of the learning rule.
+        OrderdDict
+            A dictionary mapping from the old model parameters
+            to their new values after a single iteration of the learning rule.
         """
-
         updates = OrderedDict({})
         eps = self.damping
         step = sharedX(0., name="step")

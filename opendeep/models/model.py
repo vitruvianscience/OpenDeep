@@ -346,6 +346,7 @@ class Model(object):
         theano variable or List(theano variable)
             Theano variables representing the target(s) to the model's computation. Defaults to returning an empty
             list, which assumes the model is unsupervised.
+
         """
         # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
         # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost

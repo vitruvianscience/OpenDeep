@@ -162,7 +162,7 @@ Congrats, you just:
 
 - and predicted some outputs given inputs (and saved them as an image)!
 
-.. image:: readme_images/gatsby.gif
+.. image:: _static/images/gatsby.gif
    :scale: 100 %
    :alt: Working example!
    :align: center
@@ -180,11 +180,14 @@ User group: `opendeep-users`_
 
 Developer group: `opendeep-dev`_
 
+Twitter: `@opendeep`_
+
 We would love all help to make this the best library possible! Feel free to fork the repository and
 join the Google groups!
 
 .. _opendeep-users: https://groups.google.com/forum/#!forum/opendeep-users/
 .. _opendeep-dev: https://groups.google.com/forum/#!forum/opendeep-dev/
+.. _@opendeep: https://twitter.com/opendeep
 
 
 Why OpenDeep?

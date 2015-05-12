@@ -324,15 +324,7 @@ class SoftmaxLayer(BasicLayer):
         Return the mean of the negative log-likelihood of the prediction
         of this model under a given target distribution.
 
-        .. math::
-
-            \frac{1}{|\mathcal{D}|} \mathcal{L} (\theta=\{W,b\}, \mathcal{D}) =
-            \frac{1}{|\mathcal{D}|} \sum_{i=0}^{|\mathcal{D}|}
-                \log(P(Y=y^{(i)}|x^{(i)}, W,b)) \\
-            \ell (\theta=\{W,b\}, \mathcal{D})
-
         .. note::
-
             We use the mean instead of the sum so that
             the learning rate is less dependent on the batch size
 

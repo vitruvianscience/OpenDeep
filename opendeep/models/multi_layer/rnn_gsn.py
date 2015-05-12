@@ -428,6 +428,12 @@ class RNN_GSN(Model):
             The input at time t.
         u_tm1 : tensor
             The previous timestep (t-1) recurrent hiddens.
+
+        Returns
+        -------
+        tuple
+            Current generated visible x_t and recurrent u_t if generating (no x_t given as parameter),
+            otherwise current recurrent u_t and hiddens h_t.
         """
         # If `x_t` is given, deterministic recurrence to compute the u_t. Otherwise, first generate.
         # Make current guess for hiddens based on U

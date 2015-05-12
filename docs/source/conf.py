@@ -15,6 +15,14 @@
 from __future__ import print_function
 import sys
 import os
+mock = True
+try:
+    from unittest.mock import MagicMock
+except:
+    try:
+        from mock import Mock as MagicMock
+    except:
+        mock = False
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -133,6 +141,18 @@ pygments_style = 'sphinx'
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
 #keep_warnings = False
+
+
+# Workaround for ReadTheDocs : http://docs.readthedocs.org/en/latest/faq.html
+# Need to mock out libraries that depend on C code.
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+if on_rtd and mock:
+    class Mock(MagicMock):
+        @classmethod
+        def __getattr__(cls, name):
+                return Mock()
+    MOCK_MODULES = ['numpy', 'scipy', 'theano']
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
 # -- Options for HTML output ----------------------------------------------
