@@ -1,3 +1,12 @@
+.. image:: https://travis-ci.org/vitruvianscience/OpenDeep.svg?branch=master
+    :target: https://travis-ci.org/vitruvianscience/OpenDeep
+    :alt: Build Status
+
+.. image:: https://readthedocs.org/projects/opendeep/badge/?version=latest
+    :target: https://readthedocs.org/projects/opendeep/?badge=latest
+    :alt: Documentation Status
+
+
 .. image:: readme_images/OpenDeep_logo_name.png
    :scale: 50 %
    :alt: OpenDeep

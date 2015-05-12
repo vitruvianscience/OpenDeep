@@ -14,3 +14,7 @@ theano >= 0.7.0
 PyYAML>=3.11
 # Bokeh for plotting (with bokeh-server)
 bokeh>=0.8.2
+# Mock for use in sphinx's conf.py in python versions < 3.3
+mock>=1.0.1
+# Numpydoc used in sphinx's conf.py for parsing docstrings
+numpydoc>=0.5
