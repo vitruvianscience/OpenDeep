@@ -1,6 +1,6 @@
 # Main requirements
 numpy>=1.9.2
-scipy>=0.15.1
+scipy>=0.13.3
 # Pillow is the successor to PIL for image processing
 Pillow>=2.8.1
 # The latest bleeding-edge Theano
