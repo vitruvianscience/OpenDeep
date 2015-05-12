@@ -7,7 +7,7 @@ from opendeep.optimization.log_likelihood.conservative_sampling_ll import _compi
     compute_CSL_with_minibatches, compute_CSL_with_minibatches_one_chain
 
 
-def test_bernoulli_csl(switch=0):
+def bernoulli_csl(switch=0):
 
     mnist = MNIST()
     train_x, _ = mnist.getSubset(TRAIN)
@@ -41,4 +41,4 @@ def test_bernoulli_csl(switch=0):
 
 if __name__ == '__main__':
     config_root_logger()
-    test_bernoulli_csl(switch=0)
+    bernoulli_csl(switch=0)

@@ -18,8 +18,13 @@ def read(*filenames, **kwargs):
     sep = kwargs.get('sep', '\n')
     buf = []
     for filename in filenames:
-        with io.open(filename, mode=mode, encoding=encoding) as f:
-            buf.append(f.read())
+        # hotfix for ValueError: binary mode doesn't take an encoding argument.
+        if 'b' not in mode:
+            with io.open(filename, mode=mode, encoding=encoding) as f:
+                buf.append(f.read())
+        else:
+            with io.open(filename, mode=mode) as f:
+                buf.append(f.read())
     return sep.join(buf)
 
 # Inform user of setup.py develop preference

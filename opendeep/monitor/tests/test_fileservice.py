@@ -51,7 +51,7 @@ def main():
 
     t1=time.time()
 
-    for epoch in range(100):
+    for epoch in range(10):
         t=time.time()
         log.debug(epoch)
         vals = f()
@@ -61,7 +61,7 @@ def main():
                 service.write(m[name], TRAIN)
         log.debug('----- '+make_time_units_string(time.time()-t))
 
-    for epoch in range(100):
+    for epoch in range(10):
         t = time.time()
         log.debug(epoch)
         vals = f2()

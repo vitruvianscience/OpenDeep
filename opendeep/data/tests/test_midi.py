@@ -1,26 +1,19 @@
 # standard libraries
 from __future__ import print_function
 import unittest
-import logging
 import numpy
-import time
 # internal references
 from opendeep.data.standard_datasets.midi.musedata import MuseData
 from opendeep.data.standard_datasets.midi.jsb_chorales import JSBChorales
 from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.data.standard_datasets.midi.piano_midi_de import PianoMidiDe
 from opendeep.data.dataset import TRAIN, VALID, TEST
-import opendeep.log.logger as logger
 
 
 class TestMuse(unittest.TestCase):
 
     def setUp(self):
         print("setting up!")
-        # configure the root logger
-        logger.config_root_logger()
-        # get a logger for this session
-        self.log = logging.getLogger(__name__)
         # get the muse dataset
         self.muse = MuseData()
         # get the jsb dataset

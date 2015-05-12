@@ -6,9 +6,15 @@ from StringIO import StringIO
 import logging
 # internal references
 import opendeep.log.logger as logger
+from opendeep.utils.file_ops import mkdir_p
 
 class TestLogger(unittest.TestCase):
     def setUp(self):
+        self.current_dir = os.getcwd()
+        # go into this file's directory
+        abspath = os.path.realpath(__file__)
+        dname = os.path.dirname(abspath)
+        os.chdir(dname)
         # change sys.stdout to StringIO for the duration of the test to test console output
         self.saved_stdout = sys.stdout
         self.out = StringIO()
@@ -51,6 +57,8 @@ class TestLogger(unittest.TestCase):
 
     def tearDown(self):
         sys.stdout = self.saved_stdout
+        # go back to old working directory
+        os.chdir(self.current_dir)
 
 
 if __name__ == '__main__':
