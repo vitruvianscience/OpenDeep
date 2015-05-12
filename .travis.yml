@@ -4,13 +4,11 @@ python:
   - "3.2"
   - "3.3"
   - "3.4"
-  - "pypy"
-  - "pypy3"
   - "nightly"
 # command to install dependencies
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y gcc g++ gfortran build-essential libopenblas-dev liblapack-dev
+  - sudo apt-get install -y gcc g++ gfortran build-essential git wget linux-image-generic libopenblas-dev python-dev python-pip python-nose python-numpy python-scipy
 install:
   - "pip install -r requirements.txt"
 # command to run tests
