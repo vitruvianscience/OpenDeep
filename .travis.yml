@@ -7,7 +7,8 @@ python:
 # command to install dependencies
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y gcc g++ gfortran build-essential git wget linux-image-generic python-dev python-pip python-nose
+  - sudo apt-get install -y gcc g++ gfortran build-essential git wget linux-image-generic libopenblas-dev python-dev python-pip python-nose
+  - pip install cython
   - mkdir deps
   - cd deps
   - git clone https://github.com/xianyi/OpenBLAS
