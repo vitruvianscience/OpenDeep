@@ -4,34 +4,34 @@ opendeep.models.single_layer.tests package
 Submodules
 ----------
 
-opendeep.models.single_layer.tests.test_autoencoder module
-----------------------------------------------------------
+opendeep.models.single_layer.tests.autoencoder_mnist module
+-----------------------------------------------------------
 
-.. automodule:: opendeep.models.single_layer.tests.test_autoencoder
+.. automodule:: opendeep.models.single_layer.tests.autoencoder_mnist
     :members:
     :undoc-members:
     :show-inheritance:
 
-opendeep.models.single_layer.tests.test_basic_mlp module
---------------------------------------------------------
+opendeep.models.single_layer.tests.basic_mlp_mnist module
+---------------------------------------------------------
 
-.. automodule:: opendeep.models.single_layer.tests.test_basic_mlp
+.. automodule:: opendeep.models.single_layer.tests.basic_mlp_mnist
     :members:
     :undoc-members:
     :show-inheritance:
 
-opendeep.models.single_layer.tests.test_rbm module
---------------------------------------------------
+opendeep.models.single_layer.tests.rbm_mnist module
+---------------------------------------------------
 
-.. automodule:: opendeep.models.single_layer.tests.test_rbm
+.. automodule:: opendeep.models.single_layer.tests.rbm_mnist
     :members:
     :undoc-members:
     :show-inheritance:
 
-opendeep.models.single_layer.tests.test_softmax module
-------------------------------------------------------
+opendeep.models.single_layer.tests.softmax_mnist module
+-------------------------------------------------------
 
-.. automodule:: opendeep.models.single_layer.tests.test_softmax
+.. automodule:: opendeep.models.single_layer.tests.softmax_mnist
     :members:
     :undoc-members:
     :show-inheritance:

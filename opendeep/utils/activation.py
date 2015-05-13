@@ -38,10 +38,10 @@ def sigmoid(x):
 
         You might want to try T.nnet.ultra_fast_sigmoid() or T.nnet.hard_sigmoid() for faster versions.
         Speed comparison for 100M float64 elements on a Core2 Duo @ 3.16 GHz:
-            hard_sigmoid: 1.0s
-            ultra_fast_sigmoid: 1.3s
-            sigmoid (with amdlibm): 2.3s
-            sigmoid (without amdlibm): 3.7s
+        hard_sigmoid: 1.0s
+        ultra_fast_sigmoid: 1.3s
+        sigmoid (with amdlibm): 2.3s
+        sigmoid (without amdlibm): 3.7s
 
         Precision: sigmoid(without or without amdlibm) > ultra_fast_sigmoid > hard_sigmoid.
 

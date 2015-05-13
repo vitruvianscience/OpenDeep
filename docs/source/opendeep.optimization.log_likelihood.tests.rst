@@ -4,10 +4,10 @@ opendeep.optimization.log_likelihood.tests package
 Submodules
 ----------
 
-opendeep.optimization.log_likelihood.tests.test_csl module
+opendeep.optimization.log_likelihood.tests.csl_test module
 ----------------------------------------------------------
 
-.. automodule:: opendeep.optimization.log_likelihood.tests.test_csl
+.. automodule:: opendeep.optimization.log_likelihood.tests.csl_test
     :members:
     :undoc-members:
     :show-inheritance:

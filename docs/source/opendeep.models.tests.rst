@@ -4,10 +4,10 @@ opendeep.models.tests package
 Submodules
 ----------
 
-opendeep.models.tests.test_prototype module
--------------------------------------------
+opendeep.models.tests.prototype_mnist module
+--------------------------------------------
 
-.. automodule:: opendeep.models.tests.test_prototype
+.. automodule:: opendeep.models.tests.prototype_mnist
     :members:
     :undoc-members:
     :show-inheritance:
