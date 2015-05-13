@@ -206,6 +206,12 @@ Contents:
    :maxdepth: 3
 
    opendeep
+   opendeep.data
+   opendeep.models
+   opendeep.optimization
+   opendeep.monitor
+   opendeep.utils
+   opendeep.log
 
 Indices and tables
 ==================
