@@ -28,6 +28,6 @@ before_install:
   - cd ../..
 
 install:
-  - "pip install -r req-travis.txt"
+  - "pip install -r -v req-travis.txt"
 # command to run tests
 script: nosetests
