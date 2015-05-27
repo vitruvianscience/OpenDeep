@@ -14,7 +14,9 @@ from opendeep.monitor.monitor import Monitor
 log = logging.getLogger(__name__)
 
 def main():
-    data = CharsLM(filename='shakespeare_input.txt', seq_length=500, train_split=0.95, valid_split=0.05)
+    data = CharsLM(filename='shakespeare_input.txt',
+                   source="http://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt",
+                   seq_length=500, train_split=0.95, valid_split=0.05)
 
     rnn = RNN(outdir='outputs/rnn/',
               input_size=data.vocab_size,
