@@ -22,7 +22,7 @@ import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal imports
-from opendeep import as_floatX
+from opendeep import as_floatX, sharedX
 
 log = logging.getLogger(__name__)
 
@@ -43,16 +43,20 @@ _uniform_interval = {
     'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
 }
 
-def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noise=None, rng=None, name="W", **kwargs):
+def get_weights(weights_init, shape,
+                gain=1., mean=None, std=None, interval=None, add_noise=None, rng=None, name="W", **kwargs):
     """
     This will initialize the weights from the method passed from weights_init with the arguments in kwargs.
 
     Parameters
     ----------
     weights_init : str
-        String name of the method for creating weights.
+        String name of the method for creating weights. Can be 'gaussian', 'uniform', 'identity', or 'orthogonal'
     shape : tuple
         Tuple of the shape you want the weight matrix.
+    gain : float or str
+        A multiplicative factor to affect the whole weights matrix. If gain is the string 'rectifier' or 'relu', it
+        will default to a value that is normally good for those activations (sqrt(2)).
     mean : float
         Mean value for using gaussian weights.
     std : float
@@ -70,25 +74,39 @@ def get_weights(weights_init, shape, mean=None, std=None, interval=None, add_noi
     shared variable
         Theano tensor (shared variable) for the weights.
     """
+    # check if the gain is the preset for relu activation
+    if isinstance(gain, six.string_types):
+        if gain.lower() == 'relu' or gain.lower() == 'rectifier':
+            gain = numpy.sqrt(2)
+        else:
+            log.error("Did not recognize gain %s. Needs to be 'rectifier'. Defaulting to 1." % gain)
+            gain = 1.
+    elif gain is None:
+        gain = 1.
+
     # make sure the weights_init is a string to the method to use
     if isinstance(weights_init, six.string_types):
+        weights_init = weights_init.lower()
         # if we are initializing weights from a normal distribution
-        if weights_init.lower() == 'gaussian':
-            return get_weights_gaussian(shape=shape, mean=mean, std=std, name=name, rng=rng)
+        if weights_init == 'gaussian':
+            return get_weights_gaussian(shape=shape, mean=mean, std=std, name=name, rng=rng, gain=gain)
         # if we are initializing weights from a uniform distribution
-        elif weights_init.lower() == 'uniform':
-            return get_weights_uniform(shape=shape, interval=interval, name=name, rng=rng)
+        elif weights_init == 'uniform':
+            return get_weights_uniform(shape=shape, interval=interval, name=name, rng=rng, gain=gain)
         # if we are initializing an identity matrix
-        elif weights_init.lower() == 'identity':
-            return get_weights_identity(shape=shape, name=name, add_noise=add_noise)
+        elif weights_init == 'identity':
+            return get_weights_identity(shape=shape, name=name, add_noise=add_noise, gain=gain)
+        # if we are initializing an orthonormal matrix
+        elif weights_init == 'orthogonal' or weights_init == 'ortho':
+            return get_weights_orthogonal(shape=shape, name=name, rng=rng, gain=gain)
 
     # otherwise not implemented
-    log.error("Did not recognize weights_init %s! Pleas try gaussian, uniform, or identity" %
-              str(weights_init))
-    raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian, uniform, or identity" %
-                              str(weights_init))
+    log.error("Did not recognize weights_init %s! Pleas try gaussian, uniform, identity, or orthogonal."
+              % str(weights_init))
+    raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian, uniform, identity, or orthogonal"
+                              % str(weights_init))
 
-def get_weights_uniform(shape, interval='montreal', name="W", rng=None):
+def get_weights_uniform(shape, interval='montreal', name="W", rng=None, gain=1.):
     """
     This initializes a shared variable with a given shape for weights drawn from a Uniform distribution with
     low = -interval and high = interval.
@@ -106,6 +124,8 @@ def get_weights_uniform(shape, interval='montreal', name="W", rng=None):
         The name to give the shared variable.
     rng : random
         The random number generator to use with a .uniform method.
+    gain : float
+        A multiplicative factor to affect the whole weights matrix.
 
     Returns
     -------
@@ -140,10 +160,12 @@ def get_weights_uniform(shape, interval='montreal', name="W", rng=None):
     # check if a theano rng was used
     if isinstance(val, T.TensorVariable):
         val = val.eval()
-    # make it into a shared variable
-    return theano.shared(value=val, name=name)
 
-def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
+    val = val * gain
+    # make it into a shared variable
+    return sharedX(value=val, name=name)
+
+def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None, gain=1.):
     """
     This initializes a shared variable with the given shape for weights drawn from a
     Gaussian distribution with mean and std.
@@ -160,6 +182,8 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
         The name to give the shared variable.
     rng : random
         A given random number generator to use with .normal method.
+    gain : float
+        A multiplicative factor to affect the whole weights matrix.
 
     Returns
     -------
@@ -187,10 +211,12 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None):
     # check if a theano rng was used
     if isinstance(val, T.TensorVariable):
         val = val.eval()
-    # make it into a shared variable
-    return theano.shared(value=val, name=name)
 
-def get_weights_identity(shape, name="W", add_noise=None):
+    val = val * gain
+    # make it into a shared variable
+    return sharedX(value=val, name=name)
+
+def get_weights_identity(shape, name="W", add_noise=None, gain=1.):
     """
     This will return a weights matrix as close to the identity as possible. If a non-square shape, it will make
     a matrix of the form (I 0)
@@ -203,13 +229,18 @@ def get_weights_identity(shape, name="W", add_noise=None):
         Tuple giving the shape information for the weight matrix.
     name : str
         Name to give the shared variable.
+    add_noise : functools.partial
+        A partially applied noise function (just missing the input parameter) to add noise to the identity
+        initialization. Noise functions can be found in opendeep.utils.noise.
+    gain : float
+        A multiplicative factor to affect the whole weights matrix.
 
     Returns
     -------
     shared variable
         The theano shared variable identity matrix with given shape.
     """
-    weights = numpy.eye(N=shape[0], M=shape[1], k=0, dtype=theano.config.floatX)
+    weights = numpy.eye(N=shape[0], M=int(numpy.prod(shape[1:])), k=0, dtype=theano.config.floatX)
 
     if add_noise:
         if isinstance(add_noise, partial):
@@ -217,8 +248,59 @@ def get_weights_identity(shape, name="W", add_noise=None):
         else:
             log.error("Add noise to identity weights was not a functools.partial object. Ignoring...")
 
-    return theano.shared(value=weights, name=name)
+    val = weights * gain
+    return sharedX(value=val, name=name)
 
+def get_weights_orthogonal(shape, name="W", rng=None, gain=1.):
+    """
+    This returns orthonormal random values to initialize a weight matrix (using SVD).
+
+    Some discussion here:
+    http://www.reddit.com/r/MachineLearning/comments/2qsje7/how_do_you_initialize_your_neural_network_weights/
+
+    From Lasagne:
+    For n-dimensional shapes where n > 2, the n-1 trailing axes are flattened.
+    For convolutional layers, this corresponds to the fan-in, so this makes the initialization
+    usable for both dense and convolutional layers.
+
+    Parameters
+    ----------
+    shape : tuple
+        Tuple giving the shape information for the weight matrix.
+    name : str
+        Name to give the shared variable.
+    rng : random
+        A given random number generator to use with .normal method.
+    gain : float
+        A multiplicative factor to affect the whole weights matrix.
+
+    Returns
+    -------
+    shared variable
+        The theano shared variable orthogonal matrix with given shape.
+    """
+    if rng is None:
+        rng = numpy.random
+
+    if len(shape) == 1:
+        shape = (shape[0], shape[0])
+    else:
+        # flatten shapes bigger than 2
+        # From Lasagne: For n-dimensional shapes where n > 2, the n-1 trailing axes are flattened.
+        # For convolutional layers, this corresponds to the fan-in, so this makes the initialization
+        # usable for both dense and convolutional layers.
+        shape = (shape[0], numpy.prod(shape[1:]))
+
+    # Sample from the standard normal distribution
+    if isinstance(rng, type(numpy.random)):
+        a = numpy.asarray(rng.normal(loc=0., scale=1., size=shape), dtype=theano.config.floatX)
+    else:
+        a = numpy.asarray(rng.normal(avg=0., std=1., size=shape).eval(), dtype=theano.config.floatX)
+
+    u, _, _ = numpy.linalg.svd(a, full_matrices=False)
+
+    val = u * gain
+    return sharedX(value=val, name=name)
 
 def get_bias(shape, name="b", init_values=None):
     """
@@ -246,7 +328,7 @@ def get_bias(shape, name="b", init_values=None):
     log.debug("Initializing bias variable with shape %s" % str(shape))
     # init to zeros plus the offset
     val = as_floatX(numpy.ones(shape=shape, dtype=theano.config.floatX) * init_values)
-    return theano.shared(value=val, name=name)
+    return sharedX(value=val, name=name)
 
 def mirror_images(input, image_shape, cropsize, rand, flag_rand):
     """

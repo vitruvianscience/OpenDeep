@@ -213,11 +213,10 @@ class FileDataset(Dataset):
 
             # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
             download_success = True
-            if self.source is not None:
-                if file_type is None:
-                    download_success = download_file(self.source, dataset_location)
-                    file_type = get_file_type(dataset_location)
-            else:
+            if self.source is not None and file_type is None:
+                download_success = download_file(self.source, dataset_location)
+                file_type = get_file_type(dataset_location)
+            elif self.source is None and file_type is None:
                 log.error("Filename %s couldn't be found, and no URL source to download was provided.",
                           str(self.filename))
                 raise RuntimeError("Filename %s couldn't be found, and no URL source to download was provided." %

@@ -15,6 +15,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import time
 # third party libraries
+import theano
 import theano.tensor as T
 # internal references
 from opendeep import function
@@ -382,3 +383,191 @@ class Prototype(Model):
                 if param not in params:
                     params.append(param)
         return params
+
+
+class Recurrent(Model):
+    """
+    The Recurrent container lets you create arbitrary deep recurrent models (has dependence over time).
+    Depth can be added with an input-to-hiddens model (encoder), hiddens-to-hiddens model (transition),
+    and hiddens-to-outputs model (decoder).
+
+    Attributes
+    ----------
+    encoder : :class:`Model`
+        The inputs-to-hiddens encoding model used.
+    transition : :class:`Model`
+        The hiddens-to-hiddens transition model used.
+    decoder : :class:`Model`
+        The hiddens-to-output decoder model used.
+    """
+
+    def __init__(self, encoder, transition, decoder,
+                 inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/recurrent/',
+                 direction='forward',
+                 use_scan=True,
+                 merge="add"):
+        """
+        Initialize a Recurrent container.
+
+        Parameters
+        ----------
+        encoder : :class:`Model`
+            The inputs-to-hiddens encoding model to use.
+        transition : :class:`Model`
+            The hiddens-to-hiddens transition model to use.
+        decoder : :class:`Model`
+            The hiddens-to-output decoder model to use.
+        outdir : str, optional
+            The location to produce outputs from training or running the :class:`Recurrent`.
+        direction : str, optional
+            The direction this recurrent model should go over its inputs. Can be 'forward', 'backward', or
+            'bidirectional'. In the case of 'bidirectional', it will make two passes over the sequence,
+            computing two sets of hiddens and merging them before running through the final decoder.
+        use_scan : bool, optional
+            Whether to use a scan implementation or a for loop.
+        merge : str, optional
+            The method to merge input and hiddens together to form an input to transition model.
+
+        Raises
+        ------
+        AssertionError
+            If model sizes do not match. encoder.output_size==transition.input_size,
+            transition.output_size==transition.input_size, decoder.input_size==transition.output_size
+        """
+        self.encoder = encoder
+        self.transition = transition
+        self.decoder = decoder
+
+        # assert various size properties of the models
+        # if self.encoder.output_size != self.transition.input_size:
+        #     log.critical(
+        #         "Size mismatch! Encoder model output_size was %d and transition model input_size was %d" % \
+        #         (self.encoder.output_size, self.transition.input_size)
+        #     )
+        #     raise AssertionError(
+        #         "Size mismatch! Encoder model output_size was %d and transition model input_size was %d" % \
+        #         (self.encoder.output_size, self.transition.input_size)
+        #     )
+        # if self.transition.output_size != self.transition.input_size:
+        #     log.critical(
+        #         "Size mismatch! Transition model output_size was %d and transition model input_size was %d" % \
+        #         (self.transition.output_size, self.transition.input_size)
+        #     )
+        #     raise AssertionError(
+        #         "Size mismatch! Transition model output_size was %d and transition model input_size was %d" % \
+        #         (self.transition.output_size, self.transition.input_size)
+        #     )
+        # if self.transition.output_size != self.decoder.input_size:
+        #     log.critical(
+        #         "Size mismatch! Transition model output_size was %d and decoder model input_size was %d" % \
+        #         (self.transition.output_size, self.decoder.input_size)
+        #     )
+        #     raise AssertionError(
+        #         "Size mismatch! Transition model output_size was %d and decoder model input_size was %d" % \
+        #         (self.transition.output_size, self.decoder.input_size)
+        #     )
+
+        # superclass Model init
+        super(Recurrent, self).__init__(inputs_hook=inputs_hook,
+                                        hiddens_hook=hiddens_hook,
+                                        params_hook=params_hook,
+                                        input_size=self.encoder.input_size, output_size=self.decoder.output_size,
+                                        outdir=outdir,
+                                        direction=direction,
+                                        use_scan=use_scan)
+
+        ##################
+        # specifications #
+        ##################
+        if direction == "bidirectional":
+            bidirectional = True
+        else:
+            bidirectional = False
+        if direction == "backward":
+            backward = True
+        else:
+            backward = False
+
+        ##########
+        # inputs #
+        ##########
+        # input is 3D tensor of (timesteps, batch_size, data_dim)
+        # if input is 2D tensor, assume it is of the form (timesteps, data_dim) i.e. batch_size is 1. Convert to 3D.
+        # if input is > 3D tensor, assume it is of form (timesteps, batch_size, data...) and flatten to 3D.
+        if self.inputs_hook is not None:
+            self.input = self.inputs_hook[1]
+
+            if self.input.ndim == 1:
+                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input_size = 1
+
+            elif self.input.ndim == 2:
+                self.input = self.input.dimshuffle(0, 'x', 1)
+
+            elif self.input.ndim > 3:
+                self.input = self.input.flatten(3)
+                self.input_size = sum(self.input_size)
+        else:
+            self.input = T.tensor3("Xs")
+
+        ###########
+        # hiddens #
+        ###########
+        if self.hiddens_hook is not None:
+            hidden_size = self.hiddens_hook[0]
+            assert hidden_size == self.transition.input_size, \
+                "Hiddens_hook size %d and transition input_size %d mismatch!" % \
+                (hidden_size, self.transition.input_size)
+            self.h_init = self.hiddens_hook[1]
+        else:
+            self.h_init = T.zeros((1, self.transition.input_size))
+
+        ###############
+        # computation #
+        ###############
+        if use_scan:
+            # normal case!
+            hiddens, updates = theano.scan(
+                fn=self.recurrent_step,
+                sequences=self.input,
+                outputs_info=self.h_init,
+                non_sequences=[merge, self.transition],
+                go_backwards=backward,
+                name="recurrent_scan_normal"
+            )
+
+            # bidirectional case!
+            if bidirectional:
+                self.transition_backward = self.transition.copy()
+                # now do the opposite direction for the scan!
+                hiddens_backward, updates_backward = theano.scan(
+                    fn=self.recurrent_step,
+                    sequences=self.input,
+                    outputs_info=self.h_init,
+                    non_sequences=[merge, self.transition_backward],
+                    go_backwards=(not backward),
+                    name="recurrent_scan_backward"
+                )
+                # update the function updates from stuff returned from scan!
+                updates.update(updates_backward)
+        else:
+            raise NotImplementedError("Non-scan recurrent not implemented yet!")
+
+    def recurrent_step(self, x_t, h_tm1, merge, model):
+        """
+        Performs one timestep computation given the current input x_t and the previous hidden values h_tm1.
+
+        This happens by
+
+        Parameters
+        ----------
+        x_t : tensor
+            Current timestep (t) input values.
+        h_tm1 : tensor
+            Previous timestep (t-1) hidden values.
+        merge : str
+            The method for merging x_t and h_tm1 together before feeding them to the transition model input.
+        model : :class:`Model`
+            The transition model to use computing the hidden values (transition model's output).
+        """
+        return NotImplementedError("Recurrent container not yet implemented!")

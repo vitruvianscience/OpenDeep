@@ -15,6 +15,8 @@ TAR : int
     Tarfile marker.
 NPY : int
     Numpy save file marker.
+TXT : int
+    Text file marker.
 UNKNOWN : int
     Unknown file type marker.
 """
@@ -43,8 +45,8 @@ GZ        = 2
 PKL       = 3
 TAR       = 4
 NPY       = 5
-UNKNOWN   = 6
-
+TXT       = 6
+UNKNOWN   = 7
 
 def get_filetype_string(filetype):
     """
@@ -72,11 +74,12 @@ def get_filetype_string(filetype):
         return 'TAR'
     elif filetype is NPY:
         return 'NPY'
+    elif filetype is TXT:
+        return 'TXT'
     elif filetype is UNKNOWN:
         return 'UNKNOWN'
     else:
         return str(filetype)
-
 
 def mkdir_p(path):
     """
@@ -104,7 +107,6 @@ def mkdir_p(path):
             log.exception('Error making directory %s', path)
             raise
 
-
 def init_empty_file(filename):
     """
     This function will create an empty file (containing an empty string) with the given filename. This is similar to
@@ -117,7 +119,6 @@ def init_empty_file(filename):
     """
     with open(filename, 'w') as f:
         f.write("")
-
 
 def download_file(url, destination):
     """
@@ -148,12 +149,11 @@ def download_file(url, destination):
         log.exception('Error downloading data from %s to %s', url, destination)
         return False
 
-
 def get_file_type(file_path):
     """
     Given a filename, try to determine the type of file from the extension into one of the categories defined as
     global variables above.
-    Currently, can be .zip, .gz, .tar, .pkl, .p, or .pickle.
+    Currently, can be .zip, .gz, .tar, .pkl, .p, .pickle, or .txt.
 
     Parameters
     ----------
@@ -184,6 +184,8 @@ def get_file_type(file_path):
                 return PKL
             elif extension == '.npy':
                 return NPY
+            elif extension == '.txt':
+                return TXT
             else:
                 log.warning('Didn\'t recognize file extension %s for file %s', extension, file_path)
                 return UNKNOWN
@@ -193,7 +195,6 @@ def get_file_type(file_path):
     else:
         log.debug('File %s doesn\'t exist!', file_path)
         return None
-
 
 def unzip(source_filename, destination_dir='.'):
     """
@@ -221,7 +222,6 @@ def unzip(source_filename, destination_dir='.'):
     except:
         log.exception('Error unzipping data from %s to %s', source_filename, destination_dir)
         return False
-
 
 def untar(source_filename, destination_dir='.'):
     """

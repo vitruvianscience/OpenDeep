@@ -58,7 +58,7 @@ class AdaSecant(Optimizer):
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=1e-6, lr_decay=None, lr_factor=None,
-                 decay=0.95, gamma_clip=1.8, damping=1e-7, grad_clip=None, start_var_reduction=0,
+                 decay=0.95, gamma_clip=1.8, damping=1e-7, grad_clip=None, hard_clip=False, start_var_reduction=0,
                  delta_clip=None, use_adagrad=False, skip_nan_inf=False,
                  upper_bound_tau=1e8, lower_bound_tau=1.5, use_corrected_grad=True):
         """
@@ -103,9 +103,8 @@ class AdaSecant(Optimizer):
         grad_clip: float, optional,
             Apply gradient clipping for RNNs (not necessary for feedforward networks). But this is
             a constraint on the norm of the gradient per layer.
-            Based on:
-            Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
-            recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         use_adagrad: bool, optional
             Either to use clipped adagrad or not.
         use_corrected_grad: bool, optional
@@ -124,10 +123,10 @@ class AdaSecant(Optimizer):
         self.damping = damping
         self.skip_nan_inf = skip_nan_inf
 
-        if grad_clip:
-            assert grad_clip > 0.
-            assert grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
-        self.grad_clip = grad_clip
+        # if grad_clip:
+        #     assert grad_clip > 0.
+        #     assert grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
+        # self.grad_clip = grad_clip
 
         self.use_adagrad = use_adagrad
         self.use_corrected_grad = use_corrected_grad
@@ -171,16 +170,16 @@ class AdaSecant(Optimizer):
 
         #Block-normalize gradients:
         gradients = OrderedDict({p: gradients[p] / (gradients[p].norm(2) + eps) for p in gradients.keys()})
-        nparams = len(gradients.keys())
-
-        #Apply the gradient clipping, this is only necessary for RNNs and sometimes for very deep
-        #networks
-        if self.grad_clip:
-            gnorm = sum([g.norm(2) for g in gradients.values()])
-
-            gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
-                                 g * self.grad_clip * nparams / gnorm , g)\
-                                 for p, g in gradients.iteritems()})
+        # nparams = len(gradients.keys())
+        #
+        # #Apply the gradient clipping, this is only necessary for RNNs and sometimes for very deep
+        # #networks
+        # if self.grad_clip:
+        #     gnorm = sum([g.norm(2) for g in gradients.values()])
+        #
+        #     gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
+        #                          g * self.grad_clip * nparams / gnorm , g)\
+        #                          for p, g in gradients.iteritems()})
 
         for param in gradients.keys():
             gradients[param].name = "grad_%s" % param.name

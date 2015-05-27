@@ -39,7 +39,8 @@ class RMSProp(Optimizer):
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=1e-6, lr_decay=None, lr_factor=None,
-                 decay=0.95, max_scaling=1e5):
+                 decay=0.95, max_scaling=1e5,
+                 grad_clip=None, hard_clip=False):
         """
         Initialize RMSProp.
 
@@ -74,6 +75,10 @@ class RMSProp(Optimizer):
         max_scaling: float, optional
             Restrict the RMSProp gradient scaling coefficient to values
             below `max_scaling`.
+        grad_clip : float, optional
+            Whether to clip gradients. This will clip with a maximum of grad_clip or the parameter norm.
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         """
         # need to call the Optimizer constructor
         initial_parameters = locals().copy()
@@ -125,8 +130,8 @@ class RMSProp(Optimizer):
 
             if param.name in self.mean_square_grads:
                 log.warning("Calling get_updates more than once on the "
-                              "gradients of `%s` may make monitored values "
-                              "incorrect." % param.name)
+                            "gradients of `%s` may make monitored values "
+                            "incorrect." % param.name)
             # Store variable in self.mean_square_grads for monitoring.
             self.mean_square_grads[param.name] = mean_square_grad
 

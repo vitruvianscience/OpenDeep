@@ -157,6 +157,7 @@ class Model(object):
         self.args = {}
         self.args = add_kwargs_to_dict(kwargs.copy(), self.args)
 
+        self.args['input_size']  = self.input_size
         self.args['output_size'] = self.output_size
 
         # Now create the directory for outputs of the model
@@ -730,3 +731,22 @@ class Model(object):
             return True
         else:
             return False
+
+    def copy(self, **kwargs):
+        """
+        Returns a new copy of this model - same class as self initialized with the args from self.args updated
+        with the keyword arguments kwargs supplied.
+
+        Parameters
+        ----------
+        kwargs : keyword arguments
+            Any arguments you want to override during the initialization of the :class:`Model`.
+
+        Returns
+        -------
+        :class:`Model`
+            A copy of the current model (same configurations except those overridden by kwargs).
+        """
+        args = self.args.copy()
+        args.update(kwargs)
+        return type(self)(**args)

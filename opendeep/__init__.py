@@ -10,7 +10,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 
 import version
 __version__ = version.__version__
-
+import warnings
 # third-party libraries
 import theano
 from theano.compat.six import integer_types
@@ -188,8 +188,12 @@ def dataset_shared(dataset, name=None, borrow=False, dtype=theano.config.floatX)
     SharedVariable
         The Theano shared variable of the input `dataset`.
     """
-    # TODO: look into using theano.tensor._shared instead? So it can bring portions to the GPU as needed?
-    return sharedX(value=dataset, name=name, borrow=borrow, dtype=dtype)
+    # try:
+    #     return sharedX(value=dataset, name=name, borrow=borrow, dtype=dtype)
+    # except MemoryError:
+    #     warnings.warn("Dataset was too big to fit in single shared variable, returning a tensor._shared instead...")
+    #     return theano.tensor._shared(value=dataset, name=name, borrow=borrow)
+    return theano.tensor._shared(value=dataset, name=name, borrow=borrow)
 
 def as_floatX(variable):
     """

@@ -12,6 +12,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 # standard libraries
 import logging
 # third party libraries
+import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal references
@@ -53,18 +54,23 @@ def sigmoid(x):
 def softmax(x):
     """
     See the Theano documentation.
-    Returns the row-wise softmax function of x
+    Returns the row-wise softmax function of x.
+
+    In the case of 3D input, it returns the scan of softmax applied over the first dimension.
 
     Parameters
     ----------
-    x : 2D tensor
-        Symbolic 2D Tensor (or compatible).
+    x : 2D or 3D tensor
+        Symbolic 2D or 3D Tensor (or compatible).
 
     Returns
     -------
-    2D tensor
-        Row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik})) applied to `x`.
+    2D or 3D tensor
+        Row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik})) applied to `x`. Returns same shape as input.
     """
+    if x.ndim == 3:
+        cost, _ = theano.scan(fn=T.nnet.softmax, sequences=x)
+        return cost
     return T.nnet.softmax(x)
 
 def softplus(x):

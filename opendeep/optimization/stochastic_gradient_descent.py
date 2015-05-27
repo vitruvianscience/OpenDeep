@@ -29,7 +29,8 @@ class SGD(Optimizer):
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=.1, lr_decay="exponential", lr_factor=.995,
-                 momentum=0.5, momentum_decay="linear", momentum_factor=0, nesterov_momentum=True):
+                 momentum=0.5, momentum_decay="linear", momentum_factor=0, nesterov_momentum=True,
+                 grad_clip=None, hard_clip=False):
         """
         Initialize SGD.
 
@@ -69,6 +70,10 @@ class SGD(Optimizer):
             `opendeep.utils.decay` for its effect for given decay functions.
         nesterov_momentum : bool
             Whether or not to use Nesterov momentum.
+        grad_clip : float, optional
+            Whether to clip gradients. This will clip with a maximum of grad_clip or the parameter norm.
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         """
         # superclass init
         initial_parameters = locals().copy()
