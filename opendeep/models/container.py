@@ -15,6 +15,7 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import time
 # third party libraries
+import theano
 import theano.tensor as T
 # internal references
 from opendeep import function
@@ -197,11 +198,18 @@ class Prototype(Model):
         array_like
             Theano/numpy tensor-like object that is the output of the model's computation graph.
         """
+        # set the noise switches off for running! we assume unseen data is noisy anyway :)
+        old_switch_vals = []
+        if len(self.get_noise_switch()) > 0:
+            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_noise_switch())))
+            old_switch_vals = [switch.get_value() for switch in self.get_noise_switch()]
+            [switch.set_value(0.) for switch in self.get_noise_switch()]
+
         # make sure the input is raised to a list - we are going to splat it!
         input = raise_to_list(input)
         # first check if we already made an f_run function
         if hasattr(self, 'f_run'):
-            return self.f_run(*input)
+            output = self.f_run(*input)
         # otherwise, compile it!
         else:
             inputs = self.get_inputs()
@@ -211,7 +219,13 @@ class Prototype(Model):
             log.info("Compiling f_run...")
             self.f_run = function(inputs=inputs, outputs=outputs, updates=updates, name="f_run")
             log.info("Compilation done! Took %s", make_time_units_string(time.time() - t))
-            return self.f_run(*input)
+            output = self.f_run(*input)
+
+        # reset any switches to how they were!
+        if len(self.get_noise_switch()) > 0:
+            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), old_switch_vals)]
+
+        return output
 
     def get_targets(self):
         """

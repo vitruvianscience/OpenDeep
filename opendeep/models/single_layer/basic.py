@@ -108,7 +108,10 @@ class BasicLayer(Model):
             self.input = T.matrix('X')
 
         # now that we have the input specs, define the output 'target' variable to be used in supervised training!
-        self.target = T.matrix('Y')
+        if kwargs.get('out_as_probs') == False:
+            self.target = T.vector('Y', dtype='int64')
+        else:
+            self.target = T.matrix('Y')
 
         # either grab the output's desired size from the parameter directly, or copy input_size
         self.output_size = self.output_size or self.input_size
@@ -258,6 +261,9 @@ class SoftmaxLayer(BasicLayer):
             over all classes. True means output the distribution of size `output_size` and False means output a single
             number index for the class that had the highest probability.
         """
+        if cost == 'nll':
+            cost_args = cost_args or dict()
+            cost_args['one_hot'] = out_as_probs
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
@@ -274,76 +280,23 @@ class SoftmaxLayer(BasicLayer):
                                            out_as_probs=out_as_probs,
                                            outdir=outdir,
                                            noise=False)
-        # some needed variables
-        self.out_as_probs = out_as_probs
-
-        # target_flag shows whether or not we are using the super class's targets, or making our own
-        # integer vector for targets. This becomes true if we are using the nll cost, since it requires
-        # integer labels.
-        self.target_flag = False
-
         # the outputs of the layer are the probabilities of being in a given class
         self.p_y_given_x = super(SoftmaxLayer, self).get_outputs()
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        self.y = T.concatenate(self.get_targets())
 
-        # if cost was nll, set self.cost to negative log likelihood
-        # this is what gets returned as the train cost for the BasicLayer superclass.
-        if cost.lower() == 'nll':
-            log.debug('Using softmax negative log-likelihood cost!!')
-            # nll requires integer targets 'y'.
-            self.target_flag = True
-            self.y = T.vector('y')
-            self.cost = self.negative_log_likelihood()
-
-    def get_outputs(self):
-        # if we aren't asking for the class probabilities, return the argmax (gives the index of highest probability)
-        if not self.out_as_probs:
-            return self.get_argmax_prediction()
-        # otherwise, give the output as normal, which is the vector of probabilities
+        if out_as_probs:
+            self.output = self.p_y_given_x
         else:
-            return self.p_y_given_x
+            self.output = self.y_pred
 
-    def get_targets(self):
-        # return our integer targets, or default to superclass
-        if self.target_flag:
-            return [self.y]
-        else:
-            return super(SoftmaxLayer, self).get_targets()
+        self.out_as_probs = out_as_probs
 
     def get_monitors(self):
         # grab the basiclayer's monitors
         monitors = super(SoftmaxLayer, self).get_monitors()
-        # if this softmax layer is using integer classes, add the 'error' monitor.
-        if self.target_flag:
-            monitors.update({'softmax_error': self.errors()})
+        # add the 'error' monitor.
+        monitors.update({'softmax_error': self.errors()})
         return monitors
-
-    def negative_log_likelihood(self):
-        """
-        Return the mean of the negative log-likelihood of the prediction
-        of this model under a given target distribution.
-
-        .. note::
-            We use the mean instead of the sum so that
-            the learning rate is less dependent on the batch size
-
-        Returns
-        -------
-        float
-            The negative mean log-likelihood.
-        """
-        # y.shape[0] is (symbolically) the number of rows in y, i.e.,
-        # number of examples (call it n) in the minibatch
-        # T.arange(y.shape[0]) is a symbolic vector which will contain
-        # [0,1,2,... n-1] T.log(self.p_y_given_x) is a matrix of
-        # Log-Probabilities (call it LP) with one row per example and
-        # one column per class LP[T.arange(y.shape[0]),y] is a vector
-        # v containing [LP[0,y[0]], LP[1,y[1]], LP[2,y[2]], ...,
-        # LP[n-1,y[n-1]]] and T.mean(LP[T.arange(y.shape[0]),y]) is
-        # the mean (across minibatch examples) of the elements in v,
-        # i.e., the mean log-likelihood across the minibatch.
-        return -T.mean(T.log(self.p_y_given_x)[T.arange(self.y.shape[0]), T.cast(self.y, 'int32')])
 
     def errors(self):
         """
@@ -356,16 +309,11 @@ class SoftmaxLayer(BasicLayer):
         float
             The error amount.
         """
-
-        # check if y has same dimension of y_pred
-        if self.y.ndim != self.y_pred.ndim:
-            raise TypeError(
-                'y should have the same shape as self.y_pred',
-                ('y', self.y.type, 'y_pred', self.y_pred.type)
-            )
+        if self.out_as_probs:
+            return T.mean(T.neq(self.y_pred, T.argmax(self.target, axis=1)))
         # the T.neq operator returns a vector of 0s and 1s, where 1
         # represents a mistake in prediction
-        return T.mean(T.neq(self.y_pred, self.y))
+        return T.mean(T.neq(self.y_pred, self.target))
 
     def get_argmax_prediction(self):
         """

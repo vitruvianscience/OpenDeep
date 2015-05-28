@@ -59,6 +59,7 @@ class Optimizer(object):
                  n_epoch=1000, batch_size=100, minimum_batch_size=1,
                  save_frequency=10, early_stop_threshold=.9995, early_stop_length=30,
                  learning_rate=1e-3, lr_decay='exponential', lr_factor=1,
+                 grad_clip=None, hard_clip=False,
                  **kwargs):
         """
         Initialize the Optimizer.
@@ -89,6 +90,10 @@ class Optimizer(object):
         lr_factor : float
             The amount to use for the decay function when changing the learning rate over epochs. See
             `opendeep.utils.decay` for its effect for given decay functions.
+        grad_clip : float, optional
+            Whether to clip gradients. This will clip the norm of the gradients either with a hard cutoff or rescaling.
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         """
         log.info("Initializing optimizer %s", str(type(self)))
 
@@ -129,6 +134,8 @@ class Optimizer(object):
         self.save_frequency = save_frequency
         self.early_stop_threshold = early_stop_threshold
         self.early_stop_length = early_stop_length
+        self.grad_clip = grad_clip
+        self.hard_clip = hard_clip
 
     def _get_batch_indices(self, data_lengths):
         """
@@ -197,7 +204,7 @@ class Optimizer(object):
             if model_targets is not None and len(model_targets) > 0:
                 if labels is None:
                     log.error("No labels in the dataset!")
-                    raise AssertionError, "No lables in the dataset!"
+                    raise AssertionError("No labels in the dataset!")
                 givens.update(OrderedDict(zip(model_targets, [labels[batch_slice]])))
         else:
             log.warning("Dataset doesn't have subset %s" % get_subset_strings(subset))
@@ -306,6 +313,9 @@ class Optimizer(object):
             # Now create the training cost function for the model to use while training - update parameters
             # gradient!
             gradients, _ = self.model.get_gradient(cost=train_cost)
+            # clip gradients if we want.
+            gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
+            # append to list
             self.gradients.append(gradients)
 
             # Calculate the optimizer updates each run
@@ -608,3 +618,69 @@ class Optimizer(object):
         if hasattr(self, 'learning_rate_decay') and self.learning_rate_decay:
             decay_params.append(self.learning_rate_decay)
         return decay_params
+
+
+def clip_gradients(gradients, grad_clip=5., hard_clip=False):
+    """
+    This returns the gradient parameters clipped according to the grad_clip value given in initialization.
+
+    As described here: http://www.reddit.com/r/MachineLearning/comments/31b6x8/gradient_clipping_rnns/
+
+    Code mostly taken from https://github.com/kastnerkyle/minet/blob/master/minet/net.py
+
+    Based on:
+
+    Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
+            recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
+
+    Parameters
+    ----------
+    gradients : dict
+        A dictionary mapping from the model's parameters to their
+        gradients.
+    grad_clip : float, optional
+        How much to clip gradients (if at all).
+    hard_clip : bool
+        Whether to use hard clipping (keeping gradients at grad_clip level), or soft clipping (rescaling based
+        on grad_clip).
+
+    Returns
+    -------
+    clipgrads : dict
+        A dictionary mapping from the model's parameters to their correctly clipped
+        gradients. (If no self.grad_clip, this just returns the original `gradients` input parameter).
+    """
+    if grad_clip:
+        gradients = gradients.items()
+        params = [item[0] for item in gradients]
+        grads = [item[1] for item in gradients]
+
+        # Gradient clipping
+        grad_norm = T.sqrt(sum([T.sqr(grad).sum() for grad in grads]))
+        not_finite = T.or_(T.isnan(grad_norm), T.isinf(grad_norm))
+        grad_norm = T.sqrt(grad_norm)
+        scaling_num = grad_clip
+        scaling_den = T.maximum(grad_clip, grad_norm)
+
+        if hard_clip:
+            # do the NaN/inf trick
+            grads = [T.switch(not_finite,
+                              0.1 * param,
+                              grad)
+                     for param, grad in gradients]
+            # hard clip gradients above or below grad_clip to be = grad_clip
+            grads = [T.switch(T.ge(grad_norm, grad_clip),
+                              T.sgn(grad) * grad_clip,
+                              grad)
+                     for grad in grads]
+        else:
+            # NaN/inf trick combined with scaling.
+            grads = [T.switch(not_finite,
+                              0.1 * param,
+                              grad * (scaling_num / scaling_den))
+                     for param, grad in gradients]
+
+        clipgrads = OrderedDict(zip(params, grads))
+        return clipgrads
+    else:
+        return gradients

@@ -36,7 +36,8 @@ class AdaDelta(Optimizer):
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=1e-6, lr_decay=None, lr_factor=None,
-                 decay=0.95):
+                 decay=0.95,
+                 grad_clip=None, hard_clip=False):
         """
         Initialize AdaDelta.
 
@@ -68,6 +69,10 @@ class AdaDelta(Optimizer):
             `opendeep.utils.decay` for its effect for given decay functions.
         decay : float
             Decay rate :math:`\\rho` in Algorithm 1 of Zeiler's paper.
+        grad_clip : float, optional
+            Whether to clip gradients. This will clip with a maximum of grad_clip or the parameter norm.
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         """
         # need to call the SGD constructor after parameters are extracted because the constructor calls get_updates()!
         initial_parameters = locals().copy()
