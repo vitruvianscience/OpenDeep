@@ -145,9 +145,9 @@ def get_weights_uniform(shape, interval='montreal', name="W", rng=None, gain=1.)
         interval_func = _uniform_interval.get(interval)
         if interval_func is None:
             log.error('Could not find uniform interval formula %s, try one of %s instead.' %
-                      str(interval), str(_uniform_interval.keys()))
+                      (str(interval), str(_uniform_interval.keys())))
             raise NotImplementedError('Could not find uniform interval formula %s, try one of %s instead.' %
-                                      str(interval), str(_uniform_interval.keys()))
+                                      (str(interval), str(_uniform_interval.keys())))
         else:
             log.debug("Creating weights with shape %s from Uniform distribution with formula name: %s",
                       str(shape), str(interval))

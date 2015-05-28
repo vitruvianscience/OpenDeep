@@ -231,7 +231,7 @@ class Conv2D(Model):
     (https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py)
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv2d',
-                 input_size=None, filter_shape=None, strides=None, border_mode='valid',
+                 input_size=None, filter_shape=None, strides=(1, 1), border_mode='valid',
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
@@ -253,6 +253,7 @@ class Conv2D(Model):
             be saved.
         input_size : tuple
             Shape of the incoming data: (batch_size, num_channels, input_height, input_width).
+            If input_size is None, it can be inferred. However, border_mode can't be 'same'.
         filter_shape : tuple
             (num_filters, num_channels, filter_height, filter_width). This is also the shape of the weights matrix.
         stride : int
@@ -364,6 +365,7 @@ class Conv2D(Model):
                                       filter_shape=filter_shape,
                                       border_mode=border_mode)
         elif border_mode == 'same':
+            assert self.input_size is not None, "input_size has to be specified for border_mode 'same'!"
             conved = convolution_func(self.input,
                                       W,
                                       subsample=strides,

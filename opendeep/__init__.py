@@ -13,6 +13,7 @@ __version__ = version.__version__
 import warnings
 # third-party libraries
 import theano
+import theano.tensor as T
 from theano.compat.six import integer_types
 import numpy
 # internal imports
@@ -280,3 +281,47 @@ def init_from_config(class_type, config):
     if config_dict is None:
         config_dict = {}
     return class_type(**config_dict)
+
+def theano_allclose(a, b, rtol=1e-05, atol=1e-08):
+    """
+    Elementwise checks to see if the absolute difference between any two elements in a and b are above a threshold.
+
+    The tolerance values are positive, typically very small numbers.
+    The relative difference (rtol * abs(b)) and the absolute difference atol are added together to compare
+    against the absolute difference between a and b.
+
+    If either array contains one or more NaNs, False is returned.
+    Infs are treated as equal if they are in the same place and of the same sign in both arrays.
+
+    Notes
+    -----
+    Not a symmetric equation. See numpy's documentation.
+
+    absolute(a - b) <= (atol + rtol * absolute(b))
+
+    Parameters
+    ----------
+    a : tensor
+        Input to compare
+    b : tensor
+        Input to compare
+    rtol : float, optional
+        The relative tolerance parameter
+    atol : float, optional
+        The absolute tolerance parameter
+
+    Returns
+    -------
+    bool
+        Whether or not the two tensors are within the given tolerance
+
+    Raises
+    ------
+    AssertionError
+        If the two input tensors aren't the same shape.
+    """
+    assert a.ndim == b.ndim, "a and b need to have the same number of dimensions (same shape)."
+    diff = abs(a - b)
+    tolerance = atol + rtol*abs(b)
+    close = T.le(diff, tolerance)
+    return T.all(close)

@@ -298,6 +298,13 @@ class Model(object):
         array_like
             Array_like object that is the output of the model's computation graph run on the given input.
         """
+        # set the noise switches off for running! we assume unseen data is noisy anyway :)
+        old_switch_vals = []
+        if len(self.get_noise_switch()) > 0:
+            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_noise_switch())))
+            old_switch_vals = [switch.get_value() for switch in self.get_noise_switch()]
+            [switch.set_value(0.) for switch in self.get_noise_switch()]
+
         # check if the run function is already compiled, otherwise compile it!
         if not hasattr(self, 'f_run'):
             self.compile_run_fn()
@@ -306,6 +313,10 @@ class Model(object):
         input = raise_to_list(input)
         # return the results of the run function!
         output = self.f_run(*input)
+
+        # reset any switches to how they were!
+        if len(self.get_noise_switch()) > 0:
+            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), old_switch_vals)]
 
         return output
 

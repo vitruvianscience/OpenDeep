@@ -56,7 +56,8 @@ def softmax(x):
     See the Theano documentation.
     Returns the row-wise softmax function of x.
 
-    In the case of 3D input, it returns the scan of softmax applied over the first dimension.
+    In the case of 3D input, it returns the scan of softmax applied over the second two dimensions
+    (loops over first dimension).
 
     Parameters
     ----------
