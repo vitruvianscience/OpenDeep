@@ -493,6 +493,7 @@ class Optimizer(object):
             if len(train_monitors) > 0:
                 current_monitors = zip(self.train_monitors_dict.keys(), _outs[1:])
                 for name, val in current_monitors:
+                    val = numpy.asarray(val)
                     train_monitors[name].append(val)
 
         # get the mean values for the batches
@@ -525,6 +526,7 @@ class Optimizer(object):
                 _outs = raise_to_list(self.valid_monitor_function(batch_start, batch_end))
                 current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
+                    val = numpy.asarray(val)
                     valid_monitors[name].append(val)
 
             # get the mean values for the batches
@@ -546,6 +548,7 @@ class Optimizer(object):
                 _outs = raise_to_list(self.test_monitor_function(batch_start, batch_end))
                 current_monitors = zip(self.test_monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
+                    val = numpy.asarray(val)
                     test_monitors[name].append(val)
 
             # get the mean values for the batches
