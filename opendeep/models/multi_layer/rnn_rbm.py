@@ -19,7 +19,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import function
+from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
 from opendeep.utils.nnet import get_weights, get_bias

@@ -32,7 +32,7 @@ import time
 import numpy
 import theano.tensor as T
 # internal
-from opendeep import function, as_floatX
+from opendeep.utils.constructors import function, as_floatX
 from opendeep.utils.misc import make_time_units_string
 
 log = logging.getLogger(__name__)

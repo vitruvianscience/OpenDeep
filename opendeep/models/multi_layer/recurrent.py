@@ -16,20 +16,304 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import sharedX, function, theano_allclose
+from opendeep.utils.constructors import sharedX, function
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.cost import get_cost_function
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.decorators import inherit_docs
+from opendeep.utils.misc import raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import get_noise
 
 log = logging.getLogger(__name__)
 
+@inherit_docs
+class Recurrent(Model):
+    """
+    Generic framework for describing recurrent models.
+    """
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir="outputs/recurrent/",
+                 input_size=None, hidden_size=None, output_size=None,
+                 layers=1,
+                 stacking='vanilla',
+                 activation='sigmoid', hidden_activation='relu',
+                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 bias_init=0.0,
+                 r_bias_init=0.0,
+                 cost_function='mse', cost_args=None,
+                 mrg=RNG_MRG.MRG_RandomStreams(1),
+                 noise='dropout', noise_level=None, noise_decay=False, noise_decay_amount=.99,
+                 direction='forward',
+                 clip_recurrent_grads=False,
+                 **kwargs):
+        """
+        Initialize a deep recurrent framework.
+
+        Parameters
+        ----------
+        inputs_hook : Tuple of (shape, variable)
+            Routing information for the model to accept inputs from elsewhere. This is used for linking
+            different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
+            newly supervised classification model). For now, it needs to include the shape information (normally the
+            dimensionality of the input i.e. n_in).
+        hiddens_hook : Tuple of (shape, variable)
+            Routing information for the model to accept its hidden representation from elsewhere. For recurrent nets,
+            this will be the initial starting value for hidden layers.
+        params_hook : List(theano shared variable)
+            A list of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables). This parameter is useful when you want to
+            have two versions of the model that use the same parameters.
+        outdir : str
+            The location to produce outputs from training or running the :class:`RNN`. If None, nothing will be saved.
+        input_size : int
+            The size (dimensionality) of the input. If shape is provided in `inputs_hook`, this is optional.
+        hidden_size : int
+            The size (dimensionality) of the hidden layers. If shape is provided in `hiddens_hook`, this is optional.
+        output_size : int
+            The size (dimensionality) of the output.
+        layers : int
+            The number of stacked hidden layers to use.
+        stacking : str
+            The algorithm to use when stacking recurrent layers. Right now, it can only be 'vanilla' for normal
+            input-to-output stacking, or 'gated' for interconnected gating units between all stacked layers.
+        activation : str or callable
+            The nonlinear (or linear) activation to perform after the dot product from hiddens -> output layer.
+            This activation function should be appropriate for the output unit types, i.e. 'sigmoid' for binary.
+            See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
+            your own function to be used as long as it is callable.
+        hidden_activation : str or callable
+            The activation to perform for the hidden layers.
+            See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
+            your own function to be used as long as it is callable.
+        weights_init : str
+            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+        weights_interval : str or float
+            If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
+        weights_mean : float
+            If Gaussian `weights_init`, the mean value to use.
+        weights_std : float
+            If Gaussian `weights_init`, the standard deviation to use.
+        bias_init : float
+            The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
+        r_bias_init : float
+            The initial value to use for the recurrent bias parameter. Most often, the default of 0.0 is preferred.
+        mrg : random
+            A random number generator that is used when adding noise.
+            I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
+        cost_function : str or callable
+            The function to use when calculating the output cost of the model.
+            See opendeep.utils.cost for options. You can also specify your own function, which needs to be callable.
+        cost_args : dict
+            Any additional named keyword arguments to pass to the specified `cost_function`.
+        noise : str
+            What type of noise to use for the hidden layers and outputs. See opendeep.utils.noise
+            for options. This should be appropriate for the unit activation, i.e. Gaussian for tanh or other
+            real-valued activations, etc.
+        noise_level : float
+            The amount of noise to use for the noise function specified by `hidden_noise`. This could be the
+            standard deviation for gaussian noise, the interval for uniform noise, the dropout amount, etc.
+        noise_decay : str or False
+            Whether to use `noise` scheduling (decay `noise_level` during the course of training),
+            and if so, the string input specifies what type of decay to use. See opendeep.utils.decay for options.
+            Noise decay (known as noise scheduling) effectively helps the model learn larger variance features first,
+            and then smaller ones later (almost as a kind of curriculum learning). May help it converge faster.
+        noise_decay_amount : float
+            The amount to reduce the `noise_level` after each training epoch based on the decay function specified
+            in `noise_decay`.
+        direction : str
+            The direction this recurrent model should go over its inputs. Can be 'forward', 'backward', or
+            'bidirectional'. In the case of 'bidirectional', it will make two passes over the sequence,
+            computing two sets of hiddens and merging them before running through the final decoder.
+        clip_recurrent_grads : False or float, optional
+            Whether to clip the gradients for the parameters that unroll over timesteps (such as the weights
+            connecting previous hidden states to the current hidden state, and not the weights from current
+            input to hiddens). If it is a float, the gradients for the weights will be hard clipped to the range
+            `+-clip_recurrent_grads`.
+        """
+        initial_parameters = locals().copy()
+        initial_parameters.pop('self')
+        super(Recurrent, self).__init__(**initial_parameters)
+
+        ##################
+        # specifications #
+        ##################
+        bidirectional = (direction == "bidirectional")
+        backward = (direction == "backward")
+
+        #########################################
+        # activation, cost, and noise functions #
+        #########################################
+        # recurrent hidden activation function!
+        self.hidden_activation_func = get_activation_function(hidden_activation)
+
+        # output activation function!
+        self.activation_func = get_activation_function(activation)
+
+        # Cost function
+        cost_function = get_cost_function(cost_function)
+        cost_args = cost_args or dict()
+
+        # Now deal with noise if we added it:
+        if noise:
+            log.debug('Adding %s noise switch.' % str(noise))
+            if noise_level is not None:
+                noise_level = sharedX(value=noise_level)
+                noise_func = get_noise(noise, noise_level=noise_level, mrg=mrg)
+            else:
+                noise_func = get_noise(noise, mrg=mrg)
+            # apply the noise as a switch!
+            # default to apply noise. this is for the cost and gradient functions to be computed later
+            # (not sure if the above statement is accurate such that gradient depends on initial value of switch)
+            noise_switch = sharedX(value=1, name="basiclayer_noise_switch")
+
+            # noise scheduling
+            if noise_decay and noise_level is not None:
+                noise_schedule = get_decay_function(noise_decay,
+                                                    noise_level,
+                                                    noise_level.get_value(),
+                                                    noise_decay_amount)
+
+        ###############
+        # inputs hook #
+        ###############
+        # grab info from the inputs_hook
+        # in the case of an inputs_hook, recurrent will always work with the leading tensor dimension
+        # being the temporal dimension.
+        # input is 3D tensor of (timesteps, batch_size, data_dim)
+        # if input is 2D tensor, assume it is of the form (timesteps, data_dim) i.e. batch_size is 1. Convert to 3D.
+        # if input is > 3D tensor, assume it is of form (timesteps, batch_size, data...) and flatten to 3D.
+        if self.inputs_hook is not None:
+            self.input = self.inputs_hook[1]
+
+            if self.input.ndim == 1:
+                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input_size = 1
+
+            elif self.input.ndim == 2:
+                self.input = self.input.dimshuffle(0, 'x', 1)
+
+            elif self.input.ndim > 3:
+                self.input = self.input.flatten(3)
+                self.input_size = sum(self.input_size)
+            else:
+                raise NotImplementedError("Recurrent input with %d dimensions not supported!" % self.input.ndim)
+        else:
+            # Assume input coming from optimizer is (batches, timesteps, data)
+            # so, we need to reshape to (timesteps, batches, data)
+            xs = T.tensor3("Xs")
+            xs = xs.dimshuffle(1, 0, 2)
+            self.input = xs
+
+        # The target outputs for supervised training - in the form of (batches, timesteps, output) which is
+        # the same dimension ordering as the expected input from optimizer.
+        # therefore, we need to swap it like we did to input xs.
+        ys = T.tensor3("Ys")
+        ys = ys.dimshuffle(1, 0, 2)
+        self.target = ys
+
+        ################
+        # hiddens hook #
+        ################
+        # set an initial value for the recurrent hiddens from hook
+        if self.hiddens_hook is not None:
+            h_init = raise_to_list(self.hiddens_hook[1])
+            if len(h_init) > 1:
+                assert len(h_init) == layers
+            else:
+                h_init = h_init * layers
+            hidden_size = self.hiddens_hook[0]
+        # deal with h_init after parameters formed
+
+
+        # perform gradient clipping on recurrent weight params
+        if clip_recurrent_grads:
+            clip = abs(clip_recurrent_grads)
+            W_h_h = [theano.gradient.grad_clip(param, -clip, clip) for param in W_h_h]
+
+        # hidden bias for each layer
+        b_h = [get_bias(shape=(hidden_size,),
+                        name="b_h_%d" % (l+1),
+                        init_values=r_bias_init)
+               for l in range(layers)]
+
+        # make h_init the right sized tensor
+        if not self.hiddens_hook:
+            h_init = [T.zeros_like(T.dot(self.input[0], W_x_h[0]))]*layers
+
+        ##################
+        # for generating #
+        ##################
+        # symbolic scalar for how many recurrent steps to use during generation from the model
+        self.n_steps = T.iscalar("generate_n_steps")
+        self.stop_token = T.vector("stop_token")
+
+        ###############
+        # computation #
+        ###############
+        self.updates = dict()
+        # init the hiddens list, h0 is the input layer.
+        hiddens = [self.input]
+        if stacking == "vanilla":
+            # in vanilla stacking, we build up layer by layer.
+            if layers > 1:
+                log.debug("Stacking %d layers with the vanilla implementation." % layers)
+            for layer in range(self.layers):
+                log.debug("Updating hidden layer %d" % (layer+1))
+                # normal case - either forward or just backward!
+                hiddens_next_layer, updates = theano.scan(
+                    fn=self.recurrent_step,
+                    # previous layer hiddens (h[0] is the inputs)
+                    sequences=hiddens[-1],
+                    outputs_info=self.h_init[layer],
+                    non_sequences=[param[layer] for param in self.get_scan_params()],
+                    go_backwards=self.backward,
+                    name="recurrent_scan_normal_%d" % layer,
+                    strict=True
+                )
+                self.updates.update(updates)
+
+                # bidirectional case - need to add a backward sequential pass to compute new hiddens!
+                if self.bidirectional:
+                    # now do the opposite direction for the scan!
+                    hiddens_opposite, updates_opposite = theano.scan(
+                        fn=self.recurrent_step,
+                        sequences=hiddens,
+                        outputs_info=self.h_init[layer],
+                        non_sequences=[W_x_h[layer], W_h_hb[layer], b_h[layer]],
+                        go_backwards=(not self.backward),
+                        name="recurrent_scan_backward_%d" % layer,
+                        strict=True
+                    )
+                    self.updates.update(updates_opposite)
+                    hiddens_new = hiddens_new + hiddens_opposite
+
+                # replace the hiddens with the newly computed hiddens (and add noise)!
+                hiddens = hiddens_new
+                # add noise (like dropout) if we wanted it!
+                if self.noise:
+                    self.hiddens = T.switch(self.noise_switch,
+                                            self.noise_func(input=hiddens),
+                                            hiddens)
+        elif stacking == "gated":
+            raise NotImplementedError("Gated stacking not yet implemented!")
+        else:
+            raise NotImplementedError("%s stacking not implemented, look at the docs to see available options!" %
+                                      stacking)
+
+        # now compute the outputs from the leftover (top level) hiddens
+        output = self.activation_func(
+            T.dot(hiddens, W_h_y) + b_y
+        )
+
+        # now to define the cost of the model - use the cost function to compare our output with the target value.
+        cost = self.cost_function(output=output, target=self.target, **self.cost_args)
+
+    def get_recurrent_params(self, clip_recurrent_grads):
+        raise NotImplementedError()
 
 @inherit_docs
-class RNN(Model):
+class RNN(Recurrent):
     """
     Your run-of-the-mill recurrent neural network. This has hidden units that keep track of memory over time.
 
@@ -359,8 +643,6 @@ class RNN(Model):
                                       # if uniform
                                       interval=self.r_weights_interval)
                           for l in range(self.layers)]
-
-        # if we are clipping the recurrent gradients, use theano.gradient.grad_clip(x, lower_bound, upper_bound).
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!

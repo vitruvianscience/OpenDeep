@@ -33,7 +33,7 @@ import shutil
 # third party libraries
 import numpy
 # internal imports
-from opendeep import dataset_shared
+from opendeep.utils.constructors import dataset_shared
 from opendeep.utils.file_ops import mkdir_p, get_file_type, download_file
 import opendeep.utils.file_ops as files
 

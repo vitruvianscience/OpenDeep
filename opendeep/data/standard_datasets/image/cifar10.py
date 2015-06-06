@@ -12,9 +12,8 @@ import math
 # third party libraries
 import numpy
 # internal imports
-from opendeep import dataset_shared
-import opendeep.data.dataset as datasets
-from opendeep.data.dataset import FileDataset
+from opendeep.utils.constructors import dataset_shared
+from opendeep.data.dataset import FileDataset, TRAIN, VALID, TEST, get_subset_strings
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot
 
@@ -155,14 +154,14 @@ class CIFAR10(FileDataset):
         tuple
             (x, y) tuple of shared variables holding the dataset input and label, or None if the subset doesn't exist.
         """
-        if subset is datasets.TRAIN:
+        if subset is TRAIN:
             return self.train_X, self.train_Y
-        elif subset is datasets.VALID:
+        elif subset is VALID:
             return self.valid_X, self.valid_Y
-        elif subset is datasets.TEST:
+        elif subset is TEST:
             return self.test_X, self.test_Y
         else:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+            log.error('Subset %s not recognized!', get_subset_strings(subset))
             return None, None
 
     def getDataShape(self, subset):
@@ -179,12 +178,12 @@ class CIFAR10(FileDataset):
         tuple
             Return the shape of this dataset's subset in a (N, D) tuple where N=#examples and D=dimensionality
         '''
-        if subset is datasets.TRAIN:
+        if subset is TRAIN:
             return self._train_len, 3, 32, 32
-        elif subset is datasets.VALID:
+        elif subset is VALID:
             return self._valid_len, 3, 32, 32
-        elif subset is datasets.TEST:
+        elif subset is TEST:
             return self._test_len, 3, 32, 32
         else:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+            log.error('Subset %s not recognized!', get_subset_strings(subset))
             return None

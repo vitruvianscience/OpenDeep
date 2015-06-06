@@ -15,7 +15,7 @@ import logging
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights, get_bias

@@ -14,7 +14,7 @@ import logging
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 import theano.compat.six as six
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
 from opendeep.utils.decay import get_decay_function
 

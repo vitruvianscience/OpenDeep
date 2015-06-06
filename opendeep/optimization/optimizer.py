@@ -37,13 +37,14 @@ import theano.tensor as T
 from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
-from opendeep import sharedX, function, trunc
+from opendeep.utils.constructors import sharedX, function
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST, get_subset_strings
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
-from opendeep.utils.misc import raise_to_list, make_time_units_string, get_shared_values, set_shared_values, add_kwargs_to_dict
+from opendeep.utils.misc import raise_to_list, make_time_units_string, \
+    get_shared_values, set_shared_values, add_kwargs_to_dict, trunc
 
 log = logging.getLogger(__name__)
 

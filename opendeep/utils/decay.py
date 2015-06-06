@@ -14,7 +14,7 @@ import logging
 import numpy
 import theano.compat.six as six
 # internal references
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 from opendeep.utils.decorators import inherit_docs
 
 log = logging.getLogger(__name__)

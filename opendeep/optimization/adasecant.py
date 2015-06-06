@@ -37,7 +37,7 @@ from collections import OrderedDict
 import theano.tensor as T
 import numpy
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)

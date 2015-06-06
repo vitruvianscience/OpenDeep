@@ -22,8 +22,8 @@ import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
-from opendeep import function
 from opendeep.utils import file_ops
+from opendeep.utils.constructors import function
 from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
 from opendeep.utils.file_ops import mkdir_p
 

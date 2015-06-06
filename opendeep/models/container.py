@@ -15,11 +15,10 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import time
 # third party libraries
-import theano
 import theano.tensor as T
 # internal references
-from opendeep import function
 from opendeep.models.model import Model
+from opendeep.utils.constructors import function
 from opendeep.utils.misc import make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)

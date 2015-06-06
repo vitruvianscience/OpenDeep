@@ -16,7 +16,7 @@ import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal references
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 
 log = logging.getLogger(__name__)
 

@@ -22,7 +22,7 @@ import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict
 # internal references
-from opendeep import function
+from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.convolutional import ConvPoolLayer
 from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer

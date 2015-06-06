@@ -15,7 +15,7 @@ import logging
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)

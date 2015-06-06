@@ -19,7 +19,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import function
+from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.utils.decorators import inherit_docs

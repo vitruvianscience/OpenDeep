@@ -1,5 +1,5 @@
 import numpy
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 from opendeep.log.logger import config_root_logger
 from opendeep.data.dataset import TRAIN, VALID, TEST
 from opendeep.data.standard_datasets.image.mnist import MNIST

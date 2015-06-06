@@ -22,7 +22,7 @@ import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal imports
-from opendeep import as_floatX, sharedX
+from opendeep.utils.constructors import as_floatX, sharedX
 
 log = logging.getLogger(__name__)
 

@@ -14,8 +14,6 @@ import logging
 import numpy
 import theano
 import theano.tensor as T
-# internal imports
-from opendeep import trunc, safe_zip
 
 log = logging.getLogger(__name__)
 
@@ -280,3 +278,66 @@ def add_kwargs_to_dict(kwargs, dictionary):
             inner_kwargs = kwargs['kwargs']
             dictionary = add_kwargs_to_dict(inner_kwargs, dictionary)
     return dictionary
+
+def trunc(input, length=8):
+    """
+    Casts the input to a string and cuts it off after `length` characters.
+
+    Parameters
+    ----------
+    input : object
+        The input to truncate. Must be able to convert to String.
+    length : int, optional
+        The length of the resulting string (number of characters).
+
+    Returns
+    -------
+    str
+        The appropriately truncated string representation of `input`.
+    """
+    return str(input)[:length]
+
+def binarize(input, cutoff=0.5):
+    """
+    Elementwise converts the input to 0 or 1.
+    If element >= `cutoff` : 1; otherwise : 0.
+
+    Parameters
+    ----------
+    input : tensor or array
+        The number, vector, matrix, or tensor to binarize.
+    cutoff : float
+        The threshold value between [0, 1].
+
+    Returns
+    -------
+    tensor or numpy array
+        The input converted to 0 or 1 and cast to float.
+    """
+    return as_floatX(input >= cutoff)
+
+def safe_zip(*args):
+    """
+    Like zip, but ensures arguments are of same length.
+
+    Parameters
+    ----------
+    *args
+        Argument list to `zip`
+
+    Returns
+    -------
+    list
+        The zipped list of inputs.
+
+    Raises
+    ------
+    ValueError
+        If the length of any argument is different than the length of args[0].
+    """
+    base = len(args[0])
+    for i, arg in enumerate(args[1:]):
+        if len(arg) != base:
+            raise ValueError("Argument[0] has length %d but argument %d has "
+                             "length %d" % (base, i+1, len(arg)))
+    return zip(*args)

@@ -18,9 +18,8 @@ import glob
 import numpy
 import theano
 # internal imports
-from opendeep import dataset_shared
-import opendeep.data.dataset as datasets
-from opendeep.data.dataset import FileDataset
+from opendeep.utils.constructors import dataset_shared
+from opendeep.data.dataset import FileDataset, TRAIN, VALID, TEST, get_subset_strings
 from opendeep.utils.midi import midiread
 
 log = logging.getLogger(__name__)
@@ -95,11 +94,11 @@ class JSBChorales(FileDataset):
         tuple
             (x, None) tuple of shared variables holding the dataset input, or None if the subset doesn't exist.
         """
-        if subset is datasets.TRAIN:
+        if subset is TRAIN:
             return self.train, None
-        elif subset is datasets.VALID:
+        elif subset is VALID:
             return self.valid, None
-        elif subset is datasets.TEST:
+        elif subset is TEST:
             return self.test, None
         else:
             return None, None
@@ -119,12 +118,12 @@ class JSBChorales(FileDataset):
             Return the list of shapes of this dataset's subset sequences. This will separate out the shapes for each
             sequence individually as items in the list, while the dataset is still concatenated into a single matrix.
         '''
-        if subset not in [datasets.TRAIN, datasets.VALID, datasets.TEST]:
-            log.error('Subset %s not recognized!', datasets.get_subset_strings(subset))
+        if subset not in [TRAIN, VALID, TEST]:
+            log.error('Subset %s not recognized!', get_subset_strings(subset))
             return None
-        if subset is datasets.TRAIN:
+        if subset is TRAIN:
             return self.train_shapes
-        elif subset is datasets.VALID:
+        elif subset is VALID:
             return self.valid_shapes
-        elif subset is datasets.TEST:
+        elif subset is TEST:
             return self.test_shapes
