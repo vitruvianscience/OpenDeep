@@ -187,11 +187,11 @@ class Recurrent(Model):
             self.input = self.inputs_hook[1]
 
             if self.input.ndim == 1:
-                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
                 self.input_size = 1
 
             elif self.input.ndim == 2:
-                self.input = self.input.dimshuffle(0, 'x', 1)
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
             elif self.input.ndim > 3:
                 self.input = self.input.flatten(3)
@@ -509,11 +509,11 @@ class RNN(Recurrent):
             self.input = self.inputs_hook[1]
 
             if self.input.ndim == 1:
-                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
                 self.input_size = 1
 
             elif self.input.ndim == 2:
-                self.input = self.input.dimshuffle(0, 'x', 1)
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
             elif self.input.ndim > 3:
                 self.input = self.input.flatten(3)

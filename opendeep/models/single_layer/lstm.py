@@ -38,7 +38,6 @@ class LSTM(Model):
     """
     def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/lstm/',
                  input_size=None, hidden_size=None, output_size=None,
-                 layers=1,
                  activation='sigmoid', hidden_activation='relu', inner_hidden_activation='sigmoid',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
@@ -193,11 +192,11 @@ class LSTM(Model):
             self.input = self.inputs_hook[1]
 
             if self.input.ndim == 1:
-                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
                 self.input_size = 1
 
             elif self.input.ndim == 2:
-                self.input = self.input.dimshuffle(0, 'x', 1)
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
             elif self.input.ndim > 3:
                 self.input = self.input.flatten(3)
@@ -297,10 +296,10 @@ class LSTM(Model):
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
-        params = [W_x_c, W_x_i, W_x_f, W_x_o,
-                  U_h_c, U_h_i, U_h_f, U_h_o,
-                  W_h_y, b_c, b_i, b_f, b_o,
-                  b_y]
+        self.params = [W_x_c, W_x_i, W_x_f, W_x_o,
+                       U_h_c, U_h_i, U_h_f, U_h_o,
+                       W_h_y, b_c, b_i, b_f, b_o,
+                       b_y]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
@@ -318,7 +317,7 @@ class LSTM(Model):
         x_o = T.dot(self.input, W_x_o) + b_o
 
         # now do the recurrent stuff
-        self.hiddens, memories, self.updates = theano.scan(
+        (self.hiddens, memories), self.updates = theano.scan(
             fn=self.recurrent_step,
             sequences=[x_c, x_i, x_f, x_o],
             outputs_info=[h_init, c_init],
@@ -331,16 +330,16 @@ class LSTM(Model):
         # add noise (like dropout) if we wanted it!
         if noise:
             self.hiddens = T.switch(self.noise_switch,
-                                    self.noise_func(input=self.hiddens),
+                                    noise_func(input=self.hiddens),
                                     self.hiddens)
 
         # now compute the outputs from the leftover (top level) hiddens
-        output = self.activation_func(
+        output = activation_func(
             T.dot(self.hiddens, W_h_y) + b_y
         )
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        cost = self.cost_function(output=output, target=self.target, **self.cost_args)
+        cost = cost_function(output=output, target=self.target, **cost_args)
 
         log.info("Initialized an LSTM!")
 
