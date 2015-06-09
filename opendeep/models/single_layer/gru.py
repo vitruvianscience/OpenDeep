@@ -1,5 +1,5 @@
 """
-Simple single-hidden-layer LSTM
+Simple single-hidden-layer GRU
 """
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
@@ -27,9 +27,9 @@ from opendeep.utils.noise import get_noise
 log = logging.getLogger(__name__)
 
 @inherit_docs
-class LSTM(Model):
+class GRU(Model):
     """
-    Your normal lstm.
+    Your normal GRU.
 
     Implemented from:
     "Gated Feedback Recurrent Neural Networks"
@@ -140,7 +140,7 @@ class LSTM(Model):
         """
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
-        super(LSTM, self).__init__(**initial_parameters)
+        super(GRU, self).__init__(**initial_parameters)
 
         ##################
         # specifications #
@@ -171,7 +171,7 @@ class LSTM(Model):
             # apply the noise as a switch!
             # default to apply noise. this is for the cost and gradient functions to be computed later
             # (not sure if the above statement is accurate such that gradient depends on initial value of switch)
-            self.noise_switch = sharedX(value=1, name="basiclayer_noise_switch")
+            self.noise_switch = sharedX(value=1, name="gru_noise_switch")
 
             # noise scheduling
             if noise_decay and noise_level is not None:
@@ -239,14 +239,14 @@ class LSTM(Model):
         # parameters - make sure to deal with params_hook! #
         ####################################################
         if self.params_hook is not None:
-            (W_x_c, W_x_i, W_x_f, W_x_o,
-             U_h_c, U_h_i, U_h_f, U_h_o,
-             W_h_y, b_c, b_i, b_f, b_o,
+            (W_x_z, W_x_r, W_x_h,
+             U_h_z, U_h_r, U_h_h,
+             W_h_y, b_z, b_r, b_h,
              b_y) = self.params_hook
         # otherwise, construct our params
         else:
             # all input-to-hidden weights
-            W_x_c, W_x_i, W_x_f, W_x_o = [
+            W_x_z, W_x_r, W_x_h = [
                 get_weights(weights_init=weights_init,
                             shape=(self.input_size, self.hidden_size),
                             name="W_x_%s" % sub,
@@ -255,10 +255,10 @@ class LSTM(Model):
                             std=weights_std,
                             # if uniform
                             interval=weights_interval)
-                for sub in ['c', 'i', 'f', 'o']
+                for sub in ['z', 'r', 'h']
             ]
             # all hidden-to-hidden weights
-            U_h_c, U_h_i, U_h_f, U_h_o = [
+            U_h_z, U_h_r, U_h_h = [
                 get_weights(weights_init=r_weights_init,
                             shape=(self.hidden_size, self.hidden_size),
                             name="U_h_%s" % sub,
@@ -267,7 +267,7 @@ class LSTM(Model):
                             std=r_weights_std,
                             # if uniform
                             interval=r_weights_interval)
-                for sub in ['c', 'i', 'f', 'o']
+                for sub in ['z', 'r', 'h']
             ]
             # hidden-to-output weights
             W_h_y = get_weights(weights_init=weights_init,
@@ -279,52 +279,49 @@ class LSTM(Model):
                                 # if uniform
                                 interval=weights_interval)
             # biases
-            b_c, b_i, b_f, b_o = [
+            b_z, b_r, b_h = [
                 get_bias(shape=(self.hidden_size,),
                          name="b_%s" % sub,
                          init_values=r_bias_init)
-                for sub in ['c', 'i', 'f', 'o']
+                for sub in ['z', 'r', 'h']
             ]
             # output bias
             b_y = get_bias(shape=(self.output_size,),
                            name="b_y",
                            init_values=bias_init)
             # clip gradients if we are doing that
-            recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+            recurrent_params = [U_h_z, U_h_r, U_h_h]
             if clip_recurrent_grads:
                 clip = abs(clip_recurrent_grads)
-                U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
+                U_h_z, U_h_r, U_h_h = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
-        params = [W_x_c, W_x_i, W_x_f, W_x_o,
-                  U_h_c, U_h_i, U_h_f, U_h_o,
-                  W_h_y, b_c, b_i, b_f, b_o,
+        params = [W_x_z, W_x_r, W_x_h,
+                  U_h_z, U_h_r, U_h_h,
+                  W_h_y, b_z, b_r, b_h,
                   b_y]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
-            h_init = T.zeros_like(T.dot(self.input[0], W_x_c))
-
-        c_init = T.zeros_like(T.dot(self.input[0], W_x_c))
+            h_init = T.zeros_like(T.dot(self.input[0], W_x_h))
 
         ###############
         # computation #
         ###############
         # move some computation outside of scan to speed it up!
-        x_c = T.dot(self.input, W_x_c) + b_c
-        x_i = T.dot(self.input, W_x_i) + b_i
-        x_f = T.dot(self.input, W_x_f) + b_f
-        x_o = T.dot(self.input, W_x_o) + b_o
+        x_z = T.dot(self.input, W_x_z) + b_z
+        x_r = T.dot(self.input, W_x_r) + b_r
+        x_h = T.dot(self.input, W_x_h) + b_h
 
         # now do the recurrent stuff
-        self.hiddens, memories, self.updates = theano.scan(
+        self.hiddens, self.updates = theano.scan(
             fn=self.recurrent_step,
-            sequences=[x_c, x_i, x_f, x_o],
-            outputs_info=[h_init, c_init],
-            non_sequences=[U_h_c, U_h_i, U_h_f, U_h_o],
+            sequences=[x_z, x_r, x_h],
+            outputs_info=[h_init],
+            non_sequences=[U_h_z, U_h_r, U_h_h],
             go_backwards=not forward,
-            name="lstm_scan",
+            name="gru_scan",
             strict=True
         )
 
@@ -342,34 +339,27 @@ class LSTM(Model):
         # now to define the cost of the model - use the cost function to compare our output with the target value.
         cost = self.cost_function(output=output, target=self.target, **self.cost_args)
 
-        log.info("Initialized an LSTM!")
+        log.info("Initialized a GRU!")
 
-    def recurrent_step(self, x_c_t, x_i_t, x_f_t, x_o_t, h_tm1, c_tm1, U_h_c, U_h_i, U_h_f, U_h_o):
+    def recurrent_step(self, x_z_t, x_r_t, x_h_t, h_tm1, U_h_z, U_h_r, U_h_h):
         """
         Performs one computation step over time.
         """
-        # new memory content c_tilde
-        c_tilde = self.hidden_activation_func(
-            x_c_t + T.dot(h_tm1, U_h_c)
+        # update gate
+        z_t = self.inner_hidden_activation_func(
+            x_z_t + T.dot(h_tm1, U_h_z)
         )
-        # input gate
-        i_t = self.inner_hidden_activation_func(
-            x_i_t + T.dot(h_tm1, U_h_i)
-        )
-        # forget gate
-        f_t = self.inner_hidden_activation_func(
-            x_f_t + T.dot(h_tm1, U_h_f)
+        # reset gate
+        r_t = self.inner_hidden_activation_func(
+            x_r_t + T.dot(h_tm1, U_h_r)
         )
         # new memory content
-        c_t = f_t*c_tm1 + i_t*c_tilde
-        # output gate
-        o_t = self.inner_hidden_activation_func(
-            x_o_t + T.dot(h_tm1, U_h_o)
+        h_tilde = self.hidden_activation_func(
+            x_h_t + r_t*T.dot(h_tm1, U_h_h)
         )
-        # new hiddens
-        h_t = o_t*self.hidden_activation_func(c_t)
-        # return the hiddens and memory content
-        return h_t, c_t
+        h_t = (1 - z_t)*h_tm1 + z_t*h_tilde
+        # return the hiddens
+        return h_t
 
     ###################
     # Model functions #
@@ -401,16 +391,16 @@ class LSTM(Model):
             # noise scheduling
             return [self.noise_schedule]
         else:
-            return super(LSTM, self).get_decay_params()
+            return super(GRU, self).get_decay_params()
 
     def get_noise_switch(self):
         if hasattr(self, 'noise_switch'):
             return [self.noise_switch]
         else:
-            return super(LSTM, self).get_noise_switch()
+            return super(GRU, self).get_noise_switch()
 
     def get_params(self):
         return self.params
 
     def save_args(self, args_file="lstm_config.pkl"):
-        super(LSTM, self).save_args(args_file)
+        super(GRU, self).save_args(args_file)

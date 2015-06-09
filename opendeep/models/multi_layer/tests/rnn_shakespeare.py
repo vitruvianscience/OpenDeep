@@ -37,8 +37,7 @@ def main():
               noise_level=.7,
               noise_decay='exponential',
               noise_decay_amount=.99,
-              direction='forward',
-              use_scan=True)
+              direction='forward')
 
     cost_monitor = Monitor("cost", rnn.get_train_cost(), train=False, valid=True, test=True)
 
