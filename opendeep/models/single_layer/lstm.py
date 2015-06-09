@@ -36,7 +36,7 @@ class LSTM(Model):
     Junyoung Chung, Caglar Gulcehre, Kyunghyun Cho, Yoshua Bengio
     http://arxiv.org/pdf/1502.02367v3.pdf
     """
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/rnn/',
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/lstm/',
                  input_size=None, hidden_size=None, output_size=None,
                  layers=1,
                  activation='sigmoid', hidden_activation='relu', inner_hidden_activation='sigmoid',
