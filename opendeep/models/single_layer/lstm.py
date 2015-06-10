@@ -288,11 +288,6 @@ class LSTM(Model):
             b_y = get_bias(shape=(self.output_size,),
                            name="b_y",
                            init_values=bias_init)
-            # clip gradients if we are doing that
-            recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
-            if clip_recurrent_grads:
-                clip = abs(clip_recurrent_grads)
-                U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
@@ -300,6 +295,12 @@ class LSTM(Model):
                        U_h_c, U_h_i, U_h_f, U_h_o,
                        W_h_y, b_c, b_i, b_f, b_o,
                        b_y]
+
+        # clip gradients if we are doing that
+        recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+        if clip_recurrent_grads:
+            clip = abs(clip_recurrent_grads)
+            U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:

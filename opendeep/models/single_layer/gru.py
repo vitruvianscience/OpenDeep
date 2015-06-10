@@ -288,11 +288,6 @@ class GRU(Model):
             b_y = get_bias(shape=(self.output_size,),
                            name="b_y",
                            init_values=bias_init)
-            # clip gradients if we are doing that
-            recurrent_params = [U_h_z, U_h_r, U_h_h]
-            if clip_recurrent_grads:
-                clip = abs(clip_recurrent_grads)
-                U_h_z, U_h_r, U_h_h = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
@@ -300,6 +295,12 @@ class GRU(Model):
                        U_h_z, U_h_r, U_h_h,
                        W_h_y, b_z, b_r, b_h,
                        b_y]
+
+        # clip gradients if we are doing that
+        recurrent_params = [U_h_z, U_h_r, U_h_h]
+        if clip_recurrent_grads:
+            clip = abs(clip_recurrent_grads)
+            U_h_z, U_h_r, U_h_h = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
