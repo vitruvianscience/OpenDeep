@@ -203,19 +203,18 @@ class GRU(Model):
                 self.input_size = sum(self.input_size)
             else:
                 raise NotImplementedError("Recurrent input with %d dimensions not supported!" % self.input.ndim)
+            xs = self.input
         else:
             # Assume input coming from optimizer is (batches, timesteps, data)
             # so, we need to reshape to (timesteps, batches, data)
-            xs = T.tensor3("Xs")
-            xs = xs.dimshuffle(1, 0, 2)
-            self.input = xs
+            self.input = T.tensor3("Xs")
+            xs = self.input.dimshuffle(1, 0, 2)
 
         # The target outputs for supervised training - in the form of (batches, timesteps, output) which is
         # the same dimension ordering as the expected input from optimizer.
         # therefore, we need to swap it like we did to input xs.
-        ys = T.tensor3("Ys")
-        ys = ys.dimshuffle(1, 0, 2)
-        self.target = ys
+        self.target = T.tensor3("Ys")
+        ys = self.target.dimshuffle(1, 0, 2)
 
         ################
         # hiddens hook #
@@ -242,6 +241,7 @@ class GRU(Model):
              U_h_z, U_h_r, U_h_h,
              W_h_y, b_z, b_r, b_h,
              b_y) = self.params_hook
+            recurrent_params = [U_h_z, U_h_r, U_h_h]
         # otherwise, construct our params
         else:
             # all input-to-hidden weights
@@ -291,10 +291,7 @@ class GRU(Model):
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
-        self.params = [W_x_z, W_x_r, W_x_h,
-                       U_h_z, U_h_r, U_h_h,
-                       W_h_y, b_z, b_r, b_h,
-                       b_y]
+        self.params = [W_x_z, W_x_r, W_x_h] + recurrent_params + [W_h_y, b_z, b_r, b_h, b_y]
 
         # clip gradients if we are doing that
         recurrent_params = [U_h_z, U_h_r, U_h_h]
@@ -304,15 +301,15 @@ class GRU(Model):
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
-            h_init = T.zeros_like(T.dot(self.input[0], W_x_h))
+            h_init = T.zeros_like(T.dot(xs[0], W_x_h))
 
         ###############
         # computation #
         ###############
         # move some computation outside of scan to speed it up!
-        x_z = T.dot(self.input, W_x_z) + b_z
-        x_r = T.dot(self.input, W_x_r) + b_r
-        x_h = T.dot(self.input, W_x_h) + b_h
+        x_z = T.dot(xs, W_x_z) + b_z
+        x_r = T.dot(xs, W_x_r) + b_r
+        x_h = T.dot(xs, W_x_h) + b_h
 
         # now do the recurrent stuff
         self.hiddens, self.updates = theano.scan(
@@ -337,7 +334,7 @@ class GRU(Model):
         )
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        cost = cost_function(output=output, target=self.target, **cost_args)
+        cost = cost_function(output=output, target=ys, **cost_args)
 
         log.info("Initialized a GRU!")
 
