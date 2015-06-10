@@ -203,19 +203,18 @@ class LSTM(Model):
                 self.input_size = sum(self.input_size)
             else:
                 raise NotImplementedError("Recurrent input with %d dimensions not supported!" % self.input.ndim)
+            xs = self.input
         else:
             # Assume input coming from optimizer is (batches, timesteps, data)
             # so, we need to reshape to (timesteps, batches, data)
-            xs = T.tensor3("Xs")
-            xs = xs.dimshuffle(1, 0, 2)
-            self.input = xs
+            self.input = T.tensor3("Xs")
+            xs = self.input.dimshuffle(1, 0, 2)
 
         # The target outputs for supervised training - in the form of (batches, timesteps, output) which is
         # the same dimension ordering as the expected input from optimizer.
         # therefore, we need to swap it like we did to input xs.
-        ys = T.tensor3("Ys")
-        ys = ys.dimshuffle(1, 0, 2)
-        self.target = ys
+        self.target = T.tensor3("Ys")
+        ys = self.target.dimshuffle(1, 0, 2)
 
         ################
         # hiddens hook #
@@ -242,6 +241,7 @@ class LSTM(Model):
              U_h_c, U_h_i, U_h_f, U_h_o,
              W_h_y, b_c, b_i, b_f, b_o,
              b_y) = self.params_hook
+            recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
         # otherwise, construct our params
         else:
             # all input-to-hidden weights
@@ -296,25 +296,22 @@ class LSTM(Model):
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
-        self.params = [W_x_c, W_x_i, W_x_f, W_x_o,
-                       U_h_c, U_h_i, U_h_f, U_h_o,
-                       W_h_y, b_c, b_i, b_f, b_o,
-                       b_y]
+        self.params = [W_x_c, W_x_i, W_x_f, W_x_o] + recurrent_params + [W_h_y, b_c, b_i, b_f, b_o, b_y]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
-            h_init = T.zeros_like(T.dot(self.input[0], W_x_c))
+            h_init = T.zeros_like(T.dot(xs[0], W_x_c))
 
-        c_init = T.zeros_like(T.dot(self.input[0], W_x_c))
+        c_init = T.zeros_like(T.dot(xs[0], W_x_c))
 
         ###############
         # computation #
         ###############
         # move some computation outside of scan to speed it up!
-        x_c = T.dot(self.input, W_x_c) + b_c
-        x_i = T.dot(self.input, W_x_i) + b_i
-        x_f = T.dot(self.input, W_x_f) + b_f
-        x_o = T.dot(self.input, W_x_o) + b_o
+        x_c = T.dot(xs, W_x_c) + b_c
+        x_i = T.dot(xs, W_x_i) + b_i
+        x_f = T.dot(xs, W_x_f) + b_f
+        x_o = T.dot(xs, W_x_o) + b_o
 
         # now do the recurrent stuff
         (self.hiddens, memories), self.updates = theano.scan(
@@ -339,7 +336,7 @@ class LSTM(Model):
         )
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        cost = cost_function(output=output, target=self.target, **cost_args)
+        cost = cost_function(output=output, target=ys, **cost_args)
 
         log.info("Initialized an LSTM!")
 
