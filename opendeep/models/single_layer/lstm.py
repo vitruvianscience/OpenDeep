@@ -46,7 +46,7 @@ class LSTM(Model):
                  r_bias_init=0.0,
                  cost_function='mse', cost_args=None,
                  noise='dropout', noise_level=None, noise_decay=False, noise_decay_amount=.99,
-                 forward=True,
+                 direction='forward',
                  clip_recurrent_grads=False):
         """
         Initialize a simple recurrent network.
@@ -129,8 +129,9 @@ class LSTM(Model):
         noise_decay_amount : float
             The amount to reduce the `noise_level` after each training epoch based on the decay function specified
             in `noise_decay`.
-        forward : bool
-            The direction this recurrent model should go over its inputs. True means forward, False mean backward.
+        direction : str
+            The direction this recurrent model should go over its inputs.
+            Can be 'forward', 'backward', or 'bidirectional'.
         clip_recurrent_grads : False or float, optional
             Whether to clip the gradients for the parameters that unroll over timesteps (such as the weights
             connecting previous hidden states to the current hidden state, and not the weights from current
@@ -144,6 +145,8 @@ class LSTM(Model):
         ##################
         # specifications #
         ##################
+        backward = direction.lower() == 'backward'
+        bidirectional = direction.lower() == 'bidirectional'
 
         #########################################
         # activation, cost, and noise functions #
@@ -237,11 +240,19 @@ class LSTM(Model):
         # parameters - make sure to deal with params_hook! #
         ####################################################
         if self.params_hook is not None:
-            (W_x_c, W_x_i, W_x_f, W_x_o,
-             U_h_c, U_h_i, U_h_f, U_h_o,
-             W_h_y, b_c, b_i, b_f, b_o,
-             b_y) = self.params_hook
-            recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+            if not bidirectional:
+                (W_x_c, W_x_i, W_x_f, W_x_o,
+                 U_h_c, U_h_i, U_h_f, U_h_o,
+                 W_h_y, b_c, b_i, b_f, b_o,
+                 b_y) = self.params_hook
+                recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+            else:
+                (W_x_c, W_x_i, W_x_f, W_x_o,
+                 U_h_c, U_h_i, U_h_f, U_h_o,
+                 U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b,
+                 W_h_y, b_c, b_i, b_f, b_o,
+                 b_y) = self.params_hook
+                recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o, U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]
         # otherwise, construct our params
         else:
             # all input-to-hidden weights
@@ -288,16 +299,34 @@ class LSTM(Model):
             b_y = get_bias(shape=(self.output_size,),
                            name="b_y",
                            init_values=bias_init)
+            # clip gradients if we are doing that
+            recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+            if clip_recurrent_grads:
+                clip = abs(clip_recurrent_grads)
+                U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
+            # bidirectional params
+                if bidirectional:
+                    # all hidden-to-hidden weights
+                    U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [
+                        get_weights(weights_init=r_weights_init,
+                                    shape=(self.hidden_size, self.hidden_size),
+                                    name="U_h_%s_b" % sub,
+                                    # if gaussian
+                                    mean=r_weights_mean,
+                                    std=r_weights_std,
+                                    # if uniform
+                                    interval=r_weights_interval)
+                        for sub in ['c', 'i', 'f', 'o']
+                    ]
+                    recurrent_params += [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]
+                    if clip_recurrent_grads:
+                        clip = abs(clip_recurrent_grads)
+                        U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [theano.gradient.grad_clip(p, -clip, clip) for p in
+                                                              [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]]
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
         self.params = [W_x_c, W_x_i, W_x_f, W_x_o] + recurrent_params + [W_h_y, b_c, b_i, b_f, b_o, b_y]
-
-        # clip gradients if we are doing that
-        recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
-        if clip_recurrent_grads:
-            clip = abs(clip_recurrent_grads)
-            U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
@@ -315,15 +344,32 @@ class LSTM(Model):
         x_o = T.dot(xs, W_x_o) + b_o
 
         # now do the recurrent stuff
-        (self.hiddens, memories), self.updates = theano.scan(
+        (self.hiddens, _), self.updates = theano.scan(
             fn=self.recurrent_step,
             sequences=[x_c, x_i, x_f, x_o],
             outputs_info=[h_init, c_init],
             non_sequences=[U_h_c, U_h_i, U_h_f, U_h_o],
-            go_backwards=not forward,
+            go_backwards=backward,
             name="lstm_scan",
             strict=True
         )
+
+        # if bidirectional, do the same in reverse!
+        if bidirectional:
+            (hiddens_b, _), updates_b = theano.scan(
+                fn=self.recurrent_step,
+                sequences=[x_c, x_i, x_f, x_o],
+                outputs_info=[h_init, c_init],
+                non_sequences=[U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b],
+                go_backwards=not backward,
+                name="lstm_scan_back",
+                strict=True
+            )
+            # flip the hiddens to be the right direction
+            hiddens_b = hiddens_b[::-1]
+            # update stuff
+            self.updates.update(updates_b)
+            self.hiddens += hiddens_b
 
         # add noise (like dropout) if we wanted it!
         if noise:
