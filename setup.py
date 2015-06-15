@@ -14,7 +14,7 @@ version = __version__  # it is there, trust me :) IDE's won't recognize that exe
 
 def read(*filenames, **kwargs):
     encoding = kwargs.get('encoding', 'utf-8')
-    mode = kwargs.get('mode', 'rb')
+    mode = kwargs.get('mode', 'r')
     sep = kwargs.get('sep', '\n')
     buf = []
     for filename in filenames:
