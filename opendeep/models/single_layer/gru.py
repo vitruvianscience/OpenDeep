@@ -328,12 +328,12 @@ class GRU(Model):
                                     self.hiddens)
 
         # now compute the outputs from the leftover (top level) hiddens
-        output = activation_func(
+        self.output = activation_func(
             T.dot(self.hiddens, W_h_y) + b_y
         )
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        cost = cost_function(output=output, target=ys, **cost_args)
+        self.cost = cost_function(output=self.output, target=ys, **cost_args)
 
         log.info("Initialized a GRU!")
 

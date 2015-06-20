@@ -18,3 +18,6 @@ from . import utils
 
 # so we can get `from opendeep import function, grad, sharedX,` etc.
 from .utils.constructors import *
+
+# so we can config logger from the base import
+from .log import config_root_logger

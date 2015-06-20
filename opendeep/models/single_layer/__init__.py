@@ -4,3 +4,5 @@ from .autoencoder import *
 from .basic import *
 from .convolutional import *
 from .restricted_boltzmann_machine import *
+from .gru import GRU
+from .lstm import LSTM
