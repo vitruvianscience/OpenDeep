@@ -32,7 +32,7 @@ class AdaDelta(Optimizer):
     Implements the AdaDelta learning rule as described in:
     "AdaDelta: An Adaptive Learning Rate Method", Matthew D. Zeiler.
     """
-    def __init__(self, model, dataset,
+    def __init__(self, dataset, model=None,
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=1e-6, lr_decay=None, lr_factor=None,

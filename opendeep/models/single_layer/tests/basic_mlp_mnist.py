@@ -11,8 +11,8 @@ if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
     import logging
-    import opendeep.log.logger as logger
-    logger.config_root_logger()
+    from opendeep.log import config_root_logger
+    config_root_logger()
     log = logging.getLogger(__name__)
     log.info("Creating MLP!")
 
@@ -25,11 +25,11 @@ if __name__ == '__main__':
     # create the mlp from the two layers
     mlp = Prototype(layers=[layer1, layer2])
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
-    # optimizer = AdaDelta(dataset=mnist, n_epoch=20)
+    # optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
+    optimizer = AdaDelta(dataset=mnist, n_epoch=20)
     # perform training!
-    optimizer.train()
-    # mlp.train(optimizer)
+    # optimizer.train()
+    mlp.train(optimizer)
 
 
     # test it on some images!

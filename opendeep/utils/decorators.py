@@ -1,9 +1,6 @@
 """
 This module provides various decorators used throughout OpenDeep.
 """
-from opendeep.optimization.optimizer import Optimizer
-from opendeep.models.model import Model
-
 # __all__ is created at the bottom of this file - go there for publicly available decorator names.
 
 
@@ -33,16 +30,12 @@ def init_optimizer(train_method):
         if not optimizer:
             optimizer = args[1]
         # get the initialization parameters from the optimizer
-        assert isinstance(optimizer, Optimizer), "Input optimizer needs to be an Optimizer! Found %s" % \
-            str(type(optimizer))
         init_params = optimizer.args.copy()
         # add the model's 'self' (must be args[0] of the method) to the optimizer initial config.
         model = args[0]
-        assert isinstance(model, Model), "First argument (normally 'self') to the method must be a Model! " \
-                                         "Found %s" % str(type(model))
         init_params['model'] = model
         new_optimizer = type(optimizer)(**init_params)
-        return train_method(new_optimizer)
+        return train_method(model, new_optimizer)
     return wrapper
 
 

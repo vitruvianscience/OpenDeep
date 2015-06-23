@@ -35,7 +35,7 @@ class RMSProp(Optimizer):
     problem by "[dividing] the learning rate for a weight by a running
     average of the magnitudes of recent gradients for that weight."
     """
-    def __init__(self, model, dataset,
+    def __init__(self, dataset, model=None,
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=1e-6, lr_decay=None, lr_factor=None,

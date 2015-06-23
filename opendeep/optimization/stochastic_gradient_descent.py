@@ -25,7 +25,7 @@ class SGD(Optimizer):
     """
     Stochastic gradient descent for training a model - includes learning rate decay and momentum.
     """
-    def __init__(self, model, dataset,
+    def __init__(self, dataset, model=None,
                  n_epoch=10, batch_size=100, minimum_batch_size=1,
                  save_frequency=None, early_stop_threshold=None, early_stop_length=None,
                  learning_rate=.1, lr_decay="exponential", lr_factor=.995,

@@ -114,11 +114,19 @@ class Optimizer(object):
         self.args = add_kwargs_to_dict(kwargs, self.args)
         # log the arguments
         log.info("Optimizer config args: %s", str(self.args))
+        # if the optimizer wasn't initialized with a Model (train() being called from the model class itself),
+        # just return. (This seems kinda hacky but hey, people wanted .train() to happen from Model and there
+        # wasn't really a better way unless the epoch looping logic was in that method for Model. That wasn't
+        # the best option because other methods besides stochastic ones can exist for optimizers in the future.
+        if not model:
+            return
+        # Otherwise, things are proceeding as normal. Carry on...
 
-        assert isinstance(model, Model), "Optimizer input model needs to be a Model class! Found %s" % \
-            str(type(model))
-        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! Found %s" % \
-            str(type(dataset))
+        assert isinstance(model, Model), "Optimizer input model needs to be a Model class! " \
+                                         "Found %s" % str(type(model))
+        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! " \
+                                             "Found %s" % str(type(dataset))
+
         self.model = model
         self.dataset = dataset
 
