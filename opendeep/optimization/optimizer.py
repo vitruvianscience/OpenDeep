@@ -71,7 +71,7 @@ class Optimizer(object):
         dataset : Dataset
             The Dataset to use when training the Model.
         model : Model
-            The Model to train.
+            The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
         n_epoch : int
             how many training iterations over the dataset to go.
         batch_size : int
@@ -132,7 +132,9 @@ class Optimizer(object):
 
         # Learning rate - how drastic of a step do the parameters change
         self.learning_rate = sharedX(learning_rate, 'learning_rate')
+        # whether to scale individual model parameters' learning rates.
         self.lr_scalers = self.model.get_lr_scalers()
+        # whether to decay
         if lr_decay:
             self.learning_rate_decay = get_decay_function(lr_decay,
                                                           self.learning_rate,
@@ -141,6 +143,7 @@ class Optimizer(object):
         else:
             self.learning_rate_decay = False
 
+        # rest of initial parameters needed for training.
         self.noise_switches = raise_to_list(self.model.get_noise_switch())
         self.batch_size = batch_size
         self.minimum_batch_size = minimum_batch_size

@@ -36,10 +36,10 @@ class SGD(Optimizer):
 
         Parameters
         ----------
-        model : Model
-            The Model to train.
         dataset : Dataset
             The Dataset to use when training the Model.
+        model : Model
+            The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
         n_epoch : int
             how many training iterations over the dataset to go.
         batch_size : int
