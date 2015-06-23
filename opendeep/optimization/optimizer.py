@@ -54,9 +54,10 @@ TRAIN_COST_KEY = 'train_cost'
 class Optimizer(object):
     """
     Default interface for an optimizer implementation - this provides the necessary parameter updates when
-    training a model on a dataset using an online stochastic process.
+    training a model on a dataset using an online stochastic process. The base framework for performing
+    stochastic gradient descent.
     """
-    def __init__(self, model, dataset,
+    def __init__(self, dataset, model=None,
                  n_epoch=1000, batch_size=100, minimum_batch_size=1,
                  save_frequency=10, early_stop_threshold=.9995, early_stop_length=30,
                  learning_rate=1e-3, lr_decay='exponential', lr_factor=1,
@@ -67,21 +68,21 @@ class Optimizer(object):
 
         Parameters
         ----------
-        model : Model
-            The Model to train.
         dataset : Dataset
             The Dataset to use when training the Model.
+        model : Model
+            The Model to train.
         n_epoch : int
             how many training iterations over the dataset to go.
         batch_size : int
             How many examples from the training dataset to use in parallel.
         minimum_batch_size : int
             The minimum number of examples required at a time (for things like time series, this would be > 1).
-        save_frequency : int
+        save_frequency : int, optional
             How many epochs to train between each new save of the Model's parameters.
-        early_stop_threshold : float
+        early_stop_threshold : float, optional
             The factor by how much the best validation training score needs to improve to determine early stopping.
-        early_stop_length : int
+        early_stop_length : int, optional
             The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
         learning_rate : float
             The multiplicative amount to adjust parameters based on their gradient values.
@@ -98,22 +99,26 @@ class Optimizer(object):
         """
         log.info("Initializing optimizer %s", str(type(self)))
 
-        if early_stop_threshold is None:
+        # Deal with early stopping None initializations.
+        if not early_stop_threshold:
             early_stop_threshold = 1.
-        if save_frequency is None:
+        if not save_frequency:
             save_frequency = 1000000
-        if early_stop_length is None:
+        if not early_stop_length:
             early_stop_length = 100
 
+        # Put all init parameters in self.args so we can log the initial configuration.
         self.args = locals().copy()
         self.args.pop('self')
         kwargs = self.args.pop('kwargs')
         self.args = add_kwargs_to_dict(kwargs, self.args)
         # log the arguments
-        log.info("optimizer config args: %s", str(self.args))
+        log.info("Optimizer config args: %s", str(self.args))
 
-        assert isinstance(model, Model), "Optimizer input model needs to be an opendeep Model class!"
-        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be an opendeep Dataset class!"
+        assert isinstance(model, Model), "Optimizer input model needs to be a Model class! Found %s" % \
+            str(type(model))
+        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! Found %s" % \
+            str(type(dataset))
         self.model = model
         self.dataset = dataset
 
@@ -267,6 +272,12 @@ class Optimizer(object):
         continue_training : bool
             Whether to continue training from a previous point.
         """
+        if not self.model:
+            log.error("No self.model for the Optimizer!")
+            raise AssertionError("Needs to be initialized with a Model! (Or something went wrong if train() "
+                                 "was called from the model. Try initializing the optimizer with the model "
+                                 "and calling optimizer.train().")
+
         ###############################################
         # theano index variable to use on the dataset #
         ###############################################

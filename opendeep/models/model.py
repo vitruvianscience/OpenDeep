@@ -22,6 +22,7 @@ import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
+from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
 from opendeep.utils.constructors import function
 from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
@@ -523,6 +524,13 @@ class Model(object):
             List of SharedVariable used to set the Switches. Defaults to an empty list.
         """
         return []
+
+    @init_optimizer
+    def train(self, optimizer, **kwargs):
+        """
+        This is a syntactic sugar method for training the model with a given optimizer.
+        """
+        optimizer.train(**kwargs)
 
     #######################################
     # Methods to do with model parameters #

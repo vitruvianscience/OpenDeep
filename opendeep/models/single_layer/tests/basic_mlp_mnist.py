@@ -26,8 +26,12 @@ if __name__ == '__main__':
     mlp = Prototype(layers=[layer1, layer2])
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
+    # optimizer = AdaDelta(dataset=mnist, n_epoch=20)
     # perform training!
     optimizer.train()
+    # mlp.train(optimizer)
+
+
     # test it on some images!
     test_data, test_labels = mnist.getSubset(subset=TEST)
     test_data = test_data[:25].eval()
