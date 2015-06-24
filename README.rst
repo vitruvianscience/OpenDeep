@@ -64,7 +64,6 @@ Because OpenDeep is still in alpha, you have to install via setup.py. Also, plea
 
 Dependencies
 ------------
-
 * Theano_: Theano and its dependencies are required to use OpenDeep. You need to install the bleeding-edge version directly from their GitHub, which has `installation instructions here`_.
 
   * For GPU integration with Theano, you also need the latest `CUDA drivers`_. Here are `instructions for setting up Theano for the GPU`_. If you prefer to use a server on Amazon Web Services, here are instructions for setting up an `EC2 gpu server with Theano`_.
@@ -76,6 +75,8 @@ Dependencies
 * PyYAML_ (optional): used for YAML parsing of config files.
 
 * Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
+
+All of these Python dependencies (not the system-specific ones like CUDA or HDF5), can be installed with :code:`pip install -r requirements.txt` inside the root OpenDeep folder.
 
 .. _installation instructions here: http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions
 
