@@ -19,7 +19,8 @@ import numpy
 import theano
 # internal imports
 from opendeep.utils.constructors import dataset_shared
-from opendeep.data.dataset import FileDataset, TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset import TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset_file import FileDataset
 from opendeep.utils.midi import midiread
 
 log = logging.getLogger(__name__)

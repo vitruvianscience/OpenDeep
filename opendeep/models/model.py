@@ -378,8 +378,8 @@ class Model(object):
 
         Returns
         -------
-        theano expression or list of theano expressions
-            The model's training cost(s), from which parameter gradients will be computed.
+        theano expression
+            The model's training cost from which parameter gradients will be computed.
 
         Raises
         ------

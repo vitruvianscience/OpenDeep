@@ -281,7 +281,7 @@ class LSTM(Model):
             ]
             # hidden-to-output weights
             W_h_y = get_weights(weights_init=weights_init,
-                                shape=(self.input_size, self.hidden_size),
+                                shape=(self.hidden_size, self.output_size),
                                 name="W_h_y",
                                 # if gaussian
                                 mean=weights_mean,

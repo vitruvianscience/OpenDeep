@@ -18,7 +18,8 @@ import math
 import numpy
 # internal imports
 from opendeep.utils.constructors import dataset_shared
-from opendeep.data.dataset import FileDataset, TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset import TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, make_time_units_string
 

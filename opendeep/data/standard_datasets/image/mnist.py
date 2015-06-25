@@ -18,7 +18,9 @@ import math
 import numpy
 # internal imports
 from opendeep.utils.constructors import dataset_shared
-from opendeep.data.dataset import FileDataset, TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset import TRAIN, VALID, TEST, _subsets
+from opendeep.data.dataset_file import FileDataset
+from opendeep.data.iterators.numpy_batches import NumpyBatches
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, binarize
 
@@ -78,7 +80,7 @@ class MNIST(FileDataset):
         filename = 'mnist.pkl.gz'
         source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
 
-        super(MNIST, self).__init__(filename=filename, source=source, dataset_dir=dataset_dir)
+        super(MNIST, self).__init__(filenames=filename, sources=source, dataset_dir=dataset_dir)
 
         # self.dataset_location now contains the os path to the dataset file
         # self.file_type tells how to load the dataset
@@ -162,63 +164,27 @@ class MNIST(FileDataset):
             log.debug('Valid shape is: %s', str(self._valid_shape))
             log.debug('Test shape is: %s', str(self._test_shape))
 
-        log.debug("loading datasets into shared variables")
-        self.train_X = dataset_shared(self.train_X, name='mnist_train_x', borrow=True)
-        self.train_Y = dataset_shared(self.train_Y, name='mnist_train_y', borrow=True)
+        # log.debug("loading datasets into shared variables")
+        # self.train_X = dataset_shared(self.train_X, name='mnist_train_x', borrow=True)
+        # self.train_Y = dataset_shared(self.train_Y, name='mnist_train_y', borrow=True)
+        #
+        # self.valid_X = dataset_shared(self.valid_X, name='mnist_valid_x', borrow=True)
+        # self.valid_Y = dataset_shared(self.valid_Y, name='mnist_valid_y', borrow=True)
+        #
+        # self.test_X = dataset_shared(self.test_X, name='mnist_test_x', borrow=True)
+        # self.test_Y = dataset_shared(self.test_Y, name='mnist_test_y', borrow=True)
 
-        self.valid_X = dataset_shared(self.valid_X, name='mnist_valid_x', borrow=True)
-        self.valid_Y = dataset_shared(self.valid_Y, name='mnist_valid_y', borrow=True)
+        self.datasets = {TRAIN: [self.train_X, self.train_Y],
+                         VALID: [self.valid_X, self.valid_Y],
+                         TEST: [self.test_X, self.test_Y]}
 
-        self.test_X = dataset_shared(self.test_X, name='mnist_test_x', borrow=True)
-        self.test_Y = dataset_shared(self.test_Y, name='mnist_test_y', borrow=True)
+    def get_subset(self, subset, batch_size=1, min_batch_size=1):
+        # make sure the subset is valid.
+        assert subset in _subsets, "Subset %s not recognized!" % str(subset)
 
-    def getSubset(self, subset):
-        """
-        Returns the (x, y) pair of shared variables for the given train, validation, or test subset.
-
-        Parameters
-        ----------
-        subset : int
-            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
-
-        Returns
-        -------
-        tuple
-            (x, y) tuple of shared variables holding the dataset input and label, or None if the subset doesn't exist.
-        """
-        if subset is TRAIN:
-            return self.train_X, self.train_Y
-        elif subset is VALID:
-            return self.valid_X, self.valid_Y
-        elif subset is TEST:
-            return self.test_X, self.test_Y
-        else:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return None, None
-
-    def getDataShape(self, subset):
-        '''
-        Returns the shape of the input data for the given subset
-
-        Parameters
-        ----------
-        subset : int
-            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
-
-        Returns
-        -------
-        tuple
-            Return the shape of this dataset's subset in a (N, D) tuple where N=#examples and D=dimensionality
-        '''
-        if subset is TRAIN:
-            return self._train_shape
-        elif subset is VALID:
-            return self._valid_shape
-        elif subset is TEST:
-            return self._test_shape
-        else:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return None
+        # return the appropriately sized iterator over the subset
+        x, y = [NumpyBatches(data, batch_size, min_batch_size) if data else None for data in self.datasets[subset]]
+        return x, y
 
     def sequence(self, sequence_number, rng=None):
         """

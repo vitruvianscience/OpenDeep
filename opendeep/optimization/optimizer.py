@@ -31,6 +31,8 @@ __email__ = "opendeep-dev@googlegroups.com"
 import logging
 import time
 import os
+import warnings
+from itertools import izip
 # third party
 import numpy
 import theano.tensor as T
@@ -176,7 +178,7 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def train(self, monitor_channels=None, train_outservice=None, plot=None, continue_training=False):
+    def train(self, monitor_channels=None, train_outservice=None, plot=None, additional_cost=None):
         """
         This method performs the training!!!
         It is an online training method that goes over minibatches from the dataset for a number of epochs,
@@ -194,8 +196,9 @@ class Optimizer(object):
             to logs.
         plot : Plot, optional
             The Plot object to use if we want to graph the outputs (uses bokeh server).
-        continue_training : bool
-            Whether to continue training from a previous point.
+        additional_cost : theano expression or list(theano expression), optional
+            Any additional cost expressions to use during training (things like regularization). These will be summed
+            with the existing cost.
         """
         if not self.model:
             log.error("No self.model for the Optimizer!")
@@ -206,12 +209,22 @@ class Optimizer(object):
         # Create the gradient updates for the model - make sure to handle the possible
         # list of costs used for pretraining of certain parts of the model.
         train_costs = raise_to_list(self.model.get_train_cost())
+        # deal with any other additional costs (like regularization, etc.)
+        if additional_cost is not None:
+            additional_costs = raise_to_list(additional_cost)
+            if len(additional_costs) > 1:
+                additional_cost = T.sum(additional_costs)
+
         train_updates = []
         self.gradients = []
         for i, train_cost in enumerate(train_costs):
             # Now create the training cost function for the model to use while training - update parameters
             # gradient!
-            gradients, _ = self.model.get_gradient(cost=train_cost)
+            if len(train_costs) > 1 and additional_cost is not None:
+                log.warning("additional_cost will double count with gradients during layer-wise pretraining!")
+                warnings.warn("additional_cost will double count with gradients during layer-wise pretraining!")
+            # TODO: additional_cost will double count with gradients during layer-wise pretraining. Need to somehow make w.r.t. params appropriate for the individual training costs.
+            gradients, _ = self.model.get_gradient(cost=train_cost, additional_cost=additional_cost)
             # clip gradients if we want.
             gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
             # append to list
@@ -267,6 +280,7 @@ class Optimizer(object):
         #######################################
         # compile train and monitor functions #
         #######################################
+        function_input = raise_to_list(self.model.get_inputs()) + raise_to_list(self.model.get_targets())
         train_functions = []
         for i in range(len(train_costs)):
             updates = train_updates[i]
@@ -279,15 +293,14 @@ class Optimizer(object):
             f_learn = function(inputs=function_input,
                                updates=updates,
                                outputs=[train_cost] + self.train_monitors_dict.values(),
-                               givens=train_givens,
                                name='f_learn_%d' % i)
 
             log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
             train_functions.append(f_learn)
 
         # figure out if we want valid and test
-        self.valid_flag = (self.dataset.getSubset(VALID)[0] is not None) and (len(self.valid_monitors_dict) > 0)
-        self.test_flag = (self.dataset.getSubset(TEST)[0] is not None) and (len(self.test_monitors_dict) > 0)
+        self.valid_flag = (self.dataset.get_subset(VALID)[0] is not None) and (len(self.valid_monitors_dict) > 0)
+        self.test_flag = (self.dataset.get_subset(TEST)[0] is not None) and (len(self.test_monitors_dict) > 0)
         # Now compile the monitor functions!
         log.debug("Compiling monitor functions...")
         monitor_t = time.time()
@@ -297,7 +310,6 @@ class Optimizer(object):
                 inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.valid_monitors_dict.values(),
-                givens=valid_givens,
                 name='valid_monitor_function'
             )
         else:
@@ -309,7 +321,6 @@ class Optimizer(object):
                 inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.test_monitors_dict.values(),
-                givens=test_givens,
                 name='test_monitor_function'
             )
         else:
@@ -324,21 +335,14 @@ class Optimizer(object):
         # this list of training functions was created during __init__()
         start_time = time.time()
         for func_i, train_function in enumerate(train_functions):
-            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS (continue_training=%s)-----------",
-                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch, str(continue_training))
-
-            log.debug("Train dataset size is: %s", self.dataset.getDataShape(TRAIN))
-            if self.dataset.getSubset(VALID)[0] is not None:
-                log.debug("Valid dataset size is: %s", self.dataset.getDataShape(VALID))
-            if self.dataset.getSubset(TEST)[0] is not None:
-                log.debug("Test dataset size is: %s", self.dataset.getDataShape(TEST))
+            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS-----------",
+                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch)
 
             self.STOP = False
             self.epoch_counter = 0
-            if not continue_training:
-                # reset any decay params
-                for decay_param in self.get_decay_params():
-                    decay_param.reset()
+            # reset any decay params
+            for decay_param in self.get_decay_params():
+                decay_param.reset()
 
             self.times = []
             self.best_cost = numpy.inf
@@ -385,8 +389,14 @@ class Optimizer(object):
         # train
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
-        for batch_start, batch_end in self.train_batches:
-            _outs = raise_to_list(f_learn(batch_start, batch_end))
+        train_data = izip(*[
+            data_generator for data_generator in
+            self.dataset.get_subset(TRAIN, batch_size=self.batch_size,
+                                    min_batch_size=self.minimum_batch_size)
+            if data_generator is not None
+        ])
+        for batch in train_data:
+            _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
             # handle any user defined monitors
             if len(train_monitors) > 0:
@@ -421,8 +431,14 @@ class Optimizer(object):
         # valid
         if self.valid_flag:
             valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
-            for batch_start, batch_end in self.valid_batches:
-                _outs = raise_to_list(self.valid_monitor_function(batch_start, batch_end))
+            valid_data = izip(*[
+                data_generator for data_generator in
+                self.dataset.get_subset(VALID, batch_size=self.batch_size,
+                                        min_batch_size=self.minimum_batch_size)
+                if data_generator is not None
+            ])
+            for batch in valid_data:
+                _outs = raise_to_list(self.valid_monitor_function(*batch))
                 current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
                     val = numpy.asarray(val)
@@ -443,8 +459,14 @@ class Optimizer(object):
         #test
         if self.test_flag:
             test_monitors = {key: [] for key in self.test_monitors_dict.keys()}
-            for batch_start, batch_end in self.test_batches:
-                _outs = raise_to_list(self.test_monitor_function(batch_start, batch_end))
+            test_data = izip(*[
+                data_generator for data_generator in
+                self.dataset.get_subset(TEST, batch_size=self.batch_size,
+                                        min_batch_size=self.minimum_batch_size)
+                if data_generator is not None
+            ])
+            for batch in test_data:
+                _outs = raise_to_list(self.test_monitor_function(*batch))
                 current_monitors = zip(self.test_monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
                     val = numpy.asarray(val)
