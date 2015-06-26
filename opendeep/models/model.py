@@ -528,7 +528,8 @@ class Model(object):
     @init_optimizer
     def train(self, optimizer, **kwargs):
         """
-        This is a syntactic sugar method for training the model with a given optimizer.
+        This is a syntactic sugar method for training the model with a given Optimizer.
+        See train() in Optimizer for parameters.
         """
         optimizer.train(**kwargs)
 
