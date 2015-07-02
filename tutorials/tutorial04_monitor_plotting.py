@@ -52,8 +52,8 @@ def main():
     # use SGD optimizer
     optimizer = SGD(model=mlp,
                     dataset=MNIST(concat_train_valid=False),
-                    n_epoch=500,
-                    save_frequency=100,
+                    epochs=500,
+                    save_freq=100,
                     batch_size=600,
                     learning_rate=.01,
                     lr_decay=False,

@@ -25,7 +25,7 @@ def main():
     # use these arguments to get results from paper referenced above
     _train_args = {"n_epoch": 1000,  # maximum number of times to run through the dataset
                    "batch_size": 100,  # number of examples to process in parallel (minibatch)
-                   "minimum_batch_size": 1,  # the minimum number of examples for a batch to be considered
+                   "min_batch_size": 1,  # the minimum number of examples for a batch to be considered
                    "save_frequency": 1,  # how many epochs between saving parameters
                    "early_stop_threshold": .9995,  # multiplier for how much the train cost to improve to not stop early
                    "early_stop_length": 500,  # how many epochs to wait to see if the threshold has been reached

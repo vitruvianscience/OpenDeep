@@ -43,7 +43,7 @@ def main():
 
     optimizer = RMSProp(model=rnn, dataset=data,
                         grad_clip=5., hard_clip=False,
-                        learning_rate=2e-3, decay=0.95, batch_size=100, n_epoch=300)
+                        learning_rate=2e-3, decay=0.95, batch_size=100, epochs=300)
     # optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
     optimizer.train(monitor_channels=cost_monitor)
 

@@ -49,7 +49,7 @@ def run_mlp():
 
     mnist = MNIST()
 
-    optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=10)
+    optimizer = AdaDelta(model=mlp, dataset=mnist, epochs=10)
     optimizer.train()
 
     test_data, test_labels = mnist.getSubset(subset=TEST)

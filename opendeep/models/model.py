@@ -150,7 +150,7 @@ class Model(object):
         # in that case.
         if not self.output_size:
             # Could be an error (hopefully not), so give the warning.
-            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the"
+            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the "
                         "same as input_size. Setting output_size=input_size now...")
             self.output_size = self.input_size
 

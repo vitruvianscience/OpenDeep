@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # create the softmax classifier
     s = SoftmaxLayer(input_size=28 * 28, output_size=10, out_as_probs=False)
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
+    optimizer = AdaDelta(model=s, dataset=mnist, epochs=20)
     # perform training!
     optimizer.train()
     # test it on some images!
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     # create the softmax classifier
     s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy', out_as_probs=True)
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, n_epoch=20)
+    optimizer = AdaDelta(model=s, dataset=mnist, epochs=20)
     # perform training!
     optimizer.train()
     # test it on some images!

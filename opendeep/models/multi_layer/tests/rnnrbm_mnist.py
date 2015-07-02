@@ -39,12 +39,12 @@ def run_sequence(sequence=0):
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnnrbm,
                          dataset=mnist,
-                         n_epoch=200,
+                         epochs=200,
                          batch_size=100,
-                         minimum_batch_size=2,
+                         min_batch_size=2,
                          learning_rate=1e-8,
-                         save_frequency=10,
-                         early_stop_length=200)
+                         save_freq=10,
+                         stop_patience=200)
 
     crossentropy = Monitor('crossentropy', rnnrbm.get_monitors()['crossentropy'], test=True)
     error = Monitor('error', rnnrbm.get_monitors()['mse'], test=True)

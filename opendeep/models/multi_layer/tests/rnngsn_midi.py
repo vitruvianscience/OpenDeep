@@ -66,13 +66,13 @@ def run_midi(dataset):
     # make an optimizer to train it
     optimizer = AdaDelta(model=rnngsn,
                          dataset=midi,
-                         n_epoch=200,
+                         epochs=200,
                          batch_size=100,
-                         minimum_batch_size=2,
+                         min_batch_size=2,
                          # learning_rate=1e-4,
                          learning_rate=1e-6,
-                         save_frequency=1,
-                         early_stop_length=100)
+                         save_freq=1,
+                         stop_patience=100)
 
     ll = Monitor('crossentropy', rnngsn.get_monitors()['noisy_recon_cost'],test=True)
     mse = Monitor('frame-error', rnngsn.get_monitors()['mse'],train=True,test=True,valid=True)

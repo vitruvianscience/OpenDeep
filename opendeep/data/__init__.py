@@ -8,6 +8,6 @@ from .iterators import *
 # to get dataset types like Dataset, Filedataset, etc.
 from .dataset import Dataset
 from .dataset_file import FileDataset
-from .dataset_memory import MemoryDataset
+from .dataset_memory import NumpyDataset
 # to get premade datasets
 from .standard_datasets import *

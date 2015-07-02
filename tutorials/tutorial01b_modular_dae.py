@@ -138,7 +138,7 @@ if __name__ == '__main__':
     dae = DenoisingAutoencoder()
 
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=dae, dataset=mnist, n_epoch=100)
+    optimizer = AdaDelta(model=dae, dataset=mnist, epochs=100)
     # perform training!
     optimizer.train()
 

@@ -1,5 +1,6 @@
 """
-Generic structure for a dataset.
+Generic structure for a dataset. This defines iterable objects (streams) for data and labels to use
+with any given subsets of the dataset.
 
 Attributes
 ----------
@@ -49,23 +50,18 @@ def get_subset_strings(subset):
 class Dataset(object):
     """
     Default interface for a dataset object. At minimum, a Dataset needs to implement get_subset().
-    get_subset() returns the (data, label) pair of iterators over the specific subset of this dataset with the
-    given batch size.
+    get_subset() returns the (data, label) pair of iterables over the specific subset of this dataset.
     """
-    def get_subset(self, subset, batch_size=1, min_batch_size=1):
+    def get_subset(self, subset):
         """
-        This method returns the single tuple of (input_data, labels) iterators over the given subset with the given
-        batch size. If an iterator doesn't exist (input_data and/or labels) for the subset, returns None in place of
+        This method returns the single tuple of (input_data, labels) iterables over the given subset.
+        If an iterator doesn't exist (input_data and/or labels) for the subset, returns None in place of
         the iterator.
 
         Parameters
         ----------
         subset : int
             The subset indicator. Integer assigned by :mod:`opendeep.data.dataset`'s attributes.
-        batch_size : int
-            The number of examples to include for each iteration.
-        batch_size : int
-            The minimum number of examples to include for each iteration.
 
         Returns
         -------

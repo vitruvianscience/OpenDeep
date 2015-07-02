@@ -50,7 +50,7 @@ if __name__ == '__main__':
     mlp = sequential_add_layers()
     optimizer = SGD(model=mlp,
                     dataset=MNIST(concat_train_valid=True),
-                    n_epoch=500,
+                    epochs=500,
                     batch_size=600,
                     learning_rate=.01,
                     momentum=.9,

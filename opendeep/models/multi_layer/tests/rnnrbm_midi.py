@@ -81,25 +81,25 @@ def run_midi(dataset):
     # make an optimizer to train it
     optimizer = SGD(model=rnnrbm,
                     dataset=midi,
-                    n_epoch=200,
+                    epochs=200,
                     batch_size=100,
-                    minimum_batch_size=2,
+                    min_batch_size=2,
                     learning_rate=.001,
-                    save_frequency=10,
-                    early_stop_length=200,
+                    save_freq=10,
+                    stop_patience=200,
                     momentum=False,
                     momentum_decay=False,
                     nesterov_momentum=False)
 
     optimizer = AdaDelta(model=rnnrbm,
                          dataset=midi,
-                         n_epoch=200,
+                         epochs=200,
                          batch_size=100,
-                         minimum_batch_size=2,
+                         min_batch_size=2,
                          # learning_rate=1e-4,
                          learning_rate=1e-6,
-                         save_frequency=10,
-                         early_stop_length=200)
+                         save_freq=10,
+                         stop_patience=200)
 
     ll = Monitor('pseudo-log', rnnrbm.get_monitors()['pseudo-log'], test=True)
     mse = Monitor('frame-error', rnnrbm.get_monitors()['mse'], valid=True, test=True)

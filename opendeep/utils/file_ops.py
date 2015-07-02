@@ -20,14 +20,6 @@ TXT : int
 UNKNOWN : int
     Unknown file type marker.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard imports
 import os
 import errno
@@ -35,6 +27,9 @@ import urllib
 import zipfile
 import tarfile
 import logging
+import re
+# third party
+from theano.compat.six import string_types
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +101,36 @@ def mkdir_p(path):
         else:
             log.exception('Error making directory %s', path)
             raise
+
+def find_files(path, filter=None):
+    """
+    Recursively walks directories in ``path`` (if it is a directory) to find the files that have names
+    matching ``filter``.
+
+    Parameters
+    ----------
+    path : str
+        The path to the directory to walk or file to find.
+    filter : regular expression string or compiled regular expression object
+        The regular expression to match against file names.
+    """
+    if filter is not None:
+        if isinstance(filter, string_types):
+            reg = re.compile(filter)
+        else:
+            reg = filter
+    else:
+        reg = None
+
+    for root, dirs, files in os.walk(path):
+        for basename in files:
+            try:
+                if reg is None or reg.match(basename) is not None:
+                    filename = os.path.join(root, basename)
+                    yield filename
+            except TypeError as te:
+                log.exception("TypeError exception when finding files. %s" % str(te.message))
+                raise
 
 def init_empty_file(filename):
     """

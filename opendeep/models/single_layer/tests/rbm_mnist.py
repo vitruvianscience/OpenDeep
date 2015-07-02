@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     # optimizer = SGD(model=rbm, dataset=mnist, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False, momentum=False)
 
-    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_frequency=1)
+    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_freq=1)
 
     ll = Monitor('pseudo-log', rbm.get_monitors()['pseudo-log'])
 

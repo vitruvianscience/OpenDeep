@@ -26,7 +26,7 @@ def create_mlp():
 
     mnist = MNIST()
 
-    optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
+    optimizer = AdaDelta(model=mlp, dataset=mnist, epochs=20)
     optimizer.train()
 
     test_data, test_labels = mnist.getSubset(TEST)

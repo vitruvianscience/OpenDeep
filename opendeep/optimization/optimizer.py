@@ -20,13 +20,6 @@ Attributes
 TRAIN_COST_KEY : str
     The monitor name to use for the training cost. (Optimizer will always automatically monitor the training cost).
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
@@ -47,6 +40,7 @@ from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import raise_to_list, make_time_units_string, \
     get_shared_values, set_shared_values, add_kwargs_to_dict, trunc
+from opendeep.utils.batch import minibatch
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +54,9 @@ class Optimizer(object):
     stochastic gradient descent.
     """
     def __init__(self, dataset, model=None,
-                 n_epoch=1000, batch_size=100, minimum_batch_size=1,
-                 save_frequency=10, early_stop_threshold=.9995, early_stop_length=30,
-                 learning_rate=1e-3, lr_decay='exponential', lr_factor=1,
+                 epochs=1000, batch_size=100, min_batch_size=1,
+                 save_freq=10, stop_threshold=.9995, stop_patience=30,
+                 learning_rate=1e-3, lr_decay=None, lr_decay_factor=None,
                  grad_clip=None, hard_clip=False,
                  **kwargs):
         """
@@ -74,26 +68,25 @@ class Optimizer(object):
             The Dataset to use when training the Model.
         model : Model
             The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
-        n_epoch : int
-            how many training iterations over the dataset to go.
+        epochs : int
+            How many training iterations over the dataset to go.
         batch_size : int
             How many examples from the training dataset to use in parallel.
-        minimum_batch_size : int
+        min_batch_size : int
             The minimum number of examples required at a time (for things like time series, this would be > 1).
-        save_frequency : int, optional
+        save_freq : int, optional
             How many epochs to train between each new save of the Model's parameters.
-        early_stop_threshold : float, optional
+        stop_threshold : float, optional
             The factor by how much the best validation training score needs to improve to determine early stopping.
-        early_stop_length : int, optional
-            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        stop_patience : int, optional
+            The patience or number of epochs to wait after the stop_threshold has been reached before stopping.
         learning_rate : float
             The multiplicative amount to adjust parameters based on their gradient values.
         lr_decay : str
-            The type of decay function to use for changing the learning rate over epochs. See
-            `opendeep.utils.decay` for options.
-        lr_factor : float
-            The amount to use for the decay function when changing the learning rate over epochs. See
-            `opendeep.utils.decay` for its effect for given decay functions.
+            The decay function to use for changing the learning rate over epochs. See
+            `opendeep.utils.decay` for classes of decay and documentation.
+        lr_decay_factor : float
+            The amount of decay to use for the ``lr_decay`` type of decay.
         grad_clip : float, optional
             Whether to clip gradients. This will clip the norm of the gradients either with a hard cutoff or rescaling.
         hard_clip : bool
@@ -102,12 +95,12 @@ class Optimizer(object):
         log.info("Initializing optimizer %s", str(type(self)))
 
         # Deal with early stopping None initializations.
-        if not early_stop_threshold:
-            early_stop_threshold = 1.
-        if not save_frequency:
-            save_frequency = 1000000
-        if not early_stop_length:
-            early_stop_length = 100
+        if not stop_threshold:
+            stop_threshold = 1.
+        if not save_freq:
+            save_freq = 1000000
+        if not stop_patience:
+            stop_patience = 1
 
         # Put all init parameters in self.args so we can log the initial configuration.
         self.args = locals().copy()
@@ -140,19 +133,19 @@ class Optimizer(object):
         if lr_decay:
             self.learning_rate_decay = get_decay_function(lr_decay,
                                                           self.learning_rate,
-                                                          self.learning_rate.get_value(),
-                                                          lr_factor)
+                                                          learning_rate,
+                                                          lr_decay_factor)
         else:
             self.learning_rate_decay = False
 
         # rest of initial parameters needed for training.
         self.noise_switches = raise_to_list(self.model.get_noise_switch())
         self.batch_size = batch_size
-        self.minimum_batch_size = minimum_batch_size
-        self.n_epoch = n_epoch
-        self.save_frequency = save_frequency
-        self.early_stop_threshold = early_stop_threshold
-        self.early_stop_length = early_stop_length
+        self.min_batch_size = min_batch_size
+        self.n_epoch = epochs
+        self.save_frequency = save_freq
+        self.early_stop_threshold = stop_threshold
+        self.early_stop_length = stop_patience
         self.grad_clip = grad_clip
         self.hard_clip = hard_clip
 
@@ -390,9 +383,9 @@ class Optimizer(object):
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
         train_data = izip(*[
-            data_generator for data_generator in
+            minibatch(data_generator, self.batch_size, self.min_batch_size) for data_generator in
             self.dataset.get_subset(TRAIN, batch_size=self.batch_size,
-                                    min_batch_size=self.minimum_batch_size)
+                                    min_batch_size=self.min_batch_size)
             if data_generator is not None
         ])
         for batch in train_data:
@@ -434,7 +427,7 @@ class Optimizer(object):
             valid_data = izip(*[
                 data_generator for data_generator in
                 self.dataset.get_subset(VALID, batch_size=self.batch_size,
-                                        min_batch_size=self.minimum_batch_size)
+                                        min_batch_size=self.min_batch_size)
                 if data_generator is not None
             ])
             for batch in valid_data:
@@ -462,7 +455,7 @@ class Optimizer(object):
             test_data = izip(*[
                 data_generator for data_generator in
                 self.dataset.get_subset(TEST, batch_size=self.batch_size,
-                                        min_batch_size=self.minimum_batch_size)
+                                        min_batch_size=self.min_batch_size)
                 if data_generator is not None
             ])
             for batch in test_data:
