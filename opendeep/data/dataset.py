@@ -1,5 +1,5 @@
 """
-Generic structure for a dataset, and common sub-classes to deal with files/urls or arrays from numpy/scipy (in memory).
+Generic structure for a dataset.
 
 Attributes
 ----------
@@ -19,13 +19,6 @@ TEST : int
 # TODO: (and in the future grabbing from pipelines like spark)
 # TODO: Add methods for cleaning data, like normalizing to mean0 std1, or scaling to [min,max].
 
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 
@@ -39,7 +32,7 @@ _subsets = {TRAIN: "TRAIN", VALID: "VALID", TEST: "TEST"}
 
 def get_subset_strings(subset):
     """
-    Converts the subset integer to a string representation of TRAIN, VALID, or TEST.
+    Converts the subset integer to a string representation (e.g. TRAIN, VALID, TEST).
 
     Parameters
     ----------
@@ -56,18 +49,19 @@ def get_subset_strings(subset):
 class Dataset(object):
     """
     Default interface for a dataset object. At minimum, a Dataset needs to implement get_subset().
-    get_subset() returns the (input, label) pair of iterators over the specific subset of this dataset with the
+    get_subset() returns the (data, label) pair of iterators over the specific subset of this dataset with the
     given batch size.
     """
     def get_subset(self, subset, batch_size=1, min_batch_size=1):
         """
         This method returns the single tuple of (input_data, labels) iterators over the given subset with the given
-        batch size.
+        batch size. If an iterator doesn't exist (input_data and/or labels) for the subset, returns None in place of
+        the iterator.
 
         Parameters
         ----------
         subset : int
-            The subset indicator. Integer assigned by dataset.py module's attributes.
+            The subset indicator. Integer assigned by :mod:`opendeep.data.dataset`'s attributes.
         batch_size : int
             The number of examples to include for each iteration.
         batch_size : int

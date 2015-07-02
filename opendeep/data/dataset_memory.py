@@ -14,7 +14,7 @@ import math
 # third party libraries
 import numpy
 # internal imports
-from opendeep.data.iterators.numpy_batches import NumpyBatches
+from opendeep.data.iterators.memory import NumpyBatches
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST, _subsets
 from opendeep.utils.decorators import inherit_docs
 

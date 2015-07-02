@@ -20,7 +20,7 @@ import numpy
 from opendeep.utils.constructors import dataset_shared
 from opendeep.data.dataset import TRAIN, VALID, TEST, _subsets
 from opendeep.data.dataset_file import FileDataset
-from opendeep.data.iterators.numpy_batches import NumpyBatches
+from opendeep.data.iterators.memory import NumpyBatches
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, binarize
 

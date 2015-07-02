@@ -239,6 +239,8 @@ def numpy_one_hot(vector, n_classes=None):
     numpy.ndarray
         A matrix of the one-hot encodings of the input vector.
     """
+    vector = numpy.asarray(vector)
+    assert isinstance(vector, numpy.ndarray), "Input vector couldn't be made into numpy array."
     # check if input is vector
     assert vector.ndim == 1, "Dimension mismatch for input vector, found %d dimensions!" % vector.ndim
     assert numpy.min(vector) > -1, "Found negative numbers in the vector, need all elements to be >= 0."
