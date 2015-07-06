@@ -1,5 +1,5 @@
 """
-Generic structure for a dataset reading from files.
+Generic structure for a dataset reading from a file or directory.
 """
 # standard libraries
 import logging
@@ -7,7 +7,6 @@ import os
 import shutil
 # internal imports
 from opendeep.data.dataset import Dataset
-from opendeep.utils.file_ops import mkdir_p, get_file_type, download_file
 import opendeep.utils.file_ops as files
 from opendeep.utils.decorators import inherit_docs
 
@@ -30,7 +29,7 @@ class FileDataset(Dataset):
         The integer representing the type of file for this dataset. The file_type integer is assigned by the
         :mod:`opendeep.utils.file_ops` module.
     """
-    def __init__(self, path, source=None, filter=None):
+    def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None):
         """
         Creates a new FileDataset from the path. It installs the file from the source
         if it isn't found in the path, and determines the filetype and full path location to the file.
@@ -41,16 +40,23 @@ class FileDataset(Dataset):
             The name of the file or directory for the dataset.
         source : str, optional
             The URL path for downloading the dataset (if applicable).
-        filter : regex string or compiled regex object, optional
-            The filter to match file names against (if applicable).
+        train_filter : regex string or compiled regex object, optional
+            The regular expression filter to match training file names against (if applicable).
+        valid_filter : regex string or compiled regex object, optional
+            The regular expression filter to match validation file names against (if applicable).
+        test_filter : regex string or compiled regex object, optional
+            The regular expression filter to match testing file names against (if applicable).
         """
         try:
             self.path = os.path.realpath(path)
         except Exception:
-            log.exception("Error creating os path for FileDataset from %s" % self.path)
+            log.exception("Error creating os path for FileDataset from path %s" % self.path)
             raise
+
         self.source = source
-        self.filter = filter
+        self.train_filter = train_filter
+        self.valid_filter = valid_filter
+        self.test_filter = test_filter
 
         # install the dataset from source! (makes sure file is there and returns the type so you know how to read it)
         self.file_type = self.install()
@@ -69,82 +75,83 @@ class FileDataset(Dataset):
             as defined in the :mod:`opendeep.utils.file_ops` module.
         """
         file_type = None
-        if self.path is not None:
-            log.info('Installing dataset %s', str(self.path))
-            is_dir = os.path.isdir(self.dir)
+        download_success = True
+        found = False
+        log.info('Installing dataset %s', str(self.path))
+        is_dir = os.path.isdir(self.dir)
 
-            # construct the actual path to the dataset
-            if is_dir:
-                dataset_dir = os.path.splitext(self.path)[0]
-            else:
-                dataset_dir = os.path.split(self.path)[0]
-            # make the directory or file directory
-            try:
-                mkdir_p(dataset_dir)
-            except Exception as e:
-                log.error("Couldn't make the dataset path with directory %s and path %s",
-                          dataset_dir,
-                          str(self.path))
-                log.exception("%s", str(e))
-                self.path = None
+        # construct the actual path to the dataset
+        if is_dir:
+            dataset_dir = os.path.splitext(self.path)[0]
+        else:
+            dataset_dir = os.path.split(self.path)[0]
+        # make the directory or file directory
+        try:
+            files.mkdir_p(dataset_dir)
+        except Exception as e:
+            log.error("Couldn't make the dataset path with directory %s and path %s",
+                      dataset_dir,
+                      str(self.path))
+            log.exception("%s", str(e.message))
+            raise
 
-            # if this is a directory and it is empty, attempt to install files from source
-            if is_dir and
-
-            # check if the dataset is already in the source, otherwise download it.
-            # first check if the base filename exists - without all the extensions.
-            # then, add each extension on and keep checking until the upper level, when you download from http.
-            if self.path is not None:
-                (dirs, fname) = os.path.split(self.path)
-                split_fname = fname.split('.')
-                accumulated_name = split_fname[0]
-                found = False
-                # first check if the filename was a directory (like for the midi datasets)
+        # check if the dataset is already in the source, otherwise download it.
+        # first check if the base filename exists - without all the extensions.
+        # then, add each extension on and keep checking until the upper level, when you download from http.
+        if not is_dir:
+            (dirs, fname) = os.path.split(self.path)
+            split_fname = fname.split('.')
+            accumulated_name = split_fname[0]
+            ext_idx = 1
+            while not found and ext_idx <= len(split_fname):
                 if os.path.exists(os.path.join(dirs, accumulated_name)):
                     found = True
-                    file_type = get_file_type(os.path.join(dirs, accumulated_name))
-                    dataset_location = os.path.join(dirs, accumulated_name)
-                    log.debug('Found file %s', dataset_location)
-                # now go through the file extensions starting with the lowest level and check if the file exists
-                if not found and len(split_fname) > 1:
-                    for chunk in split_fname[1:]:
-                        accumulated_name = '.'.join((accumulated_name, chunk))
-                        file_type = get_file_type(os.path.join(dirs, accumulated_name))
-                        if file_type is not None:
-                            dataset_location = os.path.join(dirs, accumulated_name)
-                            log.debug('Found file %s', dataset_location)
-                            break
+                    file_type = files.get_file_type(os.path.join(dirs, accumulated_name))
+                    self.path = os.path.join(dirs, accumulated_name)
+                    log.debug('Found file %s', self.path)
+                elif ext_idx < len(split_fname):
+                    accumulated_name = '.'.join((accumulated_name, split_fname[ext_idx]))
+                ext_idx += 1
 
             # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
-            download_success = True
-            if self.source is not None and file_type is None:
-                download_success = download_file(self.source, dataset_location)
-                file_type = get_file_type(dataset_location)
-            elif self.source is None and file_type is None:
-                log.error("Filename %s couldn't be found, and no URL source to download was provided.",
-                          str(self.filename))
-                raise RuntimeError("Filename %s couldn't be found, and no URL source to download was provided." %
-                                   str(self.filename))
+            if not found:
+                if self.source is not None and file_type is None:
+                    # make the destination for downloading the file from source be the same as self.path,
+                    # but make sure the source filename is preserved so we can deal with the appropriate
+                    # type (i.e. if it is a .tar.gz or a .zip, we have to process it first to match what
+                    # was expected with the real self.path filename)
+                    url_filename = self.source.split('/')[-1]
+                    dest = os.path.join(dirs, url_filename)
+                    download_success = files.download_file(url=self.source, destination=dest)
+                    file_type = files.get_file_type(dest)
+                elif self.source is None and file_type is None:
+                    log.error("Filename %s couldn't be found, and no URL source to download was provided.",
+                              str(self.path))
+                    raise RuntimeError("Filename %s couldn't be found, and no URL source to download was provided." %
+                                       str(self.path))
+        # if it is a directory, check if it is empty
+        else:
 
-            # if the file type is a zip, unzip it.
-            unzip_success = True
-            if file_type is files.ZIP:
-                (dirs, fname) = os.path.split(dataset_location)
-                post_unzip = os.path.join(dirs, '.'.join(fname.split('.')[0:-1]))
-                unzip_success = files.unzip(dataset_location, post_unzip)
-                # if the unzip was successful
-                if unzip_success:
-                    # remove the zipfile and update the dataset location and file type
-                    log.debug('Removing file %s', dataset_location)
-                    os.remove(dataset_location)
-                    dataset_location = post_unzip
-                    file_type = get_file_type(dataset_location)
-            if download_success and unzip_success:
-                log.info('Installation complete. Yay!')
-            else:
-                log.warning('Something went wrong installing dataset. Boo :(')
 
-            return dataset_location, file_type
+        # if the file type is a zip, unzip it.
+        unzip_success = True
+        if file_type is files.ZIP:
+            (dirs, fname) = os.path.split(dataset_location)
+            post_unzip = os.path.join(dirs, '.'.join(fname.split('.')[0:-1]))
+            unzip_success = files.unzip(dataset_location, post_unzip)
+            # if the unzip was successful
+            if unzip_success:
+                # remove the zipfile and update the dataset location and file type
+                log.debug('Removing file %s', dataset_location)
+                os.remove(dataset_location)
+                dataset_location = post_unzip
+                file_type = files.get_file_type(dataset_location)
+        if download_success and unzip_success:
+            log.info('Installation complete. Yay!')
+        else:
+            log.warning('Something went wrong installing dataset. Boo :(')
+
+        return file_type
 
     def uninstall(self):
         """

@@ -698,7 +698,7 @@ class Model(object):
             log.debug("loading model %s parameters from %s",
                       str(type(self)), str(param_file))
             # try to grab the pickled params from the specified param_file path
-            with open(param_file, 'r') as f:
+            with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
             self.set_param_values(loaded_params)
             return True

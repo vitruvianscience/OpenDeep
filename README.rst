@@ -8,9 +8,9 @@
    :alt: OpenDeep
    :align: center
 
-==============================================================
-OpenDeep: a fully modular & extensible deep learning framework
-==============================================================
+========================================================================
+OpenDeep: a fully modular & extensible deep learning framework in Python
+========================================================================
 Developer hub: http://www.opendeep.org/
 
 OpenDeep_ is a deep learning framework for Python built from the ground up

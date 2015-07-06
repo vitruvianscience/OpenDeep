@@ -20,7 +20,6 @@ import numpy
 from opendeep.utils.constructors import dataset_shared
 from opendeep.data.dataset import TRAIN, VALID, TEST, _subsets
 from opendeep.data.dataset_file import FileDataset
-from opendeep.data.iterators.memory import NumpyBatches
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, binarize
 
@@ -77,10 +76,10 @@ class MNIST(FileDataset):
         # instantiate the Dataset class to install the dataset from the url
         log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
 
-        filename = 'mnist.pkl.gz'
+        path = '../../../../datasets/mnist.pkl.gz'
         source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
 
-        super(MNIST, self).__init__(filenames=filename, sources=source, dataset_dir=dataset_dir)
+        super(MNIST, self).__init__(path=path, source=source)
 
         # self.dataset_location now contains the os path to the dataset file
         # self.file_type tells how to load the dataset
@@ -181,10 +180,8 @@ class MNIST(FileDataset):
     def get_subset(self, subset, batch_size=1, min_batch_size=1):
         # make sure the subset is valid.
         assert subset in _subsets, "Subset %s not recognized!" % str(subset)
-
-        # return the appropriately sized iterator over the subset
-        x, y = [NumpyBatches(data, batch_size, min_batch_size) if data else None for data in self.datasets[subset]]
-        return x, y
+        # return the appropriate iterables over the subset
+        return self.datasets[subset]
 
     def sequence(self, sequence_number, rng=None):
         """

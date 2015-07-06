@@ -1,5 +1,5 @@
 """
-These are basic utilities for working with files and filepaths.
+These are basic utilities for working with files and filenames.
 
 Attributes
 ----------
@@ -42,6 +42,16 @@ TAR       = 4
 NPY       = 5
 TXT       = 6
 UNKNOWN   = 7
+_types = {
+    DIRECTORY: "DIRECTORY",
+    ZIP: "ZIP",
+    GZ: "GZ",
+    PKL: "PKL",
+    TAR: "TAR",
+    NPY: "NPY",
+    TXT: "TXT",
+    UNKNOWN: "UNKNOWN"
+}
 
 def get_filetype_string(filetype):
     """
@@ -57,24 +67,7 @@ def get_filetype_string(filetype):
     str
         The string representation such as 'ZIP', 'PKL', 'UNKNOWN', etc.
     """
-    if filetype is DIRECTORY:
-        return 'DIRECTORY'
-    elif filetype is ZIP:
-        return 'ZIP'
-    elif filetype is GZ:
-        return 'GZ'
-    elif filetype is PKL:
-        return 'PKL'
-    elif filetype is TAR:
-        return 'TAR'
-    elif filetype is NPY:
-        return 'NPY'
-    elif filetype is TXT:
-        return 'TXT'
-    elif filetype is UNKNOWN:
-        return 'UNKNOWN'
-    else:
-        return str(filetype)
+    return _types.get(filetype, str(filetype))
 
 def mkdir_p(path):
     """
@@ -102,32 +95,33 @@ def mkdir_p(path):
             log.exception('Error making directory %s', path)
             raise
 
-def find_files(path, filter=None):
+def find_files(path, path_filter=None):
     """
     Recursively walks directories in ``path`` (if it is a directory) to find the files that have names
-    matching ``filter``.
+    matching ``path_filter``.
 
     Parameters
     ----------
     path : str
         The path to the directory to walk or file to find.
-    filter : regular expression string or compiled regular expression object
-        The regular expression to match against file names.
+    path_filter : regular expression string or compiled regular expression object
+        The regular expression to match against file path names.
     """
-    if filter is not None:
-        if isinstance(filter, string_types):
-            reg = re.compile(filter)
+    if path_filter is not None:
+        if isinstance(path_filter, string_types):
+            reg = re.compile(path_filter)
         else:
-            reg = filter
+            reg = path_filter
     else:
         reg = None
 
+    path = os.path.realpath(path)
     for root, dirs, files in os.walk(path):
         for basename in files:
+            filepath = os.path.join(root, basename)
             try:
-                if reg is None or reg.match(basename) is not None:
-                    filename = os.path.join(root, basename)
-                    yield filename
+                if reg is None or reg.match(filepath) is not None:
+                    yield filepath
             except TypeError as te:
                 log.exception("TypeError exception when finding files. %s" % str(te.message))
                 raise
