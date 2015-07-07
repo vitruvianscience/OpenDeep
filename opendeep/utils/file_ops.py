@@ -28,6 +28,7 @@ import zipfile
 import tarfile
 import logging
 import re
+import gzip
 # third party
 from theano.compat.six import string_types
 
@@ -36,18 +37,20 @@ log = logging.getLogger(__name__)
 # variables for file format types
 DIRECTORY = 0
 ZIP       = 1
-GZ        = 2
-PKL       = 3
-TAR       = 4
-NPY       = 5
-TXT       = 6
-UNKNOWN   = 7
+TAR       = 2
+GZ        = 3
+TARBALL   = 4
+PKL       = 5
+NPY       = 6
+TXT       = 7
+UNKNOWN   = 8
 _types = {
     DIRECTORY: "DIRECTORY",
     ZIP: "ZIP",
     GZ: "GZ",
     PKL: "PKL",
     TAR: "TAR",
+    TARBALL: "TARBALL",
     NPY: "NPY",
     TXT: "TXT",
     UNKNOWN: "UNKNOWN"
@@ -172,7 +175,7 @@ def get_file_type(file_path):
     """
     Given a filename, try to determine the type of file from the extension into one of the categories defined as
     global variables above.
-    Currently, can be .zip, .gz, .tar, .pkl, .p, .pickle, or .txt.
+    Currently, can be .zip, .gz, .tar, .tar.gz, .pkl, .p, .pickle, or .txt.
 
     Parameters
     ----------
@@ -191,11 +194,18 @@ def get_file_type(file_path):
             return DIRECTORY
         # otherwise if it is a file
         elif os.path.isfile(file_path):
-            _, extension = os.path.splitext(file_path)
+            fname, extension = os.path.splitext(file_path)
             extension = extension.lower()
             if extension == '.zip':
                 return ZIP
             elif extension == '.gz':
+                # check if tarball
+                _, ext2 = os.path.splitext(fname)
+                if ext2:
+                    ext2 = ext2.lower()
+                    if ext2 == '.tar':
+                        return TARBALL
+                # otherwise just gz
                 return GZ
             elif extension == '.tar':
                 return TAR
@@ -267,4 +277,36 @@ def untar(source_filename, destination_dir='.'):
             return True
     except:
         log.exception('Error unzipping tarball data from %s to %s', source_filename, destination_dir)
+        return False
+
+def gunzip(source_filename, destination_dir='.'):
+    """
+    This will unzip a .gz to a destination directory.
+
+    Parameters
+    ----------
+    source_filename : str
+        Filesystem path to the file to gunzip.
+    destination_dir : str
+        Filesystem path for the file to gunzip into.
+
+    Returns
+    -------
+    bool
+        Whether or not it was successful.
+    """
+    source_filename = os.path.realpath(source_filename)
+    destination_dir = os.path.realpath(destination_dir)
+    log.debug('Unzipping gz data from %s to %s', source_filename, destination_dir)
+    fpath, _ = os.path.splitext(source_filename)
+    _, fname = os.path.split(fpath)
+    dest_file = os.path.join(destination_dir, fname)
+    try:
+        with gzip.open(source_filename, 'rb') as gz:
+            data = gz.read()
+            with open(dest_file, 'wb') as f:
+                f.write(data)
+            return True
+    except:
+        log.exception('Error unzipping gz data from %s to %s', source_filename, destination_dir)
         return False

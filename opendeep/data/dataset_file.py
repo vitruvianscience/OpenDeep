@@ -6,7 +6,7 @@ import logging
 import os
 import shutil
 # internal imports
-from opendeep.data.dataset import Dataset
+from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 import opendeep.utils.file_ops as files
 from opendeep.utils.decorators import inherit_docs
 
@@ -78,7 +78,7 @@ class FileDataset(Dataset):
         download_success = True
         found = False
         log.info('Installing dataset %s', str(self.path))
-        is_dir = os.path.isdir(self.dir)
+        is_dir = os.path.isdir(self.path)
 
         # construct the actual path to the dataset
         if is_dir:
@@ -112,40 +112,46 @@ class FileDataset(Dataset):
                 elif ext_idx < len(split_fname):
                     accumulated_name = '.'.join((accumulated_name, split_fname[ext_idx]))
                 ext_idx += 1
+        elif os.listdir(self.path):
+            found = True
+            file_type = files.get_file_type(self.path)
 
-            # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
-            if not found:
-                if self.source is not None and file_type is None:
-                    # make the destination for downloading the file from source be the same as self.path,
-                    # but make sure the source filename is preserved so we can deal with the appropriate
-                    # type (i.e. if it is a .tar.gz or a .zip, we have to process it first to match what
-                    # was expected with the real self.path filename)
-                    url_filename = self.source.split('/')[-1]
-                    dest = os.path.join(dirs, url_filename)
-                    download_success = files.download_file(url=self.source, destination=dest)
-                    file_type = files.get_file_type(dest)
-                elif self.source is None and file_type is None:
-                    log.error("Filename %s couldn't be found, and no URL source to download was provided.",
-                              str(self.path))
-                    raise RuntimeError("Filename %s couldn't be found, and no URL source to download was provided." %
-                                       str(self.path))
-        # if it is a directory, check if it is empty
-        else:
+        # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
+        download_dest = None
+        if not found:
+            if self.source is not None and file_type is None:
+                # make the destination for downloading the file from source be the same as self.path,
+                # but make sure the source filename is preserved so we can deal with the appropriate
+                # type (i.e. if it is a .tar.gz or a .zip, we have to process it first to match what
+                # was expected with the real self.path filename)
+                url_filename = self.source.split('/')[-1]
+                download_dest = os.path.join(dataset_dir, url_filename)
+                download_success = files.download_file(url=self.source, destination=download_dest)
+                file_type = files.get_file_type(download_dest)
+            elif self.source is None and file_type is None:
+                log.error("Filename %s couldn't be found, and no URL source to download was provided.",
+                          str(self.path))
+                raise RuntimeError(
+                    "Filename %s couldn't be found, and no URL source to download was provided." %
+                    str(self.path))
 
-
-        # if the file type is a zip, unzip it.
+        # if the file type is a zip and different than self.path, unzip it.
         unzip_success = True
-        if file_type is files.ZIP:
-            (dirs, fname) = os.path.split(dataset_location)
-            post_unzip = os.path.join(dirs, '.'.join(fname.split('.')[0:-1]))
-            unzip_success = files.unzip(dataset_location, post_unzip)
+        if file_type is not files.get_file_type(self.path) and download_dest is not None:
+            unzip_success = False
+            if file_type is files.ZIP:
+                unzip_success = files.unzip(download_dest, dataset_dir)
+            elif file_type is files.TARBALL or file_type is files.TAR:
+                unzip_success = files.untar(download_dest, dataset_dir)
+            elif file_type is files.GZ:
+                unzip_success = files.gunzip(download_dest, dataset_dir)
             # if the unzip was successful
             if unzip_success:
                 # remove the zipfile and update the dataset location and file type
-                log.debug('Removing file %s', dataset_location)
-                os.remove(dataset_location)
-                dataset_location = post_unzip
-                file_type = files.get_file_type(dataset_location)
+                log.debug('Removing file %s', download_dest)
+                os.remove(download_dest)
+                file_type = files.get_file_type(self.path)
+
         if download_success and unzip_success:
             log.info('Installation complete. Yay!')
         else:
@@ -155,25 +161,53 @@ class FileDataset(Dataset):
 
     def uninstall(self):
         """
-        Method to delete dataset files from its dataset_location on disk.
+        Method to delete dataset files from its path on disk.
 
         .. warning::
             This method currently uses the shutil.rmtree method, which may be unsafe. A better bet would be to delete
             the dataset yourself from disk.
         """
         # TODO: Check if this shutil.rmtree is unsafe...
-        log.info('Uninstalling (removing) dataset %s', self.dataset_location)
-        if self.dataset_location is not None and os.path.exists(self.dataset_location):
+        log.info('Uninstalling (removing) dataset %s', self.path)
+        if self.path is not None and os.path.exists(self.path):
             # If we are trying to remove something not from the dataset directory, give a warning
-            if not self.dataset_location.startswith(self.dataset_dir):
+            if not self.path.startswith(self.dataset_dir):
                 log.critical("ATTEMPTING TO REMOVE A FILE NOT FROM THE DATASET DIRECTORY. "
                              "LOCATION IS %s AND THE DATASET DIRECTORY IS %s",
-                             self.dataset_location,
+                             self.path,
                              self.dataset_dir)
-            shutil.rmtree(self.dataset_location)
+            shutil.rmtree(self.path)
         else:
-            log.debug('dataset_location was not valid. It was %s', str(self.dataset_location))
+            log.debug('path was not valid. It was %s', str(self.path))
         log.info('Uninstallation (removal) successful!')
 
     def get_subset(self, subset):
-        raise NotImplementedError()
+        # return chained iterators over the files for the subset given the filters
+        if subset is TRAIN:
+            return _yield_readline(self.path, self.train_filter), None
+        elif subset is VALID and self.valid_filter is not None:
+            return _yield_readline(self.path, self.valid_filter), None
+        elif subset is TEST and self.test_filter is not None:
+            return _yield_readline(self.path, self.test_filter), None
+
+def _yield_readline(path, filter):
+    """
+    Finds the files in the path (with the regex filter applied) and yields their list of lines
+    from readlines()
+
+    Parameters
+    ----------
+    path : str
+        System path to find the files
+    filter : str or compiled regex
+        Regex filter to apply to filepaths
+
+    Yields
+    ------
+    Str
+        Each line from each file found in the path
+    """
+    for fname in files.find_files(path, filter):
+        with open(fname) as f:
+            for line in f:
+                yield line

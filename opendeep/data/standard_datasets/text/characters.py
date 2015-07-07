@@ -1,8 +1,8 @@
-'''
+"""
 Provides a dataset of sequences of characters from a text file.
 
 Based on https://github.com/karpathy/char-rnn/blob/master/util/CharSplitLMMinibatchLoader.lua
-'''
+"""
 __authors__ = "Markus Beissinger"
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __credits__ = ["Markus Beissinger"]
@@ -22,6 +22,7 @@ from opendeep.data.dataset import TRAIN, VALID, TEST, get_subset_strings
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, make_time_units_string
+from opendeep.utils.decorators import inherit_docs
 
 try:
     import cPickle as pickle
@@ -30,8 +31,9 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+@inherit_docs
 class CharsLM(FileDataset):
-    '''
+    """
     Object for getting character sequence from a text file. This dataset is for creating a character-level
     language model. The input will be sequences of characters from the file, and the labels will be the same
     sequence but shifted one character forward (for the task of predicting the next character in the sequence).
@@ -54,7 +56,7 @@ class CharsLM(FileDataset):
         The size of the vocab (input_size for models).
     length : int
         The total size of the dataset # sequences.
-    '''
+    """
     def __init__(self, filename, seq_length=120,
                  train_split=0.95, valid_split=0.05,
                  dataset_dir='../../datasets', source=None):
@@ -174,7 +176,7 @@ class CharsLM(FileDataset):
             self.test_X = None
             self.test_Y = None
 
-    def getSubset(self, subset):
+    def get_subset(self, subset):
         """
         Returns the (x, y) pair of shared variables for the given train, validation, or test subset.
 
@@ -197,27 +199,3 @@ class CharsLM(FileDataset):
         else:
             log.error('Subset %s not recognized!', get_subset_strings(subset))
             return None, None
-
-    def getDataShape(self, subset):
-        '''
-        Returns the shape of the input data for the given subset
-
-        Parameters
-        ----------
-        subset : int
-            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
-
-        Returns
-        -------
-        tuple
-            Return the shape of this dataset's subset in a (N, D) tuple where N=#examples and D=dimensionality
-        '''
-        if subset is TRAIN:
-            return self._train_len, self._seq_len, self.vocab_size
-        elif subset is VALID:
-            return self._valid_len, self._seq_len, self.vocab_size
-        elif subset is TEST:
-            return self._test_len, self._seq_len, self.vocab_size
-        else:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return None

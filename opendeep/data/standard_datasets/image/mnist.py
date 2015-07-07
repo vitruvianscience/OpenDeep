@@ -3,13 +3,6 @@ Provides the MNIST handwritten digit dataset.
 
 See: http://yann.lecun.com/exdb/mnist/
 '''
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import gzip
@@ -17,11 +10,11 @@ import math
 # third party libraries
 import numpy
 # internal imports
-from opendeep.utils.constructors import dataset_shared
 from opendeep.data.dataset import TRAIN, VALID, TEST, _subsets
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, binarize
+from opendeep.utils.decorators import inherit_docs
 
 try:
     import cPickle as pickle
@@ -30,8 +23,9 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+@inherit_docs
 class MNIST(FileDataset):
-    '''
+    """
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets. http://www.iro.umontreal.ca/~lisa/deep/data/mnist/
 
@@ -49,9 +43,11 @@ class MNIST(FileDataset):
         The testing input variables.
     test_Y : shared variable
         The testing input labels.
-    '''
+    """
     def __init__(self, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
-                 dataset_dir='../../datasets', sequence_number=0, seq_3d=False, seq_length=30, rng=None):
+                 sequence_number=0, seq_3d=False, seq_length=30, rng=None,
+                 path='../../datasets/mnist.pkl.gz',
+                 source='http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'):
         """
         Parameters
         ----------
@@ -63,8 +59,6 @@ class MNIST(FileDataset):
             Flag to convert the labels to one-hot encoding rather than their normal integers.
         concat_train_valid : bool, optional
             Flag to concatenate the training and validation datasets together. This would be the original split.
-        dataset_dir : str, optional
-            The `dataset_dir` parameter to a ``FileDataset``.
         sequence_number : int, optional
             The sequence method to use if we want to put the input images into a specific order. 0 defaults to random.
         seq_3d : bool, optional
@@ -72,25 +66,26 @@ class MNIST(FileDataset):
             3D tensors (batches, subsequences, data) or 2D (sequence, data).
         rng : random, optional
             The random number generator to use when sequencing.
+        path : str, optional
+            The `path` parameter to a ``FileDataset``.
+        source : str, optional
+            The `source` parameter to a ``FileDataset``.
         """
         # instantiate the Dataset class to install the dataset from the url
         log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
 
-        path = '../../../../datasets/mnist.pkl.gz'
-        source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
-
         super(MNIST, self).__init__(path=path, source=source)
 
-        # self.dataset_location now contains the os path to the dataset file
+        # self.path now contains the os path to the dataset file
         # self.file_type tells how to load the dataset
         # load the dataset into memory
         if self.file_type is file_ops.GZ:
             (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
-                gzip.open(self.dataset_location, 'rb')
+                gzip.open(self.path, 'rb')
             )
         else:
             (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
-                open(self.dataset_location, 'r')
+                open(self.path, 'r')
             )
 
         if concat_train_valid:
@@ -162,16 +157,6 @@ class MNIST(FileDataset):
             log.debug('Train shape is: %s', str(self._train_shape))
             log.debug('Valid shape is: %s', str(self._valid_shape))
             log.debug('Test shape is: %s', str(self._test_shape))
-
-        # log.debug("loading datasets into shared variables")
-        # self.train_X = dataset_shared(self.train_X, name='mnist_train_x', borrow=True)
-        # self.train_Y = dataset_shared(self.train_Y, name='mnist_train_y', borrow=True)
-        #
-        # self.valid_X = dataset_shared(self.valid_X, name='mnist_valid_x', borrow=True)
-        # self.valid_Y = dataset_shared(self.valid_Y, name='mnist_valid_y', borrow=True)
-        #
-        # self.test_X = dataset_shared(self.test_X, name='mnist_test_x', borrow=True)
-        # self.test_Y = dataset_shared(self.test_Y, name='mnist_test_y', borrow=True)
 
         self.datasets = {TRAIN: [self.train_X, self.train_Y],
                          VALID: [self.valid_X, self.valid_Y],
@@ -348,10 +333,13 @@ def _sequence3_indices(labels, classes=10):
 def _sequence4_indices(labels, classes=10):
     # make sure labels are integers
     labels = [label.astype('int32') for label in labels]
+
     def even(n):
         return n % 2 == 0
+
     def odd(n):
         return not even(n)
+
     sequence = []
     pool = []
     for _ in range(classes):
