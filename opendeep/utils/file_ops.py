@@ -119,15 +119,23 @@ def find_files(path, path_filter=None):
         reg = None
 
     path = os.path.realpath(path)
-    for root, dirs, files in os.walk(path):
-        for basename in files:
-            filepath = os.path.join(root, basename)
-            try:
-                if reg is None or reg.match(filepath) is not None:
-                    yield filepath
-            except TypeError as te:
-                log.exception("TypeError exception when finding files. %s" % str(te.message))
-                raise
+    if os.path.isdir(path):
+        for root, dirs, files in os.walk(path):
+            for basename in files:
+                filepath = os.path.join(root, basename)
+                try:
+                    if reg is None or reg.match(filepath) is not None:
+                        yield filepath
+                except TypeError as te:
+                    log.exception("TypeError exception when finding files. %s" % str(te.message))
+                    raise
+    elif os.path.isfile(path):
+        try:
+            if reg is None or reg.match(path) is not None:
+                yield path
+        except TypeError as te:
+            log.exception("TypeError exception when finding files. %s" % str(te.message))
+            raise
 
 def init_empty_file(filename):
     """

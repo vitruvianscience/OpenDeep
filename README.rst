@@ -76,22 +76,20 @@ Dependencies
 
 * Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
 
+* NLTK_ (optional): if you want nlp functions like word tokenization.
+
 All of these Python dependencies (not the system-specific ones like CUDA or HDF5), can be installed with :code:`pip install -r requirements.txt` inside the root OpenDeep folder.
 
 .. _installation instructions here: http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions
-
 .. _CUDA drivers: https://developer.nvidia.com/cuda-toolkit
 .. _instructions for setting up Theano for the GPU: http://deeplearning.net/software/theano/tutorial/using_gpu.html
 .. _EC2 gpu server with Theano: http://markus.com/install-theano-on-aws
-
 .. _CuDNN: https://developer.nvidia.com/cuDNN
 .. _Theano cuDNN integration: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
-
 .. _Pillow (PIL): https://pillow.readthedocs.org/installation.html
-
 .. _PyYAML: http://pyyaml.org/
-
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
+.. _NLTK: http://www.nltk.org/
 
 Install from source
 -------------------

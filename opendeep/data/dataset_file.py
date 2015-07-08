@@ -5,12 +5,44 @@ Generic structure for a dataset reading from a file or directory.
 import logging
 import os
 import shutil
+import time
+import warnings
+# third party
+try:
+    import nltk
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
 # internal imports
 from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 import opendeep.utils.file_ops as files
 from opendeep.utils.decorators import inherit_docs
+from opendeep.utils.misc import numpy_one_hot, make_time_units_string
 
 log = logging.getLogger(__name__)
+
+def _yield_readline(path, filter):
+    """
+    Finds the files in the path (with the regex filter applied) and yields their list of lines
+    from readlines()
+
+    Parameters
+    ----------
+    path : str
+        System path to find the files
+    filter : str or compiled regex
+        Regex filter to apply to filepaths
+
+    Yields
+    ------
+    Str
+        Each line from each file found in the path
+    """
+    for fname in files.find_files(path, filter):
+        with open(fname, 'rb') as f:
+            for line in f:
+                yield line
+
 
 @inherit_docs
 class FileDataset(Dataset):
@@ -190,24 +222,132 @@ class FileDataset(Dataset):
         elif subset is TEST and self.test_filter is not None:
             return _yield_readline(self.path, self.test_filter), None
 
-def _yield_readline(path, filter):
+@inherit_docs
+class TextDataset(FileDataset):
     """
-    Finds the files in the path (with the regex filter applied) and yields their list of lines
-    from readlines()
-
-    Parameters
-    ----------
-    path : str
-        System path to find the files
-    filter : str or compiled regex
-        Regex filter to apply to filepaths
-
-    Yields
-    ------
-    Str
-        Each line from each file found in the path
+    This gives a file-based dataset for working with text (either characters or words).
+    It will construct a vocabulary dictionary with each token.
     """
-    for fname in files.find_files(path, filter):
-        with open(fname) as f:
-            for line in f:
-                yield line
+    def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None,
+                 vocab=None, unk_token="<UNK>", level="char", preprocess=None):
+        """
+        Initialize a text-based dataset.
+
+        Parameters
+        ----------
+        path : str
+            The name of the file or directory for the dataset.
+        source : str, optional
+            The URL path for downloading the dataset (if applicable).
+        train_filter : regex string or compiled regex object, optional
+            The regular expression filter to match training file names against (if applicable).
+        valid_filter : regex string or compiled regex object, optional
+            The regular expression filter to match validation file names against (if applicable).
+        test_filter : regex string or compiled regex object, optional
+            The regular expression filter to match testing file names against (if applicable).
+        vocab : dict, optional
+            A starting dictionary to use when converting tokens to numbers.
+        unk_token : str, optional
+            The representation for an unknown token to use in the vocab dictionary.
+        level : str, optional
+            Either ``char``, ``word``, or ``line``, saying how to process the text.
+            For ``char``, data will be character-level.
+            For ``word``, data will be split by whitespace.
+            For ``line``, data will be split by newline.
+        preprocess : function, optional
+            A function to apply to data directly from path (i.e. lambda s: s.lower() for lowercase)
+        """
+        super(TextDataset, self).__init__(path=path, source=source,
+                                          train_filter=train_filter, valid_filter=valid_filter, test_filter=test_filter)
+        level = level.lower()
+        levels = ["char", "word", "line"]
+        assert level in levels, "level parameter needs to be one of %s, found %s!" % (str(levels), level)
+        if level == "word":
+            if not NLTK_AVAILABLE:
+                warnings.warn("NLTK isn't installed - going to split strings by whitespace. Highly recommended "
+                              "that you install nltk for better word tokenization.")
+        self.unk_token = unk_token
+        self.level = level
+        self.preprocess = preprocess
+
+        # Create our vocab dictionary if it doesn't exist!
+        self.vocab = vocab or self.compile_vocab()
+        self.vocab_inverse = {v:k for k,v in self.vocab.items()}
+
+    def tokens(self, filter=None):
+        """
+        Returns all tokens in the path (with regex filter applied) given the level and preprocessing.
+
+        Parameters
+        ----------
+        filter : regex string or compiled regex object, optional
+            The regular expression filter to match file names against (if applicable).
+        """
+        for fname in files.find_files(self.path, filter):
+            with open(fname, 'r') as f:
+                for line in f:
+                    if self.preprocess is not None:
+                        line = self.preprocess(line)
+                    if self.level == "char":
+                        tokens = line
+                    elif self.level == "word":
+                        if NLTK_AVAILABLE:
+                            tokens = nltk.tokenize.word_tokenize(line)
+                        else:
+                            tokens = line.split()
+                    elif self.level == "line":
+                        tokens = [line]
+                    else:
+                        tokens = []
+                    for token in tokens:
+                        yield token
+
+    def compile_vocab(self):
+        """
+        Creates a dictionary mapping tokens (words or characters) to integers given the level and preprocessing.
+        """
+        log.debug("Creating vocabulary...")
+        t = time.time()
+        vocab = {self.unk_token: 0}
+        i = 1
+        for token in self.tokens():
+            if token not in vocab:
+                vocab[token] = i
+                i += 1
+        log.debug("Vocab took %s to create." % make_time_units_string(time.time() - t))
+        return vocab
+
+    def vectorize_tokens(self, filter=None):
+        """
+        Generates the one-hot vectorized tokens from the files.
+
+        Parameters
+        ----------
+        filter : regex string or compiled regex object, optional
+            The regular expression filter to match file names against (if applicable).
+        """
+        for token in self.tokens(filter):
+            rep = self.vocab.get(token, self.vocab[self.unk_token])
+            yield numpy_one_hot([rep], n_classes=len(self.vocab))[0]
+
+    def get_subset(self, subset):
+        if subset is TRAIN:
+            # labels is the same generator as data, just advanced forward by one.
+            labels_gen = self.vectorize_tokens(self.train_filter)
+            # advance forward
+            next(labels_gen)
+            return self.vectorize_tokens(self.train_filter), labels_gen
+        elif subset is VALID and self.valid_filter is not None:
+            # labels is the same generator as data, just advanced forward by one.
+            labels_gen = self.vectorize_tokens(self.valid_filter)
+            # advance forward
+            next(labels_gen)
+            return self.vectorize_tokens(self.valid_filter), labels_gen
+        elif subset is TEST and self.test_filter is not None:
+            # labels is the same generator as data, just advanced forward by one.
+            labels_gen = self.vectorize_tokens(self.test_filter)
+            # advance forward
+            next(labels_gen)
+            return self.vectorize_tokens(self.test_filter), labels_gen
+        else:
+            return None, None

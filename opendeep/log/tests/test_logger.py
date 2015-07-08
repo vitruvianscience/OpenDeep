@@ -6,7 +6,6 @@ from StringIO import StringIO
 import logging
 # internal references
 import opendeep.log.logger as logger
-from opendeep.utils.file_ops import mkdir_p
 
 class TestLogger(unittest.TestCase):
     def setUp(self):
