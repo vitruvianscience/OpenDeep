@@ -5,14 +5,6 @@ which represents everything from a single layer to a full-blown deep network.
 Models are the reusable, modular building blocks for deep networks. Their power comes from
 their ability to connect with other Models.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os
@@ -25,7 +17,8 @@ from theano.compat.python2x import OrderedDict  # use this compatibility Ordered
 from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
 from opendeep.utils.constructors import function
-from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
+from opendeep.utils.misc import set_shared_values, get_shared_values, \
+    make_time_units_string, raise_to_list, add_kwargs_to_dict
 from opendeep.utils.file_ops import mkdir_p
 
 try:

@@ -33,7 +33,7 @@ from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
 from opendeep.utils.constructors import sharedX, function
-from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST, get_subset_strings
+from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
@@ -121,6 +121,11 @@ class Optimizer(object):
                                          "Found %s" % str(type(model))
         assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! " \
                                              "Found %s" % str(type(dataset))
+
+        n_model_inputs = len(raise_to_list(model.get_inputs()))
+        n_model_targets = len(raise_to_list(model.get_targets()))
+        # make sure the number of inputs/targets matches up with the dataset properties
+
 
         self.model = model
         self.dataset = dataset
