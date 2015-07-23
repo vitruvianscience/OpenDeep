@@ -33,7 +33,7 @@ from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
 from opendeep.utils.constructors import sharedX, function
-from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
+from opendeep.data.dataset import Dataset
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
@@ -125,7 +125,6 @@ class Optimizer(object):
         n_model_inputs = len(raise_to_list(model.get_inputs()))
         n_model_targets = len(raise_to_list(model.get_targets()))
         # make sure the number of inputs/targets matches up with the dataset properties
-
 
         self.model = model
         self.dataset = dataset
@@ -297,8 +296,8 @@ class Optimizer(object):
             train_functions.append(f_learn)
 
         # figure out if we want valid and test
-        self.valid_flag = (self.dataset.get_subset(VALID)[0] is not None) and (len(self.valid_monitors_dict) > 0)
-        self.test_flag = (self.dataset.get_subset(TEST)[0] is not None) and (len(self.test_monitors_dict) > 0)
+        self.valid_flag = (self.dataset.valid_inputs is not None) and (len(self.valid_monitors_dict) > 0)
+        self.test_flag = (self.dataset.test_inputs is not None) and (len(self.test_monitors_dict) > 0)
         # Now compile the monitor functions!
         log.debug("Compiling monitor functions...")
         monitor_t = time.time()
@@ -368,7 +367,6 @@ class Optimizer(object):
         log.info("------------TOTAL %s TRAIN TIME TOOK %s---------",
                  str(type(self.model)), make_time_units_string(time.time() - start_time))
 
-
     def _perform_one_epoch(self, f_learn, plot=None):
         """
         Performs a single training iteration with the given learn function.
@@ -384,15 +382,18 @@ class Optimizer(object):
             switch_vals = [switch.get_value() for switch in self.noise_switches]
             [switch.set_value(1.) for switch in self.noise_switches]
 
-        # train
+        #########
+        # train #
+        #########
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
-        train_data = izip(*[
-            minibatch(data_generator, self.batch_size, self.min_batch_size) for data_generator in
-            self.dataset.get_subset(TRAIN, batch_size=self.batch_size,
-                                    min_batch_size=self.min_batch_size)
-            if data_generator is not None
-        ])
+        train_data = minibatch(self.dataset.train_inputs, self.batch_size, self.min_batch_size)
+        if self.dataset.train_targets is not None:
+            train_data = izip(
+                train_data,
+                minibatch(self.dataset.train_targets, self.batch_size, self.min_batch_size)
+            )
+
         for batch in train_data:
             _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
@@ -412,10 +413,10 @@ class Optimizer(object):
             log.info('Train monitors: %s', str(current_mean_monitors))
         # send the values to their outservices
         if self.train_outservice:
-            self.train_outservice.write(mean_train, TRAIN)
+            self.train_outservice.write(mean_train, "train")
         for name, service in self.train_monitors_outservice_dict.items():
             if name in current_mean_monitors and service:
-                service.write(current_mean_monitors[name], TRAIN)
+                service.write(current_mean_monitors[name], "train")
         # if there is a plot, also send them over!
         if plot:
             current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
@@ -426,15 +427,17 @@ class Optimizer(object):
             log.debug("Turning off %s noise switches", str(len(self.noise_switches)))
             [switch.set_value(0.) for switch in self.noise_switches]
 
-        # valid
-        if self.valid_flag:
+        #########
+        # valid #
+        #########
+        if self.dataset.valid_inputs is not None and len(self.valid_monitors_dict) > 0:
             valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
-            valid_data = izip(*[
-                data_generator for data_generator in
-                self.dataset.get_subset(VALID, batch_size=self.batch_size,
-                                        min_batch_size=self.min_batch_size)
-                if data_generator is not None
-            ])
+            valid_data = minibatch(self.dataset.valid_inputs, self.batch_size, self.min_batch_size)
+            if self.dataset.valid_targets is not None:
+                valid_data = izip(
+                    valid_data,
+                    minibatch(self.dataset.valid_targets, self.batch_size, self.min_batch_size)
+                )
             for batch in valid_data:
                 _outs = raise_to_list(self.valid_monitor_function(*batch))
                 current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
@@ -449,39 +452,21 @@ class Optimizer(object):
             # send the values to their outservices
             for name, service in self.valid_monitors_outservice_dict.items():
                 if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], VALID)
+                    service.write(current_mean_monitors[name], "valid")
             # if there is a plot, also send them over!
             if plot:
                 plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
-        #test
-        if self.test_flag:
-            test_monitors = {key: [] for key in self.test_monitors_dict.keys()}
-            test_data = izip(*[
-                data_generator for data_generator in
-                self.dataset.get_subset(TEST, batch_size=self.batch_size,
-                                        min_batch_size=self.min_batch_size)
-                if data_generator is not None
-            ])
-            for batch in test_data:
-                _outs = raise_to_list(self.test_monitor_function(*batch))
-                current_monitors = zip(self.test_monitors_dict.keys(), _outs)
-                for name, val in current_monitors:
-                    val = numpy.asarray(val)
-                    test_monitors[name].append(val)
+        ########
+        # test #
+        ########
+        self._compute_over_subset("test", self.dataset.test_inputs, self.dataset.test_targets,
+                                  self.test_monitors_dict, self.test_monitor_function,
+                                  self.test_monitors_outservice_dict, plot)
 
-            # get the mean values for the batches
-            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in test_monitors.items()}
-            # log the mean values!
-            log.info('Test monitors: %s', str(current_mean_monitors))
-            # send the values to their outservices
-            for name, service in self.test_monitors_outservice_dict.items():
-                if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], TEST)
-            # if there is a plot, also send them over!
-            if plot:
-                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
-
+        ###########
+        # cleanup #
+        ###########
         # check for early stopping on train costs
         cost = numpy.sum(train_costs)
         if cost < self.best_cost * self.early_stop_threshold:
@@ -525,6 +510,37 @@ class Optimizer(object):
 
         # return whether or not to stop this epoch
         return stop
+
+    def _compute_over_subset(self, subset, inputs, targets,
+                             monitors_dict, monitor_function, monitors_outservice_dict,
+                             plot):
+        if inputs is not None and len(monitors_dict) > 0:
+            monitors = {key: [] for key in monitors_dict.keys()}
+            data = minibatch(inputs, self.batch_size, self.min_batch_size)
+            if targets is not None:
+                data = izip(
+                    data,
+                    minibatch(targets, self.batch_size, self.min_batch_size)
+                )
+
+            for batch in data:
+                _outs = raise_to_list(monitor_function(*batch))
+                current_monitors = zip(monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    val = numpy.asarray(val)
+                    monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in monitors.items()}
+            # log the mean values!
+            log.info('%s monitors: %s', (subset, str(current_mean_monitors)))
+            # send the values to their outservices
+            for name, service in monitors_outservice_dict.items():
+                if name in current_mean_monitors and service:
+                    service.write(current_mean_monitors[name], "test")
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
     def get_decay_params(self):
         """

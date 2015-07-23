@@ -7,11 +7,10 @@ from opendeep.data.standard_datasets.midi.musedata import MuseData
 from opendeep.data.standard_datasets.midi.jsb_chorales import JSBChorales
 from opendeep.data.standard_datasets.midi.nottingham import Nottingham
 from opendeep.data.standard_datasets.midi.piano_midi_de import PianoMidiDe
-from opendeep.data.dataset import TRAIN, VALID, TEST
 from opendeep.log.logger import config_root_logger
 
 
-class TestMuse(unittest.TestCase):
+class TestMidi(unittest.TestCase):
 
     def setUp(self):
         print("setting up!")

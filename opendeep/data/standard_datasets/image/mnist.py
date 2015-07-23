@@ -10,11 +10,9 @@ import math
 # third party libraries
 import numpy
 # internal imports
-from opendeep.data.dataset import TRAIN, VALID, TEST, _subsets
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
 from opendeep.utils.misc import numpy_one_hot, binarize
-from opendeep.utils.decorators import inherit_docs
 
 try:
     import cPickle as pickle
@@ -23,26 +21,10 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-@inherit_docs
 class MNIST(FileDataset):
     """
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets. http://www.iro.umontreal.ca/~lisa/deep/data/mnist/
-
-    Attributes
-    ----------
-    train_X : shared variable
-        The training input variables.
-    train_Y : shared variable
-        The training input labels.
-    valid_X : shared variable
-        The validation input variables.
-    valid_Y : shared variable
-        The validation input labels.
-    test_X : shared variable
-        The testing input variables.
-    test_Y : shared variable
-        The testing input labels.
     """
     def __init__(self, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
                  sequence_number=0, seq_3d=False, seq_length=30, rng=None,
@@ -80,18 +62,22 @@ class MNIST(FileDataset):
         # self.file_type tells how to load the dataset
         # load the dataset into memory
         if self.file_type is file_ops.GZ:
-            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
+            (self.train_inputs, self.train_targets), \
+            (self.valid_inputs, self.valid_targets), \
+            (self.test_inputs, self.test_targets) = pickle.load(
                 gzip.open(self.path, 'rb')
             )
         else:
-            (self.train_X, self.train_Y), (self.valid_X, self.valid_Y), (self.test_X, self.test_Y) = pickle.load(
+            (self.train_inputs, self.train_targets), \
+            (self.valid_inputs, self.valid_targets), \
+            (self.test_inputs, self.test_targets) = pickle.load(
                 open(self.path, 'r')
             )
 
         if concat_train_valid:
             log.debug('Concatenating train and valid sets together...')
-            self.train_X = numpy.concatenate((self.train_X, self.valid_X))
-            self.train_Y = numpy.concatenate((self.train_Y, self.valid_Y))
+            self.train_inputs = numpy.concatenate((self.train_inputs, self.valid_inputs))
+            self.train_targets = numpy.concatenate((self.train_targets, self.valid_targets))
 
         # sequence the dataset
         if sequence_number is not None:
@@ -100,73 +86,63 @@ class MNIST(FileDataset):
         # make optional binary
         if binary:
             log.debug('Making MNIST X values binary with cutoff %s', str(binary_cutoff))
-            self.train_X = binarize(self.train_X, binary_cutoff)
-            self.valid_X = binarize(self.valid_X, binary_cutoff)
-            self.test_X  = binarize(self.test_X, binary_cutoff)
+            self.train_inputs = binarize(self.train_inputs, binary_cutoff)
+            self.valid_inputs = binarize(self.valid_inputs, binary_cutoff)
+            self.test_inputs  = binarize(self.test_inputs, binary_cutoff)
 
         # make optional one-hot labels
         if one_hot:
-            self.train_Y = numpy_one_hot(self.train_Y, n_classes=10)
-            self.valid_Y = numpy_one_hot(self.valid_Y, n_classes=10)
-            self.test_Y  = numpy_one_hot(self.test_Y, n_classes=10)
+            self.train_targets = numpy_one_hot(self.train_targets, n_classes=10)
+            self.valid_targets = numpy_one_hot(self.valid_targets, n_classes=10)
+            self.test_targets  = numpy_one_hot(self.test_targets, n_classes=10)
 
         # optionally make 3D instead of 2D
         if seq_3d:
             log.debug("Making 3D....")
             # chop up into sequences of length seq_length
             # first make sure to chop off the remainder of the data so seq_length can divide evenly.
-            if self.train_X.shape[0] % seq_length != 0:
-                length, dim = self.train_X.shape
-                if self.train_Y.ndim == 1:
+            if self.train_inputs.shape[0] % seq_length != 0:
+                length, dim = self.train_inputs.shape
+                if self.train_targets.ndim == 1:
                     ydim = 1
                 else:
-                    ydim = self.train_Y.shape[-1]
-                self.train_X = self.train_X[:seq_length * math.floor(length / seq_length)]
-                self.train_Y = self.train_Y[:seq_length * math.floor(length / seq_length)]
+                    ydim = self.train_targets.shape[-1]
+                self.train_inputs = self.train_inputs[:seq_length * math.floor(length / seq_length)]
+                self.train_targets = self.train_targets[:seq_length * math.floor(length / seq_length)]
                 # now create the 3D tensor of sequences - they will be (num_sequences, sequence_size, 784)
-                self.train_X = numpy.reshape(self.train_X, (length / seq_length, seq_length, dim))
-                self.train_Y = numpy.reshape(self.train_Y, (length / seq_length, seq_length, ydim))
+                self.train_inputs = numpy.reshape(self.train_inputs, (length / seq_length, seq_length, dim))
+                self.train_targets = numpy.reshape(self.train_targets, (length / seq_length, seq_length, ydim))
 
-            if self.valid_X.shape[0] % seq_length != 0:
-                length, dim = self.valid_X.shape
-                if self.valid_Y.ndim == 1:
+            if self.valid_inputs.shape[0] % seq_length != 0:
+                length, dim = self.valid_inputs.shape
+                if self.valid_targets.ndim == 1:
                     ydim = 1
                 else:
-                    ydim = self.valid_Y.shape[-1]
-                self.valid_X = self.valid_X[:seq_length * math.floor(length / seq_length)]
-                self.valid_Y = self.valid_Y[:seq_length * math.floor(length / seq_length)]
+                    ydim = self.valid_targets.shape[-1]
+                self.valid_inputs = self.valid_inputs[:seq_length * math.floor(length / seq_length)]
+                self.valid_targets = self.valid_targets[:seq_length * math.floor(length / seq_length)]
                 # now create the 3D tensor of sequences - they will be (num_sequences, sequence_size, 784)
-                self.valid_X = numpy.reshape(self.valid_X, (length / seq_length, seq_length, dim))
-                self.valid_Y = numpy.reshape(self.valid_Y, (length / seq_length, seq_length, ydim))
+                self.valid_inputs = numpy.reshape(self.valid_inputs, (length / seq_length, seq_length, dim))
+                self.valid_targets = numpy.reshape(self.valid_targets, (length / seq_length, seq_length, ydim))
 
-            if self.test_X.shape[0] % seq_length != 0:
-                length, dim = self.test_X.shape
-                if self.test_Y.ndim == 1:
+            if self.test_inputs.shape[0] % seq_length != 0:
+                length, dim = self.test_inputs.shape
+                if self.test_targets.ndim == 1:
                     ydim = 1
                 else:
-                    ydim = self.test_Y.shape[-1]
-                self.test_X = self.test_X[:seq_length * math.floor(length / seq_length)]
-                self.test_Y = self.test_Y[:seq_length * math.floor(length / seq_length)]
+                    ydim = self.test_targets.shape[-1]
+                self.test_inputs = self.test_inputs[:seq_length * math.floor(length / seq_length)]
+                self.test_targets = self.test_targets[:seq_length * math.floor(length / seq_length)]
                 # now create the 3D tensor of sequences - they will be (num_sequences, sequence_size, 784)
-                self.test_X = numpy.reshape(self.test_X, (length / seq_length, seq_length, dim))
-                self.test_Y = numpy.reshape(self.test_Y, (length / seq_length, seq_length, ydim))
+                self.test_inputs = numpy.reshape(self.test_inputs, (length / seq_length, seq_length, dim))
+                self.test_targets = numpy.reshape(self.test_targets, (length / seq_length, seq_length, ydim))
 
-            self._train_shape = self.train_X.shape
-            self._valid_shape = self.valid_X.shape
-            self._test_shape = self.test_X.shape
+            self._train_shape = self.train_inputs.shape
+            self._valid_shape = self.valid_inputs.shape
+            self._test_shape = self.test_inputs.shape
             log.debug('Train shape is: %s', str(self._train_shape))
             log.debug('Valid shape is: %s', str(self._valid_shape))
             log.debug('Test shape is: %s', str(self._test_shape))
-
-        self.datasets = {TRAIN: [self.train_X, self.train_Y],
-                         VALID: [self.valid_X, self.valid_Y],
-                         TEST: [self.test_X, self.test_Y]}
-
-    def get_subset(self, subset, batch_size=1, min_batch_size=1):
-        # make sure the subset is valid.
-        assert subset in _subsets, "Subset %s not recognized!" % str(subset)
-        # return the appropriate iterables over the subset
-        return self.datasets[subset]
 
     def sequence(self, sequence_number, rng=None):
         """
@@ -202,37 +178,37 @@ class MNIST(FileDataset):
         if sequence_number == 0:
             pass
         elif sequence_number == 1:
-            train_ordered_indices = _sequence1_indices(self.train_Y)
-            valid_ordered_indices = _sequence1_indices(self.valid_Y)
-            test_ordered_indices  = _sequence1_indices(self.test_Y)
+            train_ordered_indices = _sequence1_indices(self.train_targets)
+            valid_ordered_indices = _sequence1_indices(self.valid_targets)
+            test_ordered_indices  = _sequence1_indices(self.test_targets)
         elif sequence_number == 2:
-            train_ordered_indices = _sequence2_indices(self.train_Y)
-            valid_ordered_indices = _sequence2_indices(self.valid_Y)
-            test_ordered_indices  = _sequence2_indices(self.test_Y)
+            train_ordered_indices = _sequence2_indices(self.train_targets)
+            valid_ordered_indices = _sequence2_indices(self.valid_targets)
+            test_ordered_indices  = _sequence2_indices(self.test_targets)
         elif sequence_number == 3:
-            train_ordered_indices = _sequence3_indices(self.train_Y)
-            valid_ordered_indices = _sequence3_indices(self.valid_Y)
-            test_ordered_indices  = _sequence3_indices(self.test_Y)
+            train_ordered_indices = _sequence3_indices(self.train_targets)
+            valid_ordered_indices = _sequence3_indices(self.valid_targets)
+            test_ordered_indices  = _sequence3_indices(self.test_targets)
         elif sequence_number == 4:
-            train_ordered_indices = _sequence4_indices(self.train_Y)
-            valid_ordered_indices = _sequence4_indices(self.valid_Y)
-            test_ordered_indices  = _sequence4_indices(self.test_Y)
+            train_ordered_indices = _sequence4_indices(self.train_targets)
+            valid_ordered_indices = _sequence4_indices(self.valid_targets)
+            test_ordered_indices  = _sequence4_indices(self.test_targets)
         else:
             log.warning("MNIST sequence number %s not recognized, leaving dataset as-is.", str(sequence_number))
 
         # Put the data sets in order
         if train_ordered_indices is not None and valid_ordered_indices is not None and test_ordered_indices is not None:
-            self.train_X = self.train_X[train_ordered_indices]
-            self.train_Y = self.train_Y[train_ordered_indices]
-            self.valid_X = self.valid_X[valid_ordered_indices]
-            self.valid_Y = self.valid_Y[valid_ordered_indices]
-            self.test_X  = self.test_X[test_ordered_indices]
-            self.test_Y  = self.test_Y[test_ordered_indices]
+            self.train_inputs = self.train_inputs[train_ordered_indices]
+            self.train_targets = self.train_targets[train_ordered_indices]
+            self.valid_inputs = self.valid_inputs[valid_ordered_indices]
+            self.valid_targets = self.valid_targets[valid_ordered_indices]
+            self.test_inputs  = self.test_inputs[test_ordered_indices]
+            self.test_targets  = self.test_targets[test_ordered_indices]
 
         # re-set the sizes
-        self._train_shape = self.train_X.shape
-        self._valid_shape = self.valid_X.shape
-        self._test_shape = self.test_X.shape
+        self._train_shape = self.train_inputs.shape
+        self._valid_shape = self.valid_inputs.shape
+        self._test_shape = self.test_inputs.shape
         log.debug('Train shape is: %s', str(self._train_shape))
         log.debug('Valid shape is: %s', str(self._valid_shape))
         log.debug('Test shape is: %s', str(self._test_shape))

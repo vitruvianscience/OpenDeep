@@ -1,19 +1,15 @@
 """
 This module contains utils that are general and can't be grouped logically into the other opendeep.utils modules.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
+import functools
 # third party libraries
 import numpy
 import theano
 import theano.tensor as T
+# internal imports
+from opendeep.utils.constructors import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -343,3 +339,34 @@ def safe_zip(*args):
             raise ValueError("Argument[0] has length %d but argument %d has "
                              "length %d" % (base, i+1, len(arg)))
     return zip(*args)
+
+def compose(*functions):
+    """
+    A functional helper for dealing with function compositions. It ignores any None functions, and if all are None,
+    it returns None.
+
+    Parameters
+    ----------
+    *functions
+        function arguments to compose
+
+    Returns
+    -------
+    function or None
+        The composition f(g(...)) functions.
+    """
+    # help from here: https://mathieularose.com/function-composition-in-python/
+    def f_of_g(f, g):
+        if f is not None and g is not None:
+            return lambda x: f(g(x))
+        elif f is not None:
+            return f
+        elif g is not None:
+            return g
+        else:
+            return lambda x: x
+
+    if any(functions):
+        return functools.reduce(f_of_g, functions, lambda x: x)
+    else:
+        return None

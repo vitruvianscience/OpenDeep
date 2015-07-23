@@ -2,15 +2,6 @@
 Generic structure for a dataset. This defines iterable objects (streams) for data and labels to use
 with any given subsets of the dataset.
 
-Attributes
-----------
-TRAIN : int
-    The integer representing the training dataset subset.
-VALID : int
-    The integer representing the validation dataset subset.
-TEST : int
-    The integer representing the testing dataset subset.
-
 .. todo:: Add large dataset support with database connections, numpy.memmap, h5py, pytables
     (and in the future grabbing from pipelines like spark)
 
@@ -23,32 +14,11 @@ TEST : int
 # standard libraries
 import logging
 from collections import Iterable
+from types import GeneratorType as Generator
 # internal imports
 from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
-
-# variables for each subset of the dataset
-TRAIN = 0
-VALID = 1
-TEST  = 2
-_subsets = {TRAIN: "TRAIN", VALID: "VALID", TEST: "TEST"}
-
-def get_subset_strings(subset):
-    """
-    Converts the subset integer to a string representation (e.g. TRAIN, VALID, TEST).
-
-    Parameters
-    ----------
-    subset : int
-        The integer specifying the subset.
-
-    Returns
-    -------
-    str
-        The string representation of the subset.
-    """
-    return _subsets.get(subset, str(subset))
 
 class Dataset(object):
     """
@@ -92,32 +62,30 @@ class Dataset(object):
         test_targets : list(iterable), optional
             The list of target iterables (labels) to use as labels to the model for testing.
         """
-        self.train_inputs = raise_to_list(train_inputs)
-        self.train_targets = raise_to_list(train_targets)
+        self.train_inputs = _check_type_and_return_as_list(train_inputs, "train_inputs")
+        self.train_targets = _check_type_and_return_as_list(train_targets, "train_targets")
 
-        self.valid_inputs = raise_to_list(valid_inputs)
-        self.valid_targets = raise_to_list(valid_targets)
+        self.valid_inputs = _check_type_and_return_as_list(valid_inputs, "valid_inputs")
+        self.valid_targets = _check_type_and_return_as_list(valid_targets, "valid_targets")
 
-        self.test_inputs = raise_to_list(test_inputs)
-        self.test_targets = raise_to_list(test_targets)
+        self.test_inputs = _check_type_and_return_as_list(test_inputs, "test_inputs")
+        self.test_targets = _check_type_and_return_as_list(test_targets, "test_targets")
 
-        # type checking to make sure everything is iterable.
-        for idx, elem in enumerate(self.train_inputs):
-            assert isinstance(elem, Iterable), "train_inputs parameter index %d is not iterable!" % idx
-        if self.train_targets:
-            for idx, elem in enumerate(self.train_targets):
-                assert isinstance(elem, Iterable), "train_targets parameter index %d is not iterable!" % idx
-
-        if self.valid_inputs:
-            for idx, elem in enumerate(self.valid_inputs):
-                assert isinstance(elem, Iterable), "valid_inputs parameter index %d is not iterable!" % idx
-        if self.valid_targets:
-            for idx, elem in enumerate(self.valid_targets):
-                assert isinstance(elem, Iterable), "valid_targets parameter index %d is not iterable!" % idx
-
-        if self.test_inputs:
-            for idx, elem in enumerate(self.test_inputs):
-                assert isinstance(elem, Iterable), "test_inputs parameter index %d is not iterable!" % idx
-        if self.test_targets:
-            for idx, elem in enumerate(self.test_targets):
-                assert isinstance(elem, Iterable), "test_targets parameter index %d is not iterable!" % idx
+def _check_type_and_return_as_list(iterables, name="Unknown"):
+    """
+    Helper method that checks the input to see if it is iterable as well as not a generator.
+    (inputs the list of iterables as well as the name you want to use for this grouping of iterables,
+    such as train_inputs, etc.)
+    """
+    iterables = raise_to_list(iterables)
+    if iterables:
+        # type checking to make sure everything is iterable (and warn against generators).
+        for idx, elem in enumerate(iterables):
+            assert isinstance(elem, Iterable), "%s (as a list) parameter index %d is not iterable!" % (name, idx)
+            assert not isinstance(elem, Generator), "%s (as a list) parameter index %d is a generator! " \
+                                                    "Because we loop through the data multiple times, the generator " \
+                                                    "will run out after the first iteration. Please consider using " \
+                                                    "one of the stream types in opendeep.data.stream instead, " \
+                                                    "or define your own class that performs the generator function " \
+                                                    "in an __iter__(self) method!" % (name, idx)
+    return iterables

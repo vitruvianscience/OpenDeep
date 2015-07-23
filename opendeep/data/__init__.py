@@ -6,3 +6,6 @@ from .dataset_file import *
 from .dataset_memory import *
 # to get premade datasets
 from .standard_datasets import *
+
+# for streams
+from .stream import *

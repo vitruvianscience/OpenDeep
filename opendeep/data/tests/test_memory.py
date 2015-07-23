@@ -19,7 +19,7 @@ class TestMemoryDataset(unittest.TestCase):
         train = numpy.array([[1, 2], [4, 5]])
         valid = numpy.array([[2, 3], [5, 6], [8, 9]])
         test  = numpy.array([[3, 4], [6, 7], [1, 2], [9, 0]])
-        self.dataset = NumpyDataset(train_x=train, valid_x=valid, test_x=test)
+        self.dataset = NumpyDataset(train_inputs=train, valid_inputs=valid, test_inputs=test)
 
     def tearDown(self):
         del self.dataset

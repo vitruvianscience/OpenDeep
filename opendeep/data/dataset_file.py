@@ -4,9 +4,9 @@ Generic structure for a dataset reading from a file or directory.
 # standard libraries
 import logging
 import os
-import shutil
 import time
 import warnings
+import itertools
 # third party
 try:
     import nltk
@@ -14,37 +14,14 @@ try:
 except ImportError:
     NLTK_AVAILABLE = False
 # internal imports
-from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST
+from opendeep.data.dataset import Dataset
+from opendeep.data.stream.filestream import FileStream
+from opendeep.data.stream.modifystream import ModifyStream
 import opendeep.utils.file_ops as files
-from opendeep.utils.decorators import inherit_docs
-from opendeep.utils.misc import numpy_one_hot, make_time_units_string
+from opendeep.utils.misc import numpy_one_hot, make_time_units_string, compose
 
 log = logging.getLogger(__name__)
 
-def _yield_readline(path, filter):
-    """
-    Finds the files in the path (with the regex filter applied) and yields their list of lines
-    from readlines()
-
-    Parameters
-    ----------
-    path : str
-        System path to find the files
-    filter : str or compiled regex
-        Regex filter to apply to filepaths
-
-    Yields
-    ------
-    Str
-        Each line from each file found in the path
-    """
-    for fname in files.find_files(path, filter):
-        with open(fname, 'rb') as f:
-            for line in f:
-                yield line
-
-
-@inherit_docs
 class FileDataset(Dataset):
     """
     Default interface for a file-based dataset object. Files should either exist in the ``path`` or have
@@ -61,7 +38,8 @@ class FileDataset(Dataset):
         The integer representing the type of file for this dataset. The file_type integer is assigned by the
         :mod:`opendeep.utils.file_ops` module.
     """
-    def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None):
+    def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None,
+                 inputs_preprocess=None, targets_preprocess=None):
         """
         Creates a new FileDataset from the path. It installs the file from the source
         if it isn't found in the path, and determines the filetype and full path location to the file.
@@ -78,6 +56,16 @@ class FileDataset(Dataset):
             The regular expression filter to match validation file names against (if applicable).
         test_filter : regex string or compiled regex object, optional
             The regular expression filter to match testing file names against (if applicable).
+        inputs_preprocess : function, optional
+            A preprocessing function to apply to input data. This function will be applied to each line
+            from the files in `path`, and if it creates a list of elements, each element will be yielded as the
+            input data separately. For example, the function could be ``lambda line: (line.split(',')[0]).lower()``
+            to grab a string before a comma on each line and lowercase it.
+        targets_preprocess : function, optional
+            A preprocessing function to apply to targets data. This function will be applied to each line from
+            the files in `path`, and if it creates a list of elements, each element will be yielded as the target
+            label data separately. For example, the function could be ``lambda line: (line.split(',')[1]).lower()``
+            to grab a label after a comma on each line and lowercase it.
         """
         try:
             self.path = os.path.realpath(path)
@@ -86,150 +74,40 @@ class FileDataset(Dataset):
             raise
 
         self.source = source
-        self.train_filter = train_filter
-        self.valid_filter = valid_filter
-        self.test_filter = test_filter
 
         # install the dataset from source! (makes sure file is there and returns the type so you know how to read it)
-        self.file_type = self.install()
+        self.file_type = files.install(self.path, self.source)
 
-    def install(self):
-        """
-        Method to both download and extract the dataset from the internet (if applicable) or verify that the file
-        exists as ``self.path``.
+        train_inputs, train_targets = None, None
+        valid_inputs, valid_targets = None, None
+        test_inputs, test_targets   = None, None
 
-        Returns
-        -------
-        str
-            The absolute path to the dataset location on disk.
-        int
-            The integer representing the file type for the dataset,
-            as defined in the :mod:`opendeep.utils.file_ops` module.
-        """
-        file_type = None
-        download_success = True
-        found = False
-        log.info('Installing dataset %s', str(self.path))
-        is_dir = os.path.isdir(self.path)
+        train_inputs = FileStream(self.path, train_filter, inputs_preprocess)
+        if targets_preprocess is not None:
+            train_targets = FileStream(self.path, train_filter, targets_preprocess)
 
-        # construct the actual path to the dataset
-        if is_dir:
-            dataset_dir = os.path.splitext(self.path)[0]
-        else:
-            dataset_dir = os.path.split(self.path)[0]
-        # make the directory or file directory
-        try:
-            files.mkdir_p(dataset_dir)
-        except Exception as e:
-            log.error("Couldn't make the dataset path with directory %s and path %s",
-                      dataset_dir,
-                      str(self.path))
-            log.exception("%s", str(e.message))
-            raise
+        if valid_filter is not None:
+            valid_inputs = FileStream(self.path, valid_filter, inputs_preprocess)
+            if targets_preprocess is not None:
+                valid_targets = FileStream(self.path, valid_filter, targets_preprocess)
 
-        # check if the dataset is already in the source, otherwise download it.
-        # first check if the base filename exists - without all the extensions.
-        # then, add each extension on and keep checking until the upper level, when you download from http.
-        if not is_dir:
-            (dirs, fname) = os.path.split(self.path)
-            split_fname = fname.split('.')
-            accumulated_name = split_fname[0]
-            ext_idx = 1
-            while not found and ext_idx <= len(split_fname):
-                if os.path.exists(os.path.join(dirs, accumulated_name)):
-                    found = True
-                    file_type = files.get_file_type(os.path.join(dirs, accumulated_name))
-                    self.path = os.path.join(dirs, accumulated_name)
-                    log.debug('Found file %s', self.path)
-                elif ext_idx < len(split_fname):
-                    accumulated_name = '.'.join((accumulated_name, split_fname[ext_idx]))
-                ext_idx += 1
-        elif os.listdir(self.path):
-            found = True
-            file_type = files.get_file_type(self.path)
+        if test_filter is not None:
+            test_inputs = FileStream(self.path, test_filter, inputs_preprocess)
+            if targets_preprocess is not None:
+                test_targets = FileStream(self.path, test_filter, targets_preprocess)
 
-        # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
-        download_dest = None
-        if not found:
-            if self.source is not None and file_type is None:
-                # make the destination for downloading the file from source be the same as self.path,
-                # but make sure the source filename is preserved so we can deal with the appropriate
-                # type (i.e. if it is a .tar.gz or a .zip, we have to process it first to match what
-                # was expected with the real self.path filename)
-                url_filename = self.source.split('/')[-1]
-                download_dest = os.path.join(dataset_dir, url_filename)
-                download_success = files.download_file(url=self.source, destination=download_dest)
-                file_type = files.get_file_type(download_dest)
-            elif self.source is None and file_type is None:
-                log.error("Filename %s couldn't be found, and no URL source to download was provided.",
-                          str(self.path))
-                raise RuntimeError(
-                    "Filename %s couldn't be found, and no URL source to download was provided." %
-                    str(self.path))
+        super(FileDataset, self).__init__(train_inputs=train_inputs, train_targets=train_targets,
+                                          valid_inputs=valid_inputs, valid_targets=valid_targets,
+                                          test_inputs=test_inputs, test_targets=test_targets)
 
-        # if the file type is a zip and different than self.path, unzip it.
-        unzip_success = True
-        if file_type is not files.get_file_type(self.path) and download_dest is not None:
-            unzip_success = False
-            if file_type is files.ZIP:
-                unzip_success = files.unzip(download_dest, dataset_dir)
-            elif file_type is files.TARBALL or file_type is files.TAR:
-                unzip_success = files.untar(download_dest, dataset_dir)
-            elif file_type is files.GZ:
-                unzip_success = files.gunzip(download_dest, dataset_dir)
-            # if the unzip was successful
-            if unzip_success:
-                # remove the zipfile and update the dataset location and file type
-                log.debug('Removing file %s', download_dest)
-                os.remove(download_dest)
-                file_type = files.get_file_type(self.path)
-
-        if download_success and unzip_success:
-            log.info('Installation complete. Yay!')
-        else:
-            log.warning('Something went wrong installing dataset. Boo :(')
-
-        return file_type
-
-    def uninstall(self):
-        """
-        Method to delete dataset files from its path on disk.
-
-        .. warning::
-            This method currently uses the shutil.rmtree method, which may be unsafe. A better bet would be to delete
-            the dataset yourself from disk.
-        """
-        # TODO: Check if this shutil.rmtree is unsafe...
-        log.info('Uninstalling (removing) dataset %s', self.path)
-        if self.path is not None and os.path.exists(self.path):
-            # If we are trying to remove something not from the dataset directory, give a warning
-            if not self.path.startswith(self.dataset_dir):
-                log.critical("ATTEMPTING TO REMOVE A FILE NOT FROM THE DATASET DIRECTORY. "
-                             "LOCATION IS %s AND THE DATASET DIRECTORY IS %s",
-                             self.path,
-                             self.dataset_dir)
-            shutil.rmtree(self.path)
-        else:
-            log.debug('path was not valid. It was %s', str(self.path))
-        log.info('Uninstallation (removal) successful!')
-
-    def get_subset(self, subset):
-        # return chained iterators over the files for the subset given the filters
-        if subset is TRAIN:
-            return _yield_readline(self.path, self.train_filter), None
-        elif subset is VALID and self.valid_filter is not None:
-            return _yield_readline(self.path, self.valid_filter), None
-        elif subset is TEST and self.test_filter is not None:
-            return _yield_readline(self.path, self.test_filter), None
-
-@inherit_docs
 class TextDataset(FileDataset):
     """
     This gives a file-based dataset for working with text (either characters or words).
     It will construct a vocabulary dictionary with each token.
     """
     def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None,
-                 vocab=None, unk_token="<UNK>", level="char", preprocess=None):
+                 inputs_preprocess=None, targets_preprocess=None,
+                 vocab=None, label_vocab=None, unk_token="<UNK>", level="char", n_future=None):
         """
         Initialize a text-based dataset.
 
@@ -245,8 +123,22 @@ class TextDataset(FileDataset):
             The regular expression filter to match validation file names against (if applicable).
         test_filter : regex string or compiled regex object, optional
             The regular expression filter to match testing file names against (if applicable).
+        inputs_preprocess : function, optional
+            A preprocessing function to apply to input data. This function will be applied to each line
+            from the files in `path`, and if it creates a list of elements, each element will be yielded as the
+            input data separately. For example, the function could be ``lambda line: (line.split(',')[0]).lower()``
+            to grab a string before a comma on each line and lowercase it. Preprocessing will happen before any
+            tokenization is applied i.e. tokenizing and processing are composed as tokenize(preprocess(line)).
+        targets_preprocess : function, optional
+            A preprocessing function to apply to targets data. This function will be applied to each line from
+            the files in `path`, and if it creates a list of elements, each element will be yielded as the target
+            label data separately. For example, the function could be ``lambda line: (line.split(',')[1]).lower()``
+            to grab a label after a comma on each line and lowercase it. Tokenization will not be applied to data
+            yielded from the targets' preprocessing.
         vocab : dict, optional
             A starting dictionary to use when converting tokens to numbers.
+        label_vocab : dict, optional
+            A starting dictionary to use when converting labels (targets) to numbers.
         unk_token : str, optional
             The representation for an unknown token to use in the vocab dictionary.
         level : str, optional
@@ -254,100 +146,115 @@ class TextDataset(FileDataset):
             For ``char``, data will be character-level.
             For ``word``, data will be split by whitespace.
             For ``line``, data will be split by newline.
-        preprocess : function, optional
-            A function to apply to data directly from path (i.e. lambda s: s.lower() for lowercase)
+        n_future : int, optional
+            For creating language models that predict tokens in the future, this determines the skip size (number of
+            steps in the future) that the language model will try to predict as its target. Most language models will
+            have n_future=1. If `n_future` is not None, the targets will be created from the inputs (but still apply
+            targets_preprocess instead of inputs_preprocess if it is different).
         """
-        super(TextDataset, self).__init__(path=path, source=source,
-                                          train_filter=train_filter, valid_filter=valid_filter, test_filter=test_filter)
+        # Figure out if we want characters, words, or lines processed, and create the processing function
+        # to compose on top of the preprocessing function arguments.
         level = level.lower()
-        levels = ["char", "word", "line"]
-        assert level in levels, "level parameter needs to be one of %s, found %s!" % (str(levels), level)
-        if level == "word":
-            if not NLTK_AVAILABLE:
+        if level == "char":
+            tokenize = lambda s: list(s)
+        elif level == "word":
+            if NLTK_AVAILABLE:
+                tokenize = lambda s: nltk.tokenize.word_tokenize(s)
+            else:
                 warnings.warn("NLTK isn't installed - going to split strings by whitespace. Highly recommended "
                               "that you install nltk for better word tokenization.")
-        self.unk_token = unk_token
-        self.level = level
-        self.preprocess = preprocess
+                tokenize = lambda s: s.split()
+        elif level == "line":
+            tokenize = lambda s: [s]
+        else:
+            tokenize = None
+
+        # modify our file stream's processors to work with the appropriate level!
+        # if n_future is not none, we are assuming that this is a language model and that we should tokenize the target
+        if n_future is not None:
+            targets_preprocess = compose(tokenize, inputs_preprocess)
+        inputs_preprocess = compose(tokenize, inputs_preprocess)
+
+        # call super to create the data streams
+        super(TextDataset, self).__init__(path=path, source=source,
+                                          train_filter=train_filter, valid_filter=valid_filter, test_filter=test_filter,
+                                          inputs_preprocess=inputs_preprocess, targets_preprocess=targets_preprocess)
+        # after this call, train_inputs, train_targets, etc. are all lists or None.
+
+        # determine if this is a language model, and adjust the stream accordingly to use the inputs as the targets
+        if n_future is not None:
+            self.train_targets = [FileStream(path, train_filter, targets_preprocess, n_future)]
+            if valid_filter is not None:
+                self.valid_targets = [FileStream(path, valid_filter, targets_preprocess, n_future)]
+            if test_filter is not None:
+                self.test_targets = [FileStream(path, test_filter, targets_preprocess, n_future)]
 
         # Create our vocab dictionary if it doesn't exist!
-        self.vocab = vocab or self.compile_vocab()
-        self.vocab_inverse = {v:k for k,v in self.vocab.items()}
+        self.unk_token = unk_token
+        vocab_inputs = self.train_inputs + (self.valid_inputs or [])
+        self.vocab = vocab or self.compile_vocab(itertools.chain(*vocab_inputs))
+        vocab_len = len(self.vocab)
+        self.vocab_inverse = {v: k for k, v in self.vocab.items()}
 
-    def tokens(self, filter=None):
+        # Now modify our various inputs streams with one-hot versions using the vocab dictionary.
+        # (making sure they remain as lists to satisfy the superclass condition)
+        rep = lambda token: self.vocab.get(token, self.vocab.get(self.unk_token))
+        one_hot = lambda token: numpy_one_hot([rep(token)], n_classes=vocab_len)[0]
+        self.train_inputs = [ModifyStream(self.train_inputs[0], one_hot)]
+        if self.valid_inputs is not None:
+            self.valid_inputs = [ModifyStream(self.valid_inputs[0], one_hot)]
+        if self.test_inputs is not None:
+            self.test_inputs = [ModifyStream(self.test_inputs[0], one_hot)]
+
+        # Now deal with possible output streams (either tokenizing it using the supplied label dictionary,
+        # creating the label dictionary, or using the vocab dictionary if it is a language model (n_future is not none)
+        if self.train_targets is not None and n_future is None:
+            vocab_inputs = self.train_targets + (self.valid_targets or [])
+            self.label_vocab = label_vocab or \
+                               self.compile_vocab(itertools.chain(*vocab_inputs))
+            self.label_vocab_inverse = {v: k for k, v in self.label_vocab.items()}
+        # if this is a language model, label vocab is same as input vocab
+        elif n_future is not None:
+            self.label_vocab = self.vocab
+            self.label_vocab_inverse = self.vocab_inverse
+        else:
+            self.label_vocab = None
+            self.label_vocab_inverse = None
+
+        # now modify the output streams with the one-hot representation using the vocab (making sure they remain
+        # as lists to satisfy the superclass condition)
+        if self.label_vocab is not None:
+            label_vocab_len = len(self.label_vocab)
+            label_rep = lambda token: self.label_vocab.get(token, self.label_vocab.get(self.unk_token))
+            label_one_hot = lambda token: numpy_one_hot([label_rep(token)], n_classes=label_vocab_len)[0]
+            if self.train_targets is not None:
+                self.train_targets = [ModifyStream(self.train_targets[0], label_one_hot)]
+            if self.valid_targets is not None:
+                self.valid_targets = [ModifyStream(self.valid_targets[0], label_one_hot)]
+            if self.test_targets is not None:
+                self.test_targets = [ModifyStream(self.test_targets[0], label_one_hot)]
+
+    def compile_vocab(self, iters):
         """
-        Returns all tokens in the path (with regex filter applied) given the level and preprocessing.
+        Creates a dictionary mapping tokens (words or characters) to integers given the level and preprocessing.
 
         Parameters
         ----------
-        filter : regex string or compiled regex object, optional
-            The regular expression filter to match file names against (if applicable).
-        """
-        for fname in files.find_files(self.path, filter):
-            with open(fname, 'r') as f:
-                for line in f:
-                    if self.preprocess is not None:
-                        line = self.preprocess(line)
-                    if self.level == "char":
-                        tokens = line
-                    elif self.level == "word":
-                        if NLTK_AVAILABLE:
-                            tokens = nltk.tokenize.word_tokenize(line)
-                        else:
-                            tokens = line.split()
-                    elif self.level == "line":
-                        tokens = [line]
-                    else:
-                        tokens = []
-                    for token in tokens:
-                        yield token
+        iters : iterable
+            The iterable to go through when creating the vocaublary dictionary.
 
-    def compile_vocab(self):
-        """
-        Creates a dictionary mapping tokens (words or characters) to integers given the level and preprocessing.
+        Returns
+        -------
+        vocab
+            The dictionary mapping token: integer for all tokens in the `iters` iterable.
         """
         log.debug("Creating vocabulary...")
         t = time.time()
         vocab = {self.unk_token: 0}
         i = 1
-        for token in self.tokens():
+        for token in iters:
             if token not in vocab:
                 vocab[token] = i
                 i += 1
         log.debug("Vocab took %s to create." % make_time_units_string(time.time() - t))
         return vocab
-
-    def vectorize_tokens(self, filter=None):
-        """
-        Generates the one-hot vectorized tokens from the files.
-
-        Parameters
-        ----------
-        filter : regex string or compiled regex object, optional
-            The regular expression filter to match file names against (if applicable).
-        """
-        for token in self.tokens(filter):
-            rep = self.vocab.get(token, self.vocab[self.unk_token])
-            yield numpy_one_hot([rep], n_classes=len(self.vocab))[0]
-
-    def get_subset(self, subset):
-        if subset is TRAIN:
-            # labels is the same generator as data, just advanced forward by one.
-            labels_gen = self.vectorize_tokens(self.train_filter)
-            # advance forward
-            next(labels_gen)
-            return self.vectorize_tokens(self.train_filter), labels_gen
-        elif subset is VALID and self.valid_filter is not None:
-            # labels is the same generator as data, just advanced forward by one.
-            labels_gen = self.vectorize_tokens(self.valid_filter)
-            # advance forward
-            next(labels_gen)
-            return self.vectorize_tokens(self.valid_filter), labels_gen
-        elif subset is TEST and self.test_filter is not None:
-            # labels is the same generator as data, just advanced forward by one.
-            labels_gen = self.vectorize_tokens(self.test_filter)
-            # advance forward
-            next(labels_gen)
-            return self.vectorize_tokens(self.test_filter), labels_gen
-        else:
-            return None, None

@@ -87,7 +87,7 @@ def mkdir_p(path):
         If there was an OS error making the directory.
     """
     path = os.path.realpath(path)
-    log.debug('Attempting to make directory %s', path)
+    log.debug('Making directory %s', path)
     try:
         os.makedirs(path)
     except OSError as exc: # Python >2.5
@@ -318,3 +318,101 @@ def gunzip(source_filename, destination_dir='.'):
     except:
         log.exception('Error unzipping gz data from %s to %s', source_filename, destination_dir)
         return False
+
+def install(path, source=None):
+    """
+    Method to both download and extract the dataset from the internet (if applicable) or verify that the file
+    exists as ``path``.
+
+    Returns
+    -------
+    str
+        The absolute path to the dataset location on disk.
+    int
+        The integer representing the file type for the dataset,
+        as defined in the :mod:`opendeep.utils.file_ops` module.
+    """
+    file_type = None
+    download_success = True
+    found = False
+    log.info('Installing dataset %s', str(path))
+    is_dir = os.path.isdir(path)
+
+    # construct the actual path to the dataset
+    if is_dir:
+        dataset_dir = os.path.splitext(path)[0]
+    else:
+        dataset_dir = os.path.split(path)[0]
+    # make the directory or file directory
+    try:
+        mkdir_p(dataset_dir)
+    except Exception as e:
+        log.error("Couldn't make the dataset path with directory %s and path %s",
+                  dataset_dir,
+                  str(path))
+        log.exception("%s", str(e.message))
+        raise
+
+    # check if the dataset is already in the source, otherwise download it.
+    # first check if the base filename exists - without all the extensions.
+    # then, add each extension on and keep checking until the upper level, when you download from http.
+    if not is_dir:
+        (dirs, fname) = os.path.split(path)
+        split_fname = fname.split('.')
+        accumulated_name = split_fname[0]
+        ext_idx = 1
+        while not found and ext_idx <= len(split_fname):
+            if os.path.exists(os.path.join(dirs, accumulated_name)):
+                found = True
+                file_type = get_file_type(os.path.join(dirs, accumulated_name))
+                path = os.path.join(dirs, accumulated_name)
+                log.debug('Found file %s', path)
+            elif ext_idx < len(split_fname):
+                accumulated_name = '.'.join((accumulated_name, split_fname[ext_idx]))
+            ext_idx += 1
+    elif os.listdir(path):
+        found = True
+        file_type = get_file_type(path)
+
+    # if the file wasn't found, download it if a source was provided. Otherwise, raise error.
+    download_dest = None
+    if not found:
+        if source is not None and file_type is None:
+            # make the destination for downloading the file from source be the same as self.path,
+            # but make sure the source filename is preserved so we can deal with the appropriate
+            # type (i.e. if it is a .tar.gz or a .zip, we have to process it first to match what
+            # was expected with the real self.path filename)
+            url_filename = source.split('/')[-1]
+            download_dest = os.path.join(dataset_dir, url_filename)
+            download_success = download_file(url=source, destination=download_dest)
+            file_type = get_file_type(download_dest)
+        elif source is None and file_type is None:
+            log.error("Filename %s couldn't be found, and no URL source to download was provided.",
+                      str(path))
+            raise RuntimeError(
+                "Filename %s couldn't be found, and no URL source to download was provided." %
+                str(path))
+
+    # if the file type is a zip and different than self.path, unzip it.
+    unzip_success = True
+    if file_type is not get_file_type(path) and download_dest is not None:
+        unzip_success = False
+        if file_type is ZIP:
+            unzip_success = unzip(download_dest, dataset_dir)
+        elif file_type is TARBALL or file_type is TAR:
+            unzip_success = untar(download_dest, dataset_dir)
+        elif file_type is GZ:
+            unzip_success = gunzip(download_dest, dataset_dir)
+        # if the unzip was successful
+        if unzip_success:
+            # remove the zipfile and update the dataset location and file type
+            log.debug('Removing file %s', download_dest)
+            os.remove(download_dest)
+            file_type = get_file_type(path)
+
+    if download_success and unzip_success:
+        log.info('Installation complete. Yay!')
+    else:
+        log.warning('Something went wrong installing dataset. Boo :(')
+
+    return file_type

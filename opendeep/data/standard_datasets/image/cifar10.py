@@ -8,10 +8,8 @@ import math
 # third party libraries
 import numpy
 # internal imports
-from opendeep.data.dataset import TRAIN, VALID, TEST, get_subset_strings
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils.misc import numpy_one_hot
-from opendeep.utils.decorators import inherit_docs
 
 try:
     import cPickle as pickle
@@ -20,7 +18,6 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-@inherit_docs
 class CIFAR10(FileDataset):
     """
     Object for the CIFAR-10 image dataset.
@@ -30,21 +27,6 @@ class CIFAR10(FileDataset):
     This dataset object only considers the 50000 training images and creates splits from there.
 
     http://www.cs.toronto.edu/~kriz/cifar.html
-
-    Attributes
-    ----------
-    train_X : shared variable
-        The training input variables.
-    train_Y : shared variable
-        The training input labels.
-    valid_X : shared variable
-        The validation input variables.
-    valid_Y : shared variable
-        The validation input labels.
-    test_X : shared variable
-        The testing input variables.
-    test_Y : shared variable
-        The testing input labels.
     """
     def __init__(self, train_split=0.95, valid_split=0.05, one_hot=False,
                  path='../../datasets/cifar-10-batches-py/',
@@ -95,50 +77,25 @@ class CIFAR10(FileDataset):
         if one_hot:
             Y = numpy_one_hot(Y, n_classes=10)
 
-        self.length = X.shape[0]
+        length = X.shape[0]
 
-        self._train_len = int(math.floor(self.length * train_split))
-        self._valid_len = int(math.floor(self.length * valid_split))
-        self._test_len = int(max(self.length - self._valid_len - self._train_len, 0))
+        train_len = int(math.floor(length * train_split))
+        valid_len = int(math.floor(length * valid_split))
 
         # divide into train, valid, and test sets!
-        self.train_X = X[:self._train_len]
-        self.train_Y = Y[:self._train_len]
+        self.train_inputs = X[:train_len]
+        self.train_targets = Y[:train_len]
 
         if valid_split > 0:
-            self.valid_X = X[self._train_len:self._train_len + self._valid_len]
-            self.valid_Y = Y[self._train_len:self._train_len + self._valid_len]
+            self.valid_inputs = X[train_len:train_len + valid_len]
+            self.valid_targets = Y[train_len:train_len + valid_len]
         else:
-            self.valid_X = None
-            self.valid_Y = None
+            self.valid_inputs = None
+            self.valid_targets = None
 
         if test_split > 0:
-            self.test_X = X[self._train_len + self._valid_len:]
-            self.test_Y = Y[self._train_len + self._valid_len:]
+            self.test_inputs = X[train_len + valid_len:]
+            self.test_targets = Y[train_len + valid_len:]
         else:
-            self.test_X = None
-            self.test_Y = None
-
-    def get_subset(self, subset):
-        """
-        Returns the (x, y) pair of shared variables for the given train, validation, or test subset.
-
-        Parameters
-        ----------
-        subset : int
-            The subset indicator. Integer assigned by global variables in opendeep.data.dataset.py
-
-        Returns
-        -------
-        tuple
-            (x, y) tuple of shared variables holding the dataset input and label, or None if the subset doesn't exist.
-        """
-        if subset is TRAIN:
-            return self.train_X, self.train_Y
-        elif subset is VALID:
-            return self.valid_X, self.valid_Y
-        elif subset is TEST:
-            return self.test_X, self.test_Y
-        else:
-            log.error('Subset %s not recognized!', get_subset_strings(subset))
-            return None, None
+            self.test_inputs = None
+            self.test_targets = None
