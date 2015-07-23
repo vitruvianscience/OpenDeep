@@ -22,13 +22,6 @@ Multimodal transition operator (using NADE) discussed in:
 Sherjil Ozair, Li Yao, Yoshua Bengio
 http://arxiv.org/abs/1312.5578
 '''
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger", "Li Yao"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import os
 import time

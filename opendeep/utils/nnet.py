@@ -6,13 +6,6 @@ https://github.com/yaoli/GSN
 
 And theano_alexnet (https://github.com/uoguelph-mlrg/theano_alexnet)
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from functools import partial

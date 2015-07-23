@@ -3,13 +3,6 @@ This module contains different autoencoders to use. Autoencoders are nonprobabil
 that try to reconstruct an input from a hidden layer.
 input <-> hidden, or laid out, X -> H -> X
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import theano.sandbox.rng_mrg as RNG_MRG

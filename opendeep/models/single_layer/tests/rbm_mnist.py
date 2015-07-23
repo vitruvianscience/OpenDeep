@@ -2,7 +2,6 @@ import numpy
 import theano
 from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
 from opendeep.monitor.monitor import Monitor
-from opendeep.data.dataset import TEST
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.optimization.optimizer import Optimizer
@@ -39,8 +38,8 @@ if __name__ == '__main__':
     # perform training!
     optimizer.train(monitor_channels=ll)
     # test it on some images!
-    test_data = mnist.getSubset(TEST)[0]
-    test_data = test_data[:25].eval()
+    test_data = mnist.test_inputs[0]
+    test_data = test_data[:25]
     # use the run function!
     preds = rbm.run(test_data)
 

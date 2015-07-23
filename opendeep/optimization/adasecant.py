@@ -22,14 +22,6 @@ https://github.com/caglar/adasecant_wshp_paper
     We plan to publish another paper related to that with some collaborators.
 
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Caglar Gulcehre", "Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from collections import OrderedDict

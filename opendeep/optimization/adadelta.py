@@ -5,14 +5,6 @@ Generic implementation of ADADELTA trainig algorithm
 Matthew D. Zeiler
 http://www.matthewzeiler.com/pubs/googleTR2012/googleTR2012.pdf
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Pylearn2", "Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from collections import OrderedDict

@@ -12,6 +12,14 @@ opendeep.models.multi_layer.tests.gsn_mnist module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.multi_layer.tests.rnn_shakespeare module
+--------------------------------------------------------
+
+.. automodule:: opendeep.models.multi_layer.tests.rnn_shakespeare
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.multi_layer.tests.rnngsn_midi module
 ----------------------------------------------------
 
@@ -24,6 +32,14 @@ opendeep.models.multi_layer.tests.rnngsn_mnist module
 -----------------------------------------------------
 
 .. automodule:: opendeep.models.multi_layer.tests.rnngsn_mnist
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.models.multi_layer.tests.rnngsn_prototype_mnist module
+---------------------------------------------------------------
+
+.. automodule:: opendeep.models.multi_layer.tests.rnngsn_prototype_mnist
     :members:
     :undoc-members:
     :show-inheritance:

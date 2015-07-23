@@ -4,6 +4,22 @@ opendeep.data.tests package
 Submodules
 ----------
 
+opendeep.data.tests.test_chars module
+-------------------------------------
+
+.. automodule:: opendeep.data.tests.test_chars
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.data.tests.test_cifar10 module
+---------------------------------------
+
+.. automodule:: opendeep.data.tests.test_cifar10
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.data.tests.test_memory module
 --------------------------------------
 

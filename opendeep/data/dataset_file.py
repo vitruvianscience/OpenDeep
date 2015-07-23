@@ -183,15 +183,15 @@ class TextDataset(FileDataset):
 
         # determine if this is a language model, and adjust the stream accordingly to use the inputs as the targets
         if n_future is not None:
-            self.train_targets = [FileStream(path, train_filter, targets_preprocess, n_future)]
+            self.train_targets = FileStream(path, train_filter, targets_preprocess, n_future)
             if valid_filter is not None:
-                self.valid_targets = [FileStream(path, valid_filter, targets_preprocess, n_future)]
+                self.valid_targets = FileStream(path, valid_filter, targets_preprocess, n_future)
             if test_filter is not None:
-                self.test_targets = [FileStream(path, test_filter, targets_preprocess, n_future)]
+                self.test_targets = FileStream(path, test_filter, targets_preprocess, n_future)
 
         # Create our vocab dictionary if it doesn't exist!
         self.unk_token = unk_token
-        vocab_inputs = self.train_inputs + (self.valid_inputs or [])
+        vocab_inputs = [self.train_inputs] + (self.valid_inputs or [])
         self.vocab = vocab or self.compile_vocab(itertools.chain(*vocab_inputs))
         vocab_len = len(self.vocab)
         self.vocab_inverse = {v: k for k, v in self.vocab.items()}
@@ -200,16 +200,16 @@ class TextDataset(FileDataset):
         # (making sure they remain as lists to satisfy the superclass condition)
         rep = lambda token: self.vocab.get(token, self.vocab.get(self.unk_token))
         one_hot = lambda token: numpy_one_hot([rep(token)], n_classes=vocab_len)[0]
-        self.train_inputs = [ModifyStream(self.train_inputs[0], one_hot)]
+        self.train_inputs = ModifyStream(self.train_inputs, one_hot)
         if self.valid_inputs is not None:
-            self.valid_inputs = [ModifyStream(self.valid_inputs[0], one_hot)]
+            self.valid_inputs = ModifyStream(self.valid_inputs, one_hot)
         if self.test_inputs is not None:
-            self.test_inputs = [ModifyStream(self.test_inputs[0], one_hot)]
+            self.test_inputs = ModifyStream(self.test_inputs, one_hot)
 
         # Now deal with possible output streams (either tokenizing it using the supplied label dictionary,
         # creating the label dictionary, or using the vocab dictionary if it is a language model (n_future is not none)
         if self.train_targets is not None and n_future is None:
-            vocab_inputs = self.train_targets + (self.valid_targets or [])
+            vocab_inputs = [self.train_targets] + (self.valid_targets or [])
             self.label_vocab = label_vocab or \
                                self.compile_vocab(itertools.chain(*vocab_inputs))
             self.label_vocab_inverse = {v: k for k, v in self.label_vocab.items()}
@@ -228,11 +228,11 @@ class TextDataset(FileDataset):
             label_rep = lambda token: self.label_vocab.get(token, self.label_vocab.get(self.unk_token))
             label_one_hot = lambda token: numpy_one_hot([label_rep(token)], n_classes=label_vocab_len)[0]
             if self.train_targets is not None:
-                self.train_targets = [ModifyStream(self.train_targets[0], label_one_hot)]
+                self.train_targets = ModifyStream(self.train_targets, label_one_hot)
             if self.valid_targets is not None:
-                self.valid_targets = [ModifyStream(self.valid_targets[0], label_one_hot)]
+                self.valid_targets = ModifyStream(self.valid_targets, label_one_hot)
             if self.test_targets is not None:
-                self.test_targets = [ModifyStream(self.test_targets[0], label_one_hot)]
+                self.test_targets = ModifyStream(self.test_targets, label_one_hot)
 
     def compile_vocab(self, iters):
         """

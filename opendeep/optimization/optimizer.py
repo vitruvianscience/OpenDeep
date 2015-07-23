@@ -113,6 +113,7 @@ class Optimizer(object):
         # just return. (This seems kinda hacky but hey, people wanted .train() to happen from Model and there
         # wasn't really a better way unless the epoch looping logic was in that method for Model. That wasn't
         # the best option because other methods besides stochastic ones can exist for optimizers in the future.
+        # TODO: fix this up - feels like a hack just to make model.train() work...
         if not model:
             return
         # Otherwise, things are proceeding as normal. Carry on...
@@ -123,9 +124,37 @@ class Optimizer(object):
                                              "Found %s" % str(type(dataset))
 
         n_model_inputs = len(raise_to_list(model.get_inputs()))
-        n_model_targets = len(raise_to_list(model.get_targets()))
+        n_model_targets = len(raise_to_list(model.get_targets()) or [])
+        self.unsupervised = (n_model_targets is 0)
         # make sure the number of inputs/targets matches up with the dataset properties
+        # train
+        assert n_model_inputs == len(raise_to_list(dataset.train_inputs)), \
+            "Dataset has %d train inputs, while model expects %d" % \
+            (len(raise_to_list(dataset.train_inputs)), n_model_inputs)
+        if not self.unsupervised:
+            assert n_model_targets == len(raise_to_list(dataset.train_targets) or []), \
+                "Dataset has %d train targets, while model expects %d" % \
+                (len(raise_to_list(dataset.train_targets) or []), n_model_targets)
+        # valid
+        if dataset.valid_inputs is not None:
+            assert n_model_inputs == len(raise_to_list(dataset.valid_inputs)), \
+                "Dataset has %d valid inputs, while model expects %d" % \
+                (len(raise_to_list(dataset.valid_inputs)), n_model_inputs)
+            if not self.unsupervised:
+                assert n_model_targets == len(raise_to_list(dataset.valid_targets) or []), \
+                    "Dataset has %d valid targets, while model expects %d" % \
+                    (len(raise_to_list(dataset.valid_targets) or []), n_model_targets)
+        # test
+        if dataset.test_inputs is not None:
+            assert n_model_inputs == len(raise_to_list(dataset.test_inputs)), \
+                "Dataset has %d test inputs, while model expects %d" % \
+                (len(raise_to_list(dataset.test_inputs)), n_model_inputs)
+            if not self.unsupervised:
+                assert n_model_targets == len(raise_to_list(dataset.test_targets) or []), \
+                    "Dataset has %d test targets, while model expects %d" % \
+                    (len(raise_to_list(dataset.test_targets) or []), n_model_targets)
 
+        # now we are happy, we can add them to `self`
         self.model = model
         self.dataset = dataset
 
@@ -203,6 +232,9 @@ class Optimizer(object):
                                  "was called from the Model. Try initializing the Optimizer with the model param "
                                  "and calling optimizer.train().")
 
+        #####################################################
+        # handle additional costs (normally regularization) #
+        #####################################################
         # Create the gradient updates for the model - make sure to handle the possible
         # list of costs used for pretraining of certain parts of the model.
         train_costs = raise_to_list(self.model.get_train_cost())
@@ -212,6 +244,9 @@ class Optimizer(object):
             if len(additional_costs) > 1:
                 additional_cost = T.sum(additional_costs)
 
+        #########################
+        # gradients and updates #
+        #########################
         train_updates = []
         self.gradients = []
         for i, train_cost in enumerate(train_costs):
@@ -220,7 +255,8 @@ class Optimizer(object):
             if len(train_costs) > 1 and additional_cost is not None:
                 log.warning("additional_cost will double count with gradients during layer-wise pretraining!")
                 warnings.warn("additional_cost will double count with gradients during layer-wise pretraining!")
-            # TODO: additional_cost will double count with gradients during layer-wise pretraining. Need to somehow make w.r.t. params appropriate for the individual training costs.
+            # TODO: additional_cost will double count with gradients during layer-wise pretraining.
+            # Need to somehow make w.r.t. params appropriate for the individual training costs.
             gradients, _ = self.model.get_gradient(cost=train_cost, additional_cost=additional_cost)
             # clip gradients if we want.
             gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
@@ -244,6 +280,9 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
+        ############
+        # monitors #
+        ############
         # deal with the monitor channels if they were given (or take them from the plot)
         if monitor_channels is None and plot is not None and len(plot.channels) > 0:
             monitor_channels = plot.channels
@@ -279,9 +318,7 @@ class Optimizer(object):
         #######################################
         function_input = raise_to_list(self.model.get_inputs()) + raise_to_list(self.model.get_targets())
         train_functions = []
-        for i in range(len(train_costs)):
-            updates = train_updates[i]
-            train_cost = train_costs[i]
+        for i, (updates, train_cost) in enumerate(zip(train_updates, train_costs)):
             # Compile the training function!
             log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_updates),
                      str(type(self.model)))
@@ -292,10 +329,10 @@ class Optimizer(object):
                                outputs=[train_cost] + self.train_monitors_dict.values(),
                                name='f_learn_%d' % i)
 
-            log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
+            log.info('f_learn %d compilation took %s', i + 1, make_time_units_string(time.time() - t))
             train_functions.append(f_learn)
 
-        # figure out if we want valid and test
+        # figure out if we want valid and test (monitors)
         self.valid_flag = (self.dataset.valid_inputs is not None) and (len(self.valid_monitors_dict) > 0)
         self.test_flag = (self.dataset.test_inputs is not None) and (len(self.test_monitors_dict) > 0)
         # Now compile the monitor functions!
@@ -387,14 +424,17 @@ class Optimizer(object):
         #########
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
-        train_data = minibatch(self.dataset.train_inputs, self.batch_size, self.min_batch_size)
-        if self.dataset.train_targets is not None:
-            train_data = izip(
-                train_data,
-                minibatch(self.dataset.train_targets, self.batch_size, self.min_batch_size)
-            )
+        train_data = [
+            minibatch(input, self.batch_size, self.min_batch_size)
+            for input in raise_to_list(self.dataset.train_inputs)
+            ]
+        if self.dataset.train_targets is not None and not self.unsupervised:
+            train_data += [
+                minibatch(target, self.batch_size, self.min_batch_size)
+                for target in raise_to_list(self.dataset.train_targets)
+                ]
 
-        for batch in train_data:
+        for batch in izip(*train_data):
             _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
             # handle any user defined monitors
@@ -430,32 +470,9 @@ class Optimizer(object):
         #########
         # valid #
         #########
-        if self.dataset.valid_inputs is not None and len(self.valid_monitors_dict) > 0:
-            valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
-            valid_data = minibatch(self.dataset.valid_inputs, self.batch_size, self.min_batch_size)
-            if self.dataset.valid_targets is not None:
-                valid_data = izip(
-                    valid_data,
-                    minibatch(self.dataset.valid_targets, self.batch_size, self.min_batch_size)
-                )
-            for batch in valid_data:
-                _outs = raise_to_list(self.valid_monitor_function(*batch))
-                current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
-                for name, val in current_monitors:
-                    val = numpy.asarray(val)
-                    valid_monitors[name].append(val)
-
-            # get the mean values for the batches
-            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in valid_monitors.items()}
-            # log the mean values!
-            log.info('Valid monitors: %s', str(current_mean_monitors))
-            # send the values to their outservices
-            for name, service in self.valid_monitors_outservice_dict.items():
-                if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], "valid")
-            # if there is a plot, also send them over!
-            if plot:
-                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
+        self._compute_over_subset("valid", self.dataset.valid_inputs, self.dataset.valid_targets,
+                                  self.valid_monitors_dict, self.valid_monitor_function,
+                                  self.valid_monitors_outservice_dict, plot)
 
         ########
         # test #
@@ -514,16 +531,15 @@ class Optimizer(object):
     def _compute_over_subset(self, subset, inputs, targets,
                              monitors_dict, monitor_function, monitors_outservice_dict,
                              plot):
+        inputs = raise_to_list(inputs)
+        targets = raise_to_list(targets)
         if inputs is not None and len(monitors_dict) > 0:
             monitors = {key: [] for key in monitors_dict.keys()}
-            data = minibatch(inputs, self.batch_size, self.min_batch_size)
-            if targets is not None:
-                data = izip(
-                    data,
-                    minibatch(targets, self.batch_size, self.min_batch_size)
-                )
+            data = [minibatch(input, self.batch_size, self.min_batch_size) for input in inputs]
+            if targets is not None and not self.unsupervised:
+                data += [minibatch(target, self.batch_size, self.min_batch_size) for target in targets]
 
-            for batch in data:
+            for batch in izip(*data):
                 _outs = raise_to_list(monitor_function(*batch))
                 current_monitors = zip(monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
@@ -533,7 +549,7 @@ class Optimizer(object):
             # get the mean values for the batches
             current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in monitors.items()}
             # log the mean values!
-            log.info('%s monitors: %s', (subset, str(current_mean_monitors)))
+            log.info('%s monitors: %s', subset, str(current_mean_monitors))
             # send the values to their outservices
             for name, service in monitors_outservice_dict.items():
                 if name in current_mean_monitors and service:

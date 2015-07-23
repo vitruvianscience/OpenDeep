@@ -7,13 +7,6 @@ This module provides the main Convolutional Neural Network multi-layer models.
     http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
 
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
@@ -25,7 +18,7 @@ from theano.compat.python2x import OrderedDict
 from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.convolutional import ConvPoolLayer
-from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import mirror_images
 from opendeep.utils.misc import make_time_units_string, raise_to_list
@@ -204,7 +197,7 @@ class AlexNet(Model):
         log.debug("fully connected layer 1 (model layer 6)...")
         # we want to have dropout applied to the training version, but not the test version.
         fc_layer6_input = T.flatten(convpool_layer5.get_outputs(), 2)
-        fc_layer6 = BasicLayer(inputs_hook=(9216, fc_layer6_input),
+        fc_layer6 = Dense(inputs_hook=(9216, fc_layer6_input),
                                output_size=4096,
                                noise='dropout',
                                noise_level=0.5,
@@ -215,7 +208,7 @@ class AlexNet(Model):
         self.noise_switches += fc_layer6.get_noise_switch()
 
         log.debug("fully connected layer 2 (model layer 7)...")
-        fc_layer7 = BasicLayer(inputs_hook=(4096, fc_layer6.get_outputs()),
+        fc_layer7 = Dense(inputs_hook=(4096, fc_layer6.get_outputs()),
                                output_size=4096,
                                noise='dropout',
                                noise_level=0.5,

@@ -1,8 +1,7 @@
 from __future__ import print_function
-from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
 from opendeep.models.container import Prototype
 # import the dataset and optimizer to use
-from opendeep.data.dataset import TEST
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
 
@@ -19,7 +18,7 @@ if __name__ == '__main__':
     # grab the MNIST dataset
     mnist = MNIST()
     # create the basic layer
-    layer1 = BasicLayer(input_size=28*28, output_size=1000, activation='relu')
+    layer1 = Dense(input_size=28*28, output_size=1000, activation='relu')
     # create the softmax classifier
     layer2 = SoftmaxLayer(inputs_hook=(1000, layer1.get_outputs()), output_size=10, out_as_probs=False)
     # create the mlp from the two layers
@@ -31,11 +30,10 @@ if __name__ == '__main__':
     # optimizer.train()
     mlp.train(optimizer)
 
-
     # test it on some images!
-    test_data, test_labels = mnist.getSubset(subset=TEST)
-    test_data = test_data[:25].eval()
-    test_labels = test_labels[:25].eval()
+    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
+    test_data = test_data[:25]
+    test_labels = test_labels[:25]
     # use the run function!
     preds = mlp.run(test_data)
     print('-------')

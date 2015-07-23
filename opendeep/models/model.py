@@ -258,15 +258,18 @@ class Model(object):
             The run function defaults like so::
 
                 self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                      outputs = self.get_outputs(),
+                                      outputs = raise_to_list(self.get_outputs()),
                                       updates = self.get_updates(),
                                       name    = 'f_run')
         """
         if not hasattr(self, 'f_run'):
             log.debug("Compiling f_run...")
             t = time.time()
+            outputs = raise_to_list(self.get_outputs())
+            if outputs is not None and len(outputs) == 1:
+                outputs = outputs[0]
             self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                  outputs = self.get_outputs(),
+                                  outputs = outputs,
                                   updates = self.get_updates(),
                                   name    = 'f_run')
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
@@ -509,7 +512,7 @@ class Model(object):
         The variables should be set to either 0. or 1.
         These switch variables are used in theano Switch operations, such as adding noise during training and removing
         it during testing.
-        For a usage example, see the BasicLayer in opendeep.models.single_layer.basic package.
+        For a usage example, see the Dense in opendeep.models.single_layer.basic package.
 
         Returns
         -------

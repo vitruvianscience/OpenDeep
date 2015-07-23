@@ -22,22 +22,21 @@ log = logging.getLogger(__name__)
 
 class Dataset(object):
     """
-    Default interface for a dataset object. At minimum, a Dataset needs to implement get_subset().
-    get_subset() returns the (data, label) pair of iterables over the specific subset of this dataset.
+    Default interface for a dataset object.
 
     Attributes
     ----------
-    train_inputs : list(iterable)
+    train_inputs : iterable or list(iterable)
         The list of input iterables to use as data to the model for training.
-    train_targets : list(iterable) or None
+    train_targets : iterable or list(iterable) or None
         The list of target iterables (labels) to use as labels to the model for training.
-    valid_inputs : list(iterable) or None
+    valid_inputs : iterable or list(iterable) or None
         The list of input iterables to use as data to the model for validation.
-    valid_targets : list(iterable) or None
+    valid_targets : iterable or list(iterable) or None
         The list of target iterables (labels) to use as labels to the model for validation.
-    test_inputs : list(iterable) or None
+    test_inputs : iterable or list(iterable) or None
         The list of input iterables to use as data to the model for testing.
-    test_targets : list(iterable) or None
+    test_targets : iterable or list(iterable) or None
         The list of target iterables (labels) to use as labels to the model for testing.
     """
     def __init__(self, train_inputs, train_targets=None,
@@ -49,17 +48,17 @@ class Dataset(object):
 
         Parameters
         ----------
-        train_inputs : list(iterable)
+        train_inputs : iterable or list(iterable)
             The list of input iterables to use as data to the model for training.
-        train_targets : list(iterable), optional
+        train_targets : iterable or list(iterable), optional
             The list of target iterables (labels) to use as labels to the model for training.
-        valid_inputs : list(iterable), optional
+        valid_inputs : iterable or list(iterable), optional
             The list of input iterables to use as data to the model for validation.
-        valid_targets : list(iterable), optional
+        valid_targets : iterable or list(iterable), optional
             The list of target iterables (labels) to use as labels to the model for validation.
-        test_inputs : list(iterable), optional
+        test_inputs : iterable or list(iterable), optional
             The list of input iterables to use as data to the model for testing.
-        test_targets : list(iterable), optional
+        test_targets : iterable or list(iterable), optional
             The list of target iterables (labels) to use as labels to the model for testing.
         """
         self.train_inputs = _check_type_and_return_as_list(train_inputs, "train_inputs")
@@ -78,7 +77,7 @@ def _check_type_and_return_as_list(iterables, name="Unknown"):
     such as train_inputs, etc.)
     """
     iterables = raise_to_list(iterables)
-    if iterables:
+    if iterables is not None:
         # type checking to make sure everything is iterable (and warn against generators).
         for idx, elem in enumerate(iterables):
             assert isinstance(elem, Iterable), "%s (as a list) parameter index %d is not iterable!" % (name, idx)
@@ -88,4 +87,7 @@ def _check_type_and_return_as_list(iterables, name="Unknown"):
                                                     "one of the stream types in opendeep.data.stream instead, " \
                                                     "or define your own class that performs the generator function " \
                                                     "in an __iter__(self) method!" % (name, idx)
+        # if we only have one stream, just return it not in a list wrapper
+        if len(iterables) == 1:
+            iterables = iterables[0]
     return iterables

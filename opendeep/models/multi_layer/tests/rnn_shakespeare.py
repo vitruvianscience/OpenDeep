@@ -1,27 +1,23 @@
-# standard libraries
-import logging
 # third party
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal imports
 from opendeep.log.logger import config_root_logger
-from opendeep.data.standard_datasets.text.characters import CharsLM
+from opendeep.data import TextDataset
 from opendeep.models.multi_layer.recurrent import RNN
 from opendeep.optimization.stochastic_gradient_descent import SGD
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.optimization.rmsprop import RMSProp
 from opendeep.monitor.monitor import Monitor
 
-log = logging.getLogger(__name__)
-
 def main():
-    data = CharsLM(filename='shakespeare_input.txt',
-                   source="http://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt",
-                   seq_length=500, train_split=0.95, valid_split=0.05)
+    data = TextDataset(path='../../../../datasets/shakespeare_input.txt',
+                       source="http://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt",
+                       n_future=1)
 
     rnn = RNN(outdir='outputs/rnn/',
-              input_size=data.vocab_size,
+              input_size=len(data.vocab),
               hidden_size=100,
-              output_size=data.vocab_size,
+              output_size=len(data.vocab),
               layers=3,
               activation='softmax',
               hidden_activation='relu',

@@ -4,10 +4,9 @@ import logging
 # third party libraries
 from opendeep.log.logger import config_root_logger
 from opendeep.models.container import Prototype
-from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
 from opendeep.optimization.adadelta import AdaDelta
 from opendeep.data.standard_datasets.image.mnist import MNIST
-from opendeep.data.dataset import TEST
 
 # grab a log to output useful info
 log = logging.getLogger(__name__)
@@ -35,16 +34,16 @@ def run_stacked_dae():
 
 def run_mlp():
     # # define the model layers
-    # layer1 = BasicLayer(input_size=784, output_size=1000, activation='rectifier')
-    # layer2 = BasicLayer(inputs_hook=(1000, layer1.get_outputs()), output_size=1000, activation='rectifier')
+    # layer1 = Dense(input_size=784, output_size=1000, activation='rectifier')
+    # layer2 = Dense(inputs_hook=(1000, layer1.get_outputs()), output_size=1000, activation='rectifier')
     # classlayer3 = SoftmaxLayer(inputs_hook=(1000, layer2.get_outputs()), output_size=10, out_as_probs=False)
     # # add the layers to the prototype
     # mlp = Prototype(layers=[layer1, layer2, classlayer3])
 
     # test the new way to automatically fill in inputs_hook for models
     mlp = Prototype()
-    mlp.add(BasicLayer(input_size=784, output_size=1000, activation='rectifier', noise='dropout'))
-    mlp.add(BasicLayer(output_size=1500, activation='tanh', noise='dropout'))
+    mlp.add(Dense(input_size=784, output_size=1000, activation='rectifier', noise='dropout'))
+    mlp.add(Dense(output_size=1500, activation='tanh', noise='dropout'))
     mlp.add(SoftmaxLayer(output_size=10))
 
     mnist = MNIST()
@@ -52,9 +51,9 @@ def run_mlp():
     optimizer = AdaDelta(model=mlp, dataset=mnist, epochs=10)
     optimizer.train()
 
-    test_data, test_labels = mnist.getSubset(subset=TEST)
-    test_data = test_data[:25].eval()
-    test_labels = test_labels[:25].eval()
+    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
+    test_data = test_data[:25]
+    test_labels = test_labels[:25]
     # use the run function!
     yhat = mlp.run(test_data)
     print('-------')

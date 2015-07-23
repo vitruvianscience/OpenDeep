@@ -31,7 +31,7 @@ class PianoMidiDe(FileDataset):
     test : numpy matrix
         All the testing sequences concatenated into one matrix.
     """
-    def __init__(self, path='../../datasets/Piano-midi.de',
+    def __init__(self, path='datasets/Piano-midi.de',
                  source='http://www-etud.iro.umontreal.ca/~boulanni/Piano-midi.de.zip',
                  train_filter='.*train.*',
                  valid_filter='.*valid.*',

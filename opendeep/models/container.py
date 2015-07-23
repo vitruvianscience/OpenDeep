@@ -3,14 +3,6 @@ This module defines a container for quickly assembling multiple layers/models
 together without needing to define a new Model class. This should mainly be used
 for experimentation, and then later you should make your creation into a new Model class.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
@@ -87,10 +79,10 @@ class Prototype(Model):
         of it automatically::
 
             from opendeep.models.container import Prototype
-            from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+            from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
             mlp = Prototype()
-            mlp.add(BasicLayer(input_size=28*28, output_size=1000, activation='relu', noise='dropout', noise_level=0.5))
-            mlp.add(BasicLayer(output_size=512, activation='relu', noise='dropout', noise_level=0.5))
+            mlp.add(Dense(input_size=28*28, output_size=1000, activation='relu', noise='dropout', noise_level=0.5))
+            mlp.add(Dense(output_size=512, activation='relu', noise='dropout', noise_level=0.5))
             mlp.add(SoftmaxLayer(output_size=10))
 
         Parameters
@@ -211,8 +203,10 @@ class Prototype(Model):
             output = self.f_run(*input)
         # otherwise, compile it!
         else:
-            inputs = self.get_inputs()
-            outputs = self.get_outputs()
+            inputs = raise_to_list(self.get_inputs())
+            outputs = raise_to_list(self.get_outputs())
+            if outputs is not None and len(outputs) == 1:
+                outputs = outputs[0]
             updates = self.get_updates()
             t = time.time()
             log.info("Compiling f_run...")

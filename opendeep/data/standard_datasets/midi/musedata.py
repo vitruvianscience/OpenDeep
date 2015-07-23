@@ -31,7 +31,7 @@ class MuseData(FileDataset):
     test : numpy matrix
         All the testing sequences concatenated into one matrix.
     """
-    def __init__(self, path='../../datasets/MuseData',
+    def __init__(self, path='datasets/MuseData',
                  source='http://www-etud.iro.umontreal.ca/~boulanni/MuseData.zip',
                  train_filter='.*train.*',
                  valid_filter='.*valid.*',

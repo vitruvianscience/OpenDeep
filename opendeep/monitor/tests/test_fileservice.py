@@ -6,7 +6,6 @@ import theano
 import theano.tensor as T
 from opendeep.monitor.monitor import Monitor, MonitorsChannel, collapse_channels
 from opendeep.monitor.out_service import FileService
-from opendeep.data.dataset import TRAIN, VALID, TEST
 from opendeep.utils.noise import add_uniform
 from opendeep.utils.statistics import get_stats
 from opendeep.utils.misc import make_time_units_string
@@ -58,7 +57,7 @@ def main():
         m = OrderedDict(zip(train_collapsed.keys(), vals))
         for name, service in train_services.items():
             if name in m:
-                service.write(m[name], TRAIN)
+                service.write(m[name], "train")
         log.debug('----- '+make_time_units_string(time.time()-t))
 
     for epoch in range(10):
@@ -68,7 +67,7 @@ def main():
         m = OrderedDict(zip(valid_collapsed.keys(), vals))
         for name, service in valid_services.items():
             if name in m:
-                service.write(m[name], VALID)
+                service.write(m[name], "valid")
         log.debug('----- ' + make_time_units_string(time.time() - t))
 
     log.debug("TOTAL TIME "+make_time_units_string(time.time()-t1))

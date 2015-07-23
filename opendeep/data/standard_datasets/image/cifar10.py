@@ -9,7 +9,7 @@ import math
 import numpy
 # internal imports
 from opendeep.data.dataset_file import FileDataset
-from opendeep.utils.misc import numpy_one_hot
+from opendeep.utils.misc import numpy_one_hot, raise_to_list
 
 try:
     import cPickle as pickle
@@ -29,7 +29,7 @@ class CIFAR10(FileDataset):
     http://www.cs.toronto.edu/~kriz/cifar.html
     """
     def __init__(self, train_split=0.95, valid_split=0.05, one_hot=False,
-                 path='../../datasets/cifar-10-batches-py/',
+                 path='datasets/cifar-10-batches-py/',
                  source='http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'):
         """
         Parameters

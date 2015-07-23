@@ -2,13 +2,6 @@
 This module provides a framework for constructing recurrent networks. Recurrent networks have an internal hidden
 state that keeps memory over time.
 """
-__authors__ = ["Markus Beissinger", "Skylar Payne"]
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger", "Skylar Payne"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
@@ -16,13 +9,12 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep.utils.constructors import sharedX, function
+from opendeep.utils.constructors import sharedX
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.cost import get_cost_function
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.decorators import inherit_docs
-from opendeep.utils.misc import raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import get_noise
 

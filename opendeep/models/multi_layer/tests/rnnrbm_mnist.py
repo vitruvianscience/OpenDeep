@@ -1,6 +1,6 @@
 import numpy
 import logging
-import opendeep.log.logger as logger
+from opendeep.log import config_root_logger
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
 from opendeep.data.standard_datasets.image.mnist import MNIST
@@ -91,7 +91,7 @@ def run_sequence(sequence=0):
 if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
-    logger.config_root_logger()
+    config_root_logger()
     run_sequence(1)
     run_sequence(2)
     run_sequence(3)

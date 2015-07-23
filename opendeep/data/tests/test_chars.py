@@ -26,7 +26,7 @@ class TestCharsDataset(unittest.TestCase):
                                   level="char",
                                   n_future=n_future)
             i = 0
-            chars, labels = dataset.train_inputs[0], dataset.train_targets[0]
+            chars, labels = dataset.train_inputs, dataset.train_targets
             for char, label in itertools.izip(chars, labels):
                 char = dataset.vocab_inverse[np.argmax(char, 0)]
                 label = dataset.label_vocab_inverse[np.argmax(label, 0)]
@@ -43,7 +43,7 @@ class TestCharsDataset(unittest.TestCase):
         # char
         dataset = TextDataset(path=self.shakespeare,
                               level="char")
-        for i, char in enumerate(dataset.train_inputs[0]):
+        for i, char in enumerate(dataset.train_inputs):
             if i >= self.n_chars:
                 break
             char = dataset.vocab_inverse[np.argmax(char)]
@@ -53,7 +53,7 @@ class TestCharsDataset(unittest.TestCase):
         # word
         dataset = TextDataset(path=self.shakespeare,
                               level="word")
-        for i, word, in enumerate(dataset.train_inputs[0]):
+        for i, word, in enumerate(dataset.train_inputs):
             if i >= self.n_chars:
                 break
             print(dataset.vocab_inverse[np.argmax(word)])
@@ -64,7 +64,7 @@ class TestCharsDataset(unittest.TestCase):
         print(lines)
         dataset = TextDataset(path=self.shakespeare,
                               level="line")
-        for i, line in enumerate(dataset.train_inputs[0]):
+        for i, line in enumerate(dataset.train_inputs):
             if i>= self.n_chars:
                 break
             print([dataset.vocab_inverse[np.argmax(line)]])

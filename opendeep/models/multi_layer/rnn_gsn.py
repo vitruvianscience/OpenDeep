@@ -2,14 +2,6 @@
 This module provides the RNN-GSN: an unsupervised, generative recurrent model.
 .. todo:: <link to my paper when it is on arxiv>
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os

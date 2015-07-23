@@ -1,8 +1,8 @@
-'''
+"""
 Provides the MNIST handwritten digit dataset.
 
 See: http://yann.lecun.com/exdb/mnist/
-'''
+"""
 # standard libraries
 import logging
 import gzip
@@ -12,7 +12,7 @@ import numpy
 # internal imports
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
-from opendeep.utils.misc import numpy_one_hot, binarize
+from opendeep.utils.misc import numpy_one_hot, binarize, raise_to_list
 
 try:
     import cPickle as pickle
@@ -28,7 +28,7 @@ class MNIST(FileDataset):
     """
     def __init__(self, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
                  sequence_number=0, seq_3d=False, seq_length=30, rng=None,
-                 path='../../datasets/mnist.pkl.gz',
+                 path='datasets/mnist.pkl.gz',
                  source='http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'):
         """
         Parameters
@@ -81,7 +81,7 @@ class MNIST(FileDataset):
 
         # sequence the dataset
         if sequence_number is not None:
-            self.sequence(sequence_number=sequence_number, rng=rng)
+            self._sequence(sequence_number=sequence_number, rng=rng)
 
         # make optional binary
         if binary:
@@ -144,7 +144,7 @@ class MNIST(FileDataset):
             log.debug('Valid shape is: %s', str(self._valid_shape))
             log.debug('Test shape is: %s', str(self._test_shape))
 
-    def sequence(self, sequence_number, rng=None):
+    def _sequence(self, sequence_number, rng=None):
         """
         Sequences the train, valid, and test datasets according to the artificial sequences I made up...
 

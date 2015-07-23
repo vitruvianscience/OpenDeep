@@ -31,7 +31,7 @@ class Nottingham(FileDataset):
     test : numpy matrix
         All the testing sequences concatenated into one matrix.
     """
-    def __init__(self, path='../../datasets/Nottingham',
+    def __init__(self, path='datasets/Nottingham',
                  source='http://www-etud.iro.umontreal.ca/~boulanni/Nottingham.zip',
                  train_filter='.*train.*',
                  valid_filter='.*valid.*',
