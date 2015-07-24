@@ -7,6 +7,7 @@ import logging
 import itertools
 # third party libraries
 import numpy
+# internal imports
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ def minibatch(iterable, batch_size=1, min_batch_size=1):
     Parameters
     ----------
     iterable : iterator
-        An iterable object (a numpy array is also iterable).
+        An iterable object (a numpy array is also iterable) or list of iterable objects to grab batches from.
     batch_size : int, optional
         The number of examples to pull from the iterable as a batch. Default is 1.
     min_batch_size : int, optional
@@ -33,7 +34,7 @@ def minibatch(iterable, batch_size=1, min_batch_size=1):
         (batch_size, min_batch_size)
     # if our input is just a numpy array, use the faster minibatching function
     if isinstance(iterable, numpy.ndarray):
-        # would prefer to use 'yield from' but that syntax is python >= 3.3
+        # would prefer to use 'yield from' but that syntax is python >= 3.3 only
         for chunk in numpy_minibatch(iterable, batch_size, min_batch_size):
             yield chunk
     # otherwise for general iterators, use the generic minibatching function.

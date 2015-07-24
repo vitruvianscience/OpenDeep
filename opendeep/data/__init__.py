@@ -8,4 +8,4 @@ from .dataset_memory import *
 from .standard_datasets import *
 
 # for streams
-from .stream import *
+from . import stream

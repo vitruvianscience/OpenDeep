@@ -9,7 +9,7 @@ import math
 import numpy
 # internal imports
 from opendeep.data.dataset_file import FileDataset
-from opendeep.utils.misc import numpy_one_hot, raise_to_list
+from opendeep.utils.misc import numpy_one_hot
 
 try:
     import cPickle as pickle

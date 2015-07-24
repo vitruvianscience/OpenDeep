@@ -12,7 +12,7 @@ import numpy
 # internal imports
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils import file_ops
-from opendeep.utils.misc import numpy_one_hot, binarize, raise_to_list
+from opendeep.utils.misc import numpy_one_hot, binarize
 
 try:
     import cPickle as pickle

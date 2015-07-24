@@ -8,6 +8,7 @@ import time
 import warnings
 import itertools
 # third party
+import numpy
 try:
     import nltk
     NLTK_AVAILABLE = True
@@ -16,7 +17,7 @@ except ImportError:
 # internal imports
 from opendeep.data.dataset import Dataset
 from opendeep.data.stream.filestream import FileStream
-from opendeep.data.stream.modifystream import ModifyStream
+from opendeep.data.stream.modifystream import ModifyStream, BufferStream
 import opendeep.utils.file_ops as files
 from opendeep.utils.misc import numpy_one_hot, make_time_units_string, compose
 
@@ -108,7 +109,7 @@ class TextDataset(FileDataset):
     def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None,
                  inputs_preprocess=None, targets_preprocess=None,
                  vocab=None, label_vocab=None, unk_token="<UNK>", level="char", target_n_future=None,
-                 sequence_length=20):
+                 sequence_length=False):
         """
         Initialize a text-based dataset.
 
@@ -152,7 +153,7 @@ class TextDataset(FileDataset):
             steps in the future) that the language model will try to predict as its target. Most language models will
             have target_n_future=1. If `target_n_future` is not None, the targets will be created from the inputs (but still apply
             targets_preprocess instead of inputs_preprocess if it is different).
-        sequence_length : int
+        sequence_length : int, optional
             The maximum length of subsequences to iterate over this dataset.
         """
         # Figure out if we want characters, words, or lines processed, and create the processing function
@@ -171,6 +172,10 @@ class TextDataset(FileDataset):
             tokenize = lambda s: [s]
         else:
             tokenize = None
+
+        if sequence_length:
+            assert sequence_length > 1, "Need to have a sequence_length greater than 1, found %d" % sequence_length
+        self.sequence_len = sequence_length
 
         # modify our file stream's processors to work with the appropriate level!
         # if target_n_future is not none, we are assuming that this is a language model and that we should tokenize the target
@@ -204,10 +209,16 @@ class TextDataset(FileDataset):
         rep = lambda token: self.vocab.get(token, self.vocab.get(self.unk_token))
         one_hot = lambda token: numpy_one_hot([rep(token)], n_classes=vocab_len)[0]
         self.train_inputs = ModifyStream(self.train_inputs, one_hot)
+        if self.sequence_len:
+            self.train_inputs = self._subsequence(self.train_inputs)
         if self.valid_inputs is not None:
             self.valid_inputs = ModifyStream(self.valid_inputs, one_hot)
+            if self.sequence_len:
+                self.valid_inputs = self._subsequence(self.valid_inputs)
         if self.test_inputs is not None:
             self.test_inputs = ModifyStream(self.test_inputs, one_hot)
+            if self.sequence_len:
+                self.valid_inputs = self._subsequence(self.valid_inputs)
 
         # Now deal with possible output streams (either tokenizing it using the supplied label dictionary,
         # creating the label dictionary, or using the vocab dictionary if it is a language model (target_n_future is not none)
@@ -232,10 +243,23 @@ class TextDataset(FileDataset):
             label_one_hot = lambda token: numpy_one_hot([label_rep(token)], n_classes=label_vocab_len)[0]
             if self.train_targets is not None:
                 self.train_targets = ModifyStream(self.train_targets, label_one_hot)
+                if self.sequence_len:
+                    self.train_targets = self._subsequence(self.train_targets)
             if self.valid_targets is not None:
                 self.valid_targets = ModifyStream(self.valid_targets, label_one_hot)
+                if self.sequence_len:
+                    self.valid_targets = self._subsequence(self.valid_targets)
             if self.test_targets is not None:
                 self.test_targets = ModifyStream(self.test_targets, label_one_hot)
+                if self.sequence_len:
+                    self.test_targets = self._subsequence(self.test_targets)
+
+    def _subsequence(self, stream):
+        numpy_concat = lambda l: numpy.vstack(l)
+        return ModifyStream(
+            BufferStream(stream, self.sequence_len),
+            numpy_concat
+        )
 
     def compile_vocab(self, iters):
         """
