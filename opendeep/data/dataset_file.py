@@ -107,7 +107,8 @@ class TextDataset(FileDataset):
     """
     def __init__(self, path, source=None, train_filter=None, valid_filter=None, test_filter=None,
                  inputs_preprocess=None, targets_preprocess=None,
-                 vocab=None, label_vocab=None, unk_token="<UNK>", level="char", n_future=None):
+                 vocab=None, label_vocab=None, unk_token="<UNK>", level="char", target_n_future=None,
+                 sequence_length=20):
         """
         Initialize a text-based dataset.
 
@@ -139,18 +140,20 @@ class TextDataset(FileDataset):
             A starting dictionary to use when converting tokens to numbers.
         label_vocab : dict, optional
             A starting dictionary to use when converting labels (targets) to numbers.
-        unk_token : str, optional
+        unk_token : str
             The representation for an unknown token to use in the vocab dictionary.
-        level : str, optional
+        level : str
             Either ``char``, ``word``, or ``line``, saying how to process the text.
             For ``char``, data will be character-level.
             For ``word``, data will be split by whitespace.
             For ``line``, data will be split by newline.
-        n_future : int, optional
+        target_n_future : int, optional
             For creating language models that predict tokens in the future, this determines the skip size (number of
             steps in the future) that the language model will try to predict as its target. Most language models will
-            have n_future=1. If `n_future` is not None, the targets will be created from the inputs (but still apply
+            have target_n_future=1. If `target_n_future` is not None, the targets will be created from the inputs (but still apply
             targets_preprocess instead of inputs_preprocess if it is different).
+        sequence_length : int
+            The maximum length of subsequences to iterate over this dataset.
         """
         # Figure out if we want characters, words, or lines processed, and create the processing function
         # to compose on top of the preprocessing function arguments.
@@ -170,8 +173,8 @@ class TextDataset(FileDataset):
             tokenize = None
 
         # modify our file stream's processors to work with the appropriate level!
-        # if n_future is not none, we are assuming that this is a language model and that we should tokenize the target
-        if n_future is not None:
+        # if target_n_future is not none, we are assuming that this is a language model and that we should tokenize the target
+        if target_n_future is not None:
             targets_preprocess = compose(tokenize, inputs_preprocess)
         inputs_preprocess = compose(tokenize, inputs_preprocess)
 
@@ -182,12 +185,12 @@ class TextDataset(FileDataset):
         # after this call, train_inputs, train_targets, etc. are all lists or None.
 
         # determine if this is a language model, and adjust the stream accordingly to use the inputs as the targets
-        if n_future is not None:
-            self.train_targets = FileStream(path, train_filter, targets_preprocess, n_future)
+        if target_n_future is not None:
+            self.train_targets = FileStream(path, train_filter, targets_preprocess, target_n_future)
             if valid_filter is not None:
-                self.valid_targets = FileStream(path, valid_filter, targets_preprocess, n_future)
+                self.valid_targets = FileStream(path, valid_filter, targets_preprocess, target_n_future)
             if test_filter is not None:
-                self.test_targets = FileStream(path, test_filter, targets_preprocess, n_future)
+                self.test_targets = FileStream(path, test_filter, targets_preprocess, target_n_future)
 
         # Create our vocab dictionary if it doesn't exist!
         self.unk_token = unk_token
@@ -207,14 +210,14 @@ class TextDataset(FileDataset):
             self.test_inputs = ModifyStream(self.test_inputs, one_hot)
 
         # Now deal with possible output streams (either tokenizing it using the supplied label dictionary,
-        # creating the label dictionary, or using the vocab dictionary if it is a language model (n_future is not none)
-        if self.train_targets is not None and n_future is None:
+        # creating the label dictionary, or using the vocab dictionary if it is a language model (target_n_future is not none)
+        if self.train_targets is not None and target_n_future is None:
             vocab_inputs = [self.train_targets] + (self.valid_targets or [])
             self.label_vocab = label_vocab or \
                                self.compile_vocab(itertools.chain(*vocab_inputs))
             self.label_vocab_inverse = {v: k for k, v in self.label_vocab.items()}
         # if this is a language model, label vocab is same as input vocab
-        elif n_future is not None:
+        elif target_n_future is not None:
             self.label_vocab = self.vocab
             self.label_vocab_inverse = self.vocab_inverse
         else:

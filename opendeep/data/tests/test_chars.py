@@ -24,7 +24,7 @@ class TestCharsDataset(unittest.TestCase):
         for n_future in [0, 1, 10, 13]:
             dataset = TextDataset(path=self.shakespeare,
                                   level="char",
-                                  n_future=n_future)
+                                  target_n_future=n_future)
             i = 0
             chars, labels = dataset.train_inputs, dataset.train_targets
             for char, label in itertools.izip(chars, labels):

@@ -12,7 +12,7 @@ from opendeep.monitor.monitor import Monitor
 def main():
     data = TextDataset(path='../../../../datasets/shakespeare_input.txt',
                        source="http://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt",
-                       n_future=1)
+                       target_n_future=1)
 
     rnn = RNN(outdir='outputs/rnn/',
               input_size=len(data.vocab),

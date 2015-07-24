@@ -20,3 +20,14 @@ class ModifyStream:
     def __iter__(self):
         for elem in self.stream:
             yield self.func(elem)
+
+class BufferStream:
+    """
+    Creates an iterable stream that returns a list of elements from the input stream with a buffer size.
+    """
+    def __init__(self, stream, buffer_size):
+        self.stream = stream
+        self.buffer_size = buffer_size
+
+    def __iter__(self):
+        pass
