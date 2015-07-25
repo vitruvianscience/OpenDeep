@@ -11,6 +11,14 @@ Subpackages
 Submodules
 ----------
 
+opendeep.data.stream.batchstream module
+---------------------------------------
+
+.. automodule:: opendeep.data.stream.batchstream
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.data.stream.filestream module
 --------------------------------------
 

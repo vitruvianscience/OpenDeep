@@ -17,7 +17,8 @@ except ImportError:
 # internal imports
 from opendeep.data.dataset import Dataset
 from opendeep.data.stream.filestream import FileStream
-from opendeep.data.stream.modifystream import ModifyStream, BufferStream
+from opendeep.data.stream.modifystream import ModifyStream
+from opendeep.data.stream.batchstream import BufferStream
 import opendeep.utils.file_ops as files
 from opendeep.utils.misc import numpy_one_hot, make_time_units_string, compose
 
@@ -151,10 +152,11 @@ class TextDataset(FileDataset):
         target_n_future : int, optional
             For creating language models that predict tokens in the future, this determines the skip size (number of
             steps in the future) that the language model will try to predict as its target. Most language models will
-            have target_n_future=1. If `target_n_future` is not None, the targets will be created from the inputs (but still apply
-            targets_preprocess instead of inputs_preprocess if it is different).
+            have target_n_future=1. If `target_n_future` is not None, the targets will be created from the inputs
+            (but still apply targets_preprocess instead of inputs_preprocess if it is different).
         sequence_length : int, optional
-            The maximum length of subsequences to iterate over this dataset.
+            The maximum length of subsequences to iterate over this dataset. If this is None or False, the data
+            will just be supplied as a stream of one-hot vectors rather than broken into 2-D one-hot vector sequences.
         """
         # Figure out if we want characters, words, or lines processed, and create the processing function
         # to compose on top of the preprocessing function arguments.

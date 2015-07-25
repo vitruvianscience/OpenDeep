@@ -4,6 +4,7 @@ This module contains utils that are general and can't be grouped logically into 
 # standard libraries
 import logging
 import functools
+import itertools
 # third party libraries
 import numpy
 import theano
@@ -370,3 +371,16 @@ def compose(*functions):
         return functools.reduce(f_of_g, functions, lambda x: x)
     else:
         return None
+
+def min_normalized_izip(*iterables):
+    """
+    A function to make sure the length of all iterables is the same and normalize to the minimum if not.
+
+    Parameters
+    ----------
+    *iterables
+        A list of iterable objects (most typically going to be minibatches)
+    """
+    for elems in itertools.izip(*iterables):
+        min_len = min([elem.shape[0] if hasattr(elem, 'shape') else len(raise_to_list(elem)) for elem in elems])
+        yield [elem[:min_len] for elem in elems]

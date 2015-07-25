@@ -1,7 +1,7 @@
 # standard libraries
 from __future__ import print_function
 import unittest
-import shutil
+import os
 import itertools
 import numpy as np
 try:
@@ -45,13 +45,12 @@ class TestCharsDataset(unittest.TestCase):
                 i += 1
             del dataset
 
-        for len in [1, 5]:
+        for len in [2, 5]:
             dataset = TextDataset(path=self.shakespeare,
                                   level="char",
                                   target_n_future=1,
                                   sequence_length=len)
 
-            print(dataset.vocab)
             chars, labels = dataset.train_inputs, dataset.train_targets
             for i, (char_seq, label_seq) in enumerate(itertools.izip(chars, labels)):
                 char_s = [dataset.vocab_inverse[np.argmax(char, 0)] for char in char_seq]
@@ -90,7 +89,7 @@ class TestCharsDataset(unittest.TestCase):
             print([dataset.vocab_inverse[np.argmax(line)]])
 
     def tearDown(self):
-        shutil.rmtree(self.shakespeare)
+        os.remove(self.shakespeare)
 
 
 if __name__ == '__main__':

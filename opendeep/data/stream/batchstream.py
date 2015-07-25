@@ -3,6 +3,8 @@ A wrapper object for modifying iterable streams of data into batches/minibatches
 """
 # standard libraries
 import itertools
+# third party libraries
+import numpy
 # internal imports
 from opendeep.utils.misc import raise_to_list
 
@@ -33,4 +35,14 @@ class MinibatchStream:
         self.min_batch_size = min_batch_size
 
     def __iter__(self):
-        pass
+        iters = [iter(stream) for stream in self.streams]
+        while True:
+            chunks = [list(itertools.islice(it, self.batch_size)) for it in iters]
+            # if there was nothing returned by any slice, return (assures stops at shortest stream)
+            if any([len(chunk) == 0 for chunk in chunks]):
+                return
+            # otherwise if the chunk is above the acceptable minimum size, yield it as a numpy array!
+            elif all(len(chunk) >= self.min_batch_size for chunk in chunks):
+                # make sure they are all the same length
+                min_len = min([len(chunk) for chunk in chunks])
+                yield [numpy.asarray(chunk[:min_len]) for chunk in chunks]

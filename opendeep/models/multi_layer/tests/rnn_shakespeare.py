@@ -13,13 +13,15 @@ def main():
     data = TextDataset(path='../../../../datasets/shakespeare_input.txt',
                        source="http://cs.stanford.edu/people/karpathy/char-rnn/shakespeare_input.txt",
                        target_n_future=1,
-                       sequence_length=2)
+                       sequence_length=50)
+
+
 
     rnn = RNN(outdir='outputs/rnn/',
               input_size=len(data.vocab),
-              hidden_size=100,
+              hidden_size=128,
               output_size=len(data.vocab),
-              layers=3,
+              layers=2,
               activation='softmax',
               hidden_activation='relu',
               mrg=RNG_MRG.MRG_RandomStreams(1),
@@ -40,7 +42,8 @@ def main():
 
     optimizer = RMSProp(model=rnn, dataset=data,
                         grad_clip=5., hard_clip=False,
-                        learning_rate=2e-3, decay=0.95, batch_size=100, epochs=300)
+                        learning_rate=2e-3, lr_decay='exponential', lr_decay_factor=0.97,
+                        decay=0.95, batch_size=50, epochs=50)
     # optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
     optimizer.train(monitor_channels=cost_monitor)
 

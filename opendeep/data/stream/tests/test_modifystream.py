@@ -1,5 +1,6 @@
 import unittest
-from opendeep.data.stream.modifystream import ModifyStream, BufferStream
+from opendeep.data.stream.modifystream import ModifyStream
+from opendeep.data.stream.batchstream import BufferStream
 
 class TestModifystream(unittest.TestCase):
 

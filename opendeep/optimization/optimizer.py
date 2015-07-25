@@ -41,6 +41,7 @@ from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import raise_to_list, make_time_units_string, \
     get_shared_values, set_shared_values, add_kwargs_to_dict, trunc
 from opendeep.utils.batch import minibatch
+from opendeep.utils.misc import min_normalized_izip
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class Optimizer(object):
     """
     def __init__(self, dataset, model=None,
                  epochs=1000, batch_size=100, min_batch_size=1,
-                 save_freq=10, stop_threshold=.9995, stop_patience=30,
+                 save_freq=10, stop_threshold=None, stop_patience=50,
                  learning_rate=1e-3, lr_decay=None, lr_decay_factor=None,
                  grad_clip=None, hard_clip=False,
                  **kwargs):
@@ -96,7 +97,7 @@ class Optimizer(object):
 
         # Deal with early stopping None initializations.
         if not stop_threshold:
-            stop_threshold = 1.
+            stop_threshold = numpy.inf
         if not save_freq:
             save_freq = 1000000
         if not stop_patience:
@@ -434,7 +435,7 @@ class Optimizer(object):
                 for target in raise_to_list(self.dataset.train_targets)
                 ]
 
-        for batch in izip(*train_data):
+        for batch in min_normalized_izip(*train_data):
             _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
             # handle any user defined monitors
@@ -486,12 +487,13 @@ class Optimizer(object):
         ###########
         # check for early stopping on train costs
         cost = numpy.sum(train_costs)
+        # if the cost improved, reset the patience and record the best cost.
         if cost < self.best_cost * self.early_stop_threshold:
             self.patience = 0
             self.best_cost = cost
             # save the parameters that made it the best
             self.best_params = get_shared_values(self.params)
-        else:
+        elif cost is not numpy.NaN:
             self.patience += 1
 
         # check for stopping either from n_epochs or from threshold/patience
@@ -539,7 +541,7 @@ class Optimizer(object):
             if targets is not None and not self.unsupervised:
                 data += [minibatch(target, self.batch_size, self.min_batch_size) for target in targets]
 
-            for batch in izip(*data):
+            for batch in min_normalized_izip(*data):
                 _outs = raise_to_list(monitor_function(*batch))
                 current_monitors = zip(monitors_dict.keys(), _outs)
                 for name, val in current_monitors:
