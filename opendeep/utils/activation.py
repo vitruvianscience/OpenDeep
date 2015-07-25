@@ -2,20 +2,14 @@
 These functions provide the nonlinearities used as activation functions for the visible, hidden,
 or output units in a deep net.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
+import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal references
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -53,18 +47,24 @@ def sigmoid(x):
 def softmax(x):
     """
     See the Theano documentation.
-    Returns the row-wise softmax function of x
+    Returns the row-wise softmax function of x.
+
+    In the case of 3D input, it returns the scan of softmax applied over the second two dimensions
+    (loops over first dimension).
 
     Parameters
     ----------
-    x : 2D tensor
-        Symbolic 2D Tensor (or compatible).
+    x : 2D or 3D tensor
+        Symbolic 2D or 3D Tensor (or compatible).
 
     Returns
     -------
-    2D tensor
-        Row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik})) applied to `x`.
+    2D or 3D tensor
+        Row-wise softmax: softmax_{ij}(x) = exp(x_{ij})/sum_k(exp(x_{ik})) applied to `x`. Returns same shape as input.
     """
+    if x.ndim == 3:
+        cost, _ = theano.scan(fn=T.nnet.softmax, sequences=x)
+        return cost
     return T.nnet.softmax(x)
 
 def softplus(x):

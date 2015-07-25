@@ -3,22 +3,14 @@ This module defines a container for quickly assembling multiple layers/models
 together without needing to define a new Model class. This should mainly be used
 for experimentation, and then later you should make your creation into a new Model class.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
 # third party libraries
 import theano.tensor as T
 # internal references
-from opendeep import function
 from opendeep.models.model import Model
+from opendeep.utils.constructors import function
 from opendeep.utils.misc import make_time_units_string, raise_to_list
 
 log = logging.getLogger(__name__)
@@ -87,10 +79,10 @@ class Prototype(Model):
         of it automatically::
 
             from opendeep.models.container import Prototype
-            from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
+            from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
             mlp = Prototype()
-            mlp.add(BasicLayer(input_size=28*28, output_size=1000, activation='relu', noise='dropout', noise_level=0.5))
-            mlp.add(BasicLayer(output_size=512, activation='relu', noise='dropout', noise_level=0.5))
+            mlp.add(Dense(input_size=28*28, output_size=1000, activation='relu', noise='dropout', noise_level=0.5))
+            mlp.add(Dense(output_size=512, activation='relu', noise='dropout', noise_level=0.5))
             mlp.add(SoftmaxLayer(output_size=10))
 
         Parameters
@@ -197,21 +189,36 @@ class Prototype(Model):
         array_like
             Theano/numpy tensor-like object that is the output of the model's computation graph.
         """
+        # set the noise switches off for running! we assume unseen data is noisy anyway :)
+        old_switch_vals = []
+        if len(self.get_noise_switch()) > 0:
+            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_noise_switch())))
+            old_switch_vals = [switch.get_value() for switch in self.get_noise_switch()]
+            [switch.set_value(0.) for switch in self.get_noise_switch()]
+
         # make sure the input is raised to a list - we are going to splat it!
         input = raise_to_list(input)
         # first check if we already made an f_run function
         if hasattr(self, 'f_run'):
-            return self.f_run(*input)
+            output = self.f_run(*input)
         # otherwise, compile it!
         else:
-            inputs = self.get_inputs()
-            outputs = self.get_outputs()
+            inputs = raise_to_list(self.get_inputs())
+            outputs = raise_to_list(self.get_outputs())
+            if outputs is not None and len(outputs) == 1:
+                outputs = outputs[0]
             updates = self.get_updates()
             t = time.time()
             log.info("Compiling f_run...")
             self.f_run = function(inputs=inputs, outputs=outputs, updates=updates, name="f_run")
             log.info("Compilation done! Took %s", make_time_units_string(time.time() - t))
-            return self.f_run(*input)
+            output = self.f_run(*input)
+
+        # reset any switches to how they were!
+        if len(self.get_noise_switch()) > 0:
+            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), old_switch_vals)]
+
+        return output
 
     def get_targets(self):
         """

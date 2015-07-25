@@ -15,14 +15,6 @@ VALID_MARKER : str
 TEST_MARKER : str
     The string indicator to append to collapsed monitor names to indicate they should be used on testing data.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os

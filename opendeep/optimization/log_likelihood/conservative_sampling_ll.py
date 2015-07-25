@@ -18,13 +18,6 @@ However, this is never the case with limited number of h taken from a Markov cha
 What I did in the paper is to take one h every K steps. The assumption being made here is that samples
 of h from higher layers mix much faster then x, which is what we usually observed in practice.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Li Yao, Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
@@ -32,7 +25,7 @@ import time
 import numpy
 import theano.tensor as T
 # internal
-from opendeep import function, as_floatX
+from opendeep.utils.constructors import function, as_floatX
 from opendeep.utils.misc import make_time_units_string
 
 log = logging.getLogger(__name__)

@@ -1,21 +1,13 @@
 """
 Generic implementation of RMSProp training algorithm.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Pylearn2", "Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
@@ -35,38 +27,39 @@ class RMSProp(Optimizer):
     problem by "[dividing] the learning rate for a weight by a running
     average of the magnitudes of recent gradients for that weight."
     """
-    def __init__(self, model, dataset,
-                 n_epoch=10, batch_size=100, minimum_batch_size=1,
-                 save_frequency=None, early_stop_threshold=None, early_stop_length=None,
-                 learning_rate=1e-6, lr_decay=None, lr_factor=None,
-                 decay=0.95, max_scaling=1e5):
+    def __init__(self, dataset, model=None,
+                 epochs=10, batch_size=100, min_batch_size=1,
+                 save_freq=None, stop_threshold=None, stop_patience=None,
+                 learning_rate=1e-6, lr_decay=None, lr_decay_factor=None,
+                 decay=0.95, max_scaling=1e5,
+                 grad_clip=None, hard_clip=False):
         """
         Initialize RMSProp.
 
         Parameters
         ----------
-        model : Model
-            The Model to train.
         dataset : Dataset
             The Dataset to use when training the Model.
-        n_epoch : int
+        model : Model
+            The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
+        epochs : int
             how many training iterations over the dataset to go.
         batch_size : int
             How many examples from the training dataset to use in parallel.
-        minimum_batch_size : int
+        min_batch_size : int
             The minimum number of examples required at a time (for things like time series, this would be > 1).
-        save_frequency : int
+        save_freq : int
             How many epochs to train between each new save of the Model's parameters.
-        early_stop_threshold : float
+        stop_threshold : float
             The factor by how much the best validation training score needs to improve to determine early stopping.
-        early_stop_length : int
-            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        stop_patience : int
+            The patience or number of epochs to wait after the stop_threshold has been reached before stopping.
         learning_rate : float
             The multiplicative amount to adjust parameters based on their gradient values.
         lr_decay : str
             The type of decay function to use for changing the learning rate over epochs. See
             `opendeep.utils.decay` for options.
-        lr_factor : float
+        lr_decay_factor : float
             The amount to use for the decay function when changing the learning rate over epochs. See
             `opendeep.utils.decay` for its effect for given decay functions.
         decay : float, optional
@@ -74,6 +67,10 @@ class RMSProp(Optimizer):
         max_scaling: float, optional
             Restrict the RMSProp gradient scaling coefficient to values
             below `max_scaling`.
+        grad_clip : float, optional
+            Whether to clip gradients. This will clip with a maximum of grad_clip or the parameter norm.
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         """
         # need to call the Optimizer constructor
         initial_parameters = locals().copy()
@@ -125,8 +122,8 @@ class RMSProp(Optimizer):
 
             if param.name in self.mean_square_grads:
                 log.warning("Calling get_updates more than once on the "
-                              "gradients of `%s` may make monitored values "
-                              "incorrect." % param.name)
+                            "gradients of `%s` may make monitored values "
+                            "incorrect." % param.name)
             # Store variable in self.mean_square_grads for monitoring.
             self.mean_square_grads[param.name] = mean_square_grad
 

@@ -1,6 +1,6 @@
 import numpy
 import logging
-import opendeep.log.logger as logger
+from opendeep.log import config_root_logger
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_gsn import RNN_GSN
 from opendeep.data.standard_datasets.image.mnist import MNIST
@@ -39,17 +39,17 @@ def run_sequence(sequence=0):
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnngsn,
                          dataset=mnist,
-                         n_epoch=200,
+                         epochs=200,
                          batch_size=100,
-                         minimum_batch_size=2,
+                         min_batch_size=2,
                          learning_rate=1e-6,
-                         save_frequency=1,
-                         early_stop_length=200)
+                         save_freq=1,
+                         stop_patience=200)
     # optimizer = SGD(model=rnngsn,
     #                 dataset=mnist,
     #                 n_epoch=300,
     #                 batch_size=100,
-    #                 minimum_batch_size=2,
+    #                 min_batch_size=2,
     #                 learning_rate=.25,
     #                 lr_decay='exponential',
     #                 lr_factor=.995,
@@ -103,7 +103,7 @@ def run_sequence(sequence=0):
 if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
-    logger.config_root_logger()
+    config_root_logger()
     run_sequence(1)
     run_sequence(2)
     run_sequence(3)

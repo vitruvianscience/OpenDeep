@@ -2,13 +2,6 @@
 Configuring the logger for our example needs. By default in the logging_config.json file,
 this will print logging levels of info and higher to log files in the logs/ directory. Debug goes to console.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import os
 import logging

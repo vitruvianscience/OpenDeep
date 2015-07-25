@@ -4,12 +4,6 @@ Alternative 1-dimensional convolution implementations.
 These 1-dimensional convolutions were taken from the Sander Dieleman's Lasagne framework:
 https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py
 """
-__authors__ = "Sander Dieleman"
-__credits__ = ["Sander Dieleman", "Daniel Nouri", "Colin Raffel", "Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries

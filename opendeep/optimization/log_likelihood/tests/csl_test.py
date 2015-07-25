@@ -1,7 +1,6 @@
 import numpy
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 from opendeep.log.logger import config_root_logger
-from opendeep.data.dataset import TRAIN, VALID, TEST
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.log_likelihood.conservative_sampling_ll import _compile_csl_fn, _compile_csl_fn_v2, \
     compute_CSL_with_minibatches, compute_CSL_with_minibatches_one_chain
@@ -10,14 +9,14 @@ from opendeep.optimization.log_likelihood.conservative_sampling_ll import _compi
 def bernoulli_csl(switch=0):
 
     mnist = MNIST()
-    train_x, _ = mnist.getSubset(TRAIN)
-    valid_x, _ = mnist.getSubset(VALID)
-    test_x, _  = mnist.getSubset(TEST)
+    train_x = mnist.train_inputs[0]
+    valid_x = mnist.valid_inputs[0]
+    test_x  = mnist.test_inputs[0]
 
     mnist_b = MNIST(binary=True)
-    train_x_b, _ = mnist_b.getSubset(TRAIN)
-    valid_x_b, _ = mnist_b.getSubset(VALID)
-    test_x_b, _  = mnist_b.getSubset(TEST)
+    train_x_b = mnist_b.train_inputs[0]
+    valid_x_b = mnist_b.valid_inputs[0]
+    test_x_b  = mnist_b.test_inputs[0]
 
     means = as_floatX(test_x).eval()
     means = numpy.clip(a=means, a_min=1e-10, a_max=(1 - (1e-5)))

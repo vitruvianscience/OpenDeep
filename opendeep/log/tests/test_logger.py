@@ -5,8 +5,7 @@ import sys
 from StringIO import StringIO
 import logging
 # internal references
-import opendeep.log.logger as logger
-from opendeep.utils.file_ops import mkdir_p
+from opendeep.log import config_root_logger
 
 class TestLogger(unittest.TestCase):
     def setUp(self):
@@ -20,7 +19,7 @@ class TestLogger(unittest.TestCase):
         self.out = StringIO()
         sys.stdout = self.out
         # configure the root logger
-        logger.config_root_logger()
+        config_root_logger()
         # get a logger for this session
         self.log = logging.getLogger(__name__)
         # set the paths for the logs (comes from reading logging_config.json)

@@ -22,14 +22,6 @@ https://github.com/caglar/adasecant_wshp_paper
     We plan to publish another paper related to that with some collaborators.
 
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Caglar Gulcehre", "Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from collections import OrderedDict
@@ -37,7 +29,7 @@ from collections import OrderedDict
 import theano.tensor as T
 import numpy
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
 
 log = logging.getLogger(__name__)
@@ -54,11 +46,11 @@ class AdaSecant(Optimizer):
     arXiv preprint arXiv:1412.7419 (2014).
     There are some small changes in this code.
     """
-    def __init__(self, model, dataset,
-                 n_epoch=10, batch_size=100, minimum_batch_size=1,
-                 save_frequency=None, early_stop_threshold=None, early_stop_length=None,
-                 learning_rate=1e-6, lr_decay=None, lr_factor=None,
-                 decay=0.95, gamma_clip=1.8, damping=1e-7, grad_clip=None, start_var_reduction=0,
+    def __init__(self, dataset, model=None,
+                 epochs=10, batch_size=100, min_batch_size=1,
+                 save_freq=None, stop_threshold=None, stop_patience=None,
+                 learning_rate=1e-6, lr_decay=None, lr_decay_factor=None,
+                 decay=0.95, gamma_clip=1.8, damping=1e-7, grad_clip=None, hard_clip=False, start_var_reduction=0,
                  delta_clip=None, use_adagrad=False, skip_nan_inf=False,
                  upper_bound_tau=1e8, lower_bound_tau=1.5, use_corrected_grad=True):
         """
@@ -66,28 +58,28 @@ class AdaSecant(Optimizer):
 
         Parameters
         ----------
-        model : Model
-            The Model to train.
         dataset : Dataset
             The Dataset to use when training the Model.
-        n_epoch : int
+        model : Model
+            The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
+        epochs : int
             how many training iterations over the dataset to go.
         batch_size : int
             How many examples from the training dataset to use in parallel.
-        minimum_batch_size : int
+        min_batch_size : int
             The minimum number of examples required at a time (for things like time series, this would be > 1).
-        save_frequency : int
+        save_freq : int
             How many epochs to train between each new save of the Model's parameters.
-        early_stop_threshold : float
+        stop_threshold : float
             The factor by how much the best validation training score needs to improve to determine early stopping.
-        early_stop_length : int
-            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        stop_patience : int
+            The patience or number of epochs to wait after the stop_threshold has been reached before stopping.
         learning_rate : float
             The multiplicative amount to adjust parameters based on their gradient values.
         lr_decay : str
             The type of decay function to use for changing the learning rate over epochs. See
             `opendeep.utils.decay` for options.
-        lr_factor : float
+        lr_decay_factor : float
             The amount to use for the decay function when changing the learning rate over epochs. See
             `opendeep.utils.decay` for its effect for given decay functions.
         decay : float, optional
@@ -103,9 +95,8 @@ class AdaSecant(Optimizer):
         grad_clip: float, optional,
             Apply gradient clipping for RNNs (not necessary for feedforward networks). But this is
             a constraint on the norm of the gradient per layer.
-            Based on:
-            Pascanu, Razvan, Tomas Mikolov, and Yoshua Bengio. "On the difficulty of training
-            recurrent neural networks." arXiv preprint arXiv:1211.5063 (2012).
+        hard_clip : bool
+            Whether to use a hard cutoff or rescaling for clipping gradients.
         use_adagrad: bool, optional
             Either to use clipped adagrad or not.
         use_corrected_grad: bool, optional
@@ -124,10 +115,10 @@ class AdaSecant(Optimizer):
         self.damping = damping
         self.skip_nan_inf = skip_nan_inf
 
-        if grad_clip:
-            assert grad_clip > 0.
-            assert grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
-        self.grad_clip = grad_clip
+        # if grad_clip:
+        #     assert grad_clip > 0.
+        #     assert grad_clip <= 1., "Norm of the gradients per layer can not be larger than 1."
+        # self.grad_clip = grad_clip
 
         self.use_adagrad = use_adagrad
         self.use_corrected_grad = use_corrected_grad
@@ -171,16 +162,16 @@ class AdaSecant(Optimizer):
 
         #Block-normalize gradients:
         gradients = OrderedDict({p: gradients[p] / (gradients[p].norm(2) + eps) for p in gradients.keys()})
-        nparams = len(gradients.keys())
-
-        #Apply the gradient clipping, this is only necessary for RNNs and sometimes for very deep
-        #networks
-        if self.grad_clip:
-            gnorm = sum([g.norm(2) for g in gradients.values()])
-
-            gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
-                                 g * self.grad_clip * nparams / gnorm , g)\
-                                 for p, g in gradients.iteritems()})
+        # nparams = len(gradients.keys())
+        #
+        # #Apply the gradient clipping, this is only necessary for RNNs and sometimes for very deep
+        # #networks
+        # if self.grad_clip:
+        #     gnorm = sum([g.norm(2) for g in gradients.values()])
+        #
+        #     gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
+        #                          g * self.grad_clip * nparams / gnorm , g)\
+        #                          for p, g in gradients.iteritems()})
 
         for param in gradients.keys():
             gradients[param].name = "grad_%s" % param.name
