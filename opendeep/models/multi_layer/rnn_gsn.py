@@ -2,14 +2,6 @@
 This module provides the RNN-GSN: an unsupervised, generative recurrent model.
 .. todo:: <link to my paper when it is on arxiv>
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os
@@ -19,7 +11,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import function
+from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.multi_layer.generative_stochastic_network import GSN
 from opendeep.utils.decorators import inherit_docs

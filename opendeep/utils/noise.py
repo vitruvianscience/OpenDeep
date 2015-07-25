@@ -5,13 +5,6 @@ deep nets from overfitting.
 Based on code from Li Yao (University of Montreal)
 https://github.com/yaoli/GSN
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from functools import partial

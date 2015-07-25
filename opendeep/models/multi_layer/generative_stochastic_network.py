@@ -22,13 +22,6 @@ Multimodal transition operator (using NADE) discussed in:
 Sherjil Ozair, Li Yao, Yoshua Bengio
 http://arxiv.org/abs/1312.5578
 '''
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger", "Li Yao"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import os
 import time
@@ -41,11 +34,11 @@ import theano.sandbox.rng_mrg as RNG_MRG
 from theano.compat.python2x import OrderedDict
 import PIL
 # internal references
-from opendeep import as_floatX, function, sharedX
 from opendeep.models.model import Model
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.activation import get_activation_function, is_binary
+from opendeep.utils.constructors import as_floatX, sharedX, function
 from opendeep.utils.cost import get_cost_function
 from opendeep.utils.misc import closest_to_square_factors, make_time_units_string, raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias

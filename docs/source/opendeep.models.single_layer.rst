@@ -35,10 +35,18 @@ opendeep.models.single_layer.convolutional module
     :undoc-members:
     :show-inheritance:
 
-opendeep.models.single_layer.recurrent module
----------------------------------------------
+opendeep.models.single_layer.gru module
+---------------------------------------
 
-.. automodule:: opendeep.models.single_layer.recurrent
+.. automodule:: opendeep.models.single_layer.gru
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.models.single_layer.lstm module
+----------------------------------------
+
+.. automodule:: opendeep.models.single_layer.lstm
     :members:
     :undoc-members:
     :show-inheritance:

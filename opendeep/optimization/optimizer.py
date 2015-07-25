@@ -20,30 +20,28 @@ Attributes
 TRAIN_COST_KEY : str
     The monitor name to use for the training cost. (Optimizer will always automatically monitor the training cost).
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import time
 import os
+import warnings
+from itertools import izip
 # third party
 import numpy
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
-from opendeep import sharedX, function, trunc
-from opendeep.data.dataset import Dataset, TRAIN, VALID, TEST, get_subset_strings
+from opendeep.utils.constructors import sharedX, function
+from opendeep.data.dataset import Dataset
 from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
-from opendeep.utils.misc import raise_to_list, make_time_units_string, get_shared_values, set_shared_values, add_kwargs_to_dict
+from opendeep.utils.misc import raise_to_list, make_time_units_string, \
+    get_shared_values, set_shared_values, add_kwargs_to_dict, trunc
+from opendeep.utils.batch import minibatch
+from opendeep.utils.misc import min_normalized_izip
 
 log = logging.getLogger(__name__)
 
@@ -53,12 +51,13 @@ TRAIN_COST_KEY = 'train_cost'
 class Optimizer(object):
     """
     Default interface for an optimizer implementation - this provides the necessary parameter updates when
-    training a model on a dataset using an online stochastic process.
+    training a model on a dataset using an online stochastic process. The base framework for performing
+    stochastic gradient descent.
     """
-    def __init__(self, model, dataset,
-                 n_epoch=1000, batch_size=100, minimum_batch_size=1,
-                 save_frequency=10, early_stop_threshold=.9995, early_stop_length=30,
-                 learning_rate=1e-3, lr_decay='exponential', lr_factor=1,
+    def __init__(self, dataset, model=None,
+                 epochs=1000, batch_size=100, min_batch_size=1,
+                 save_freq=10, stop_threshold=None, stop_patience=50,
+                 learning_rate=1e-3, lr_decay=None, lr_decay_factor=None,
                  grad_clip=None, hard_clip=False,
                  **kwargs):
         """
@@ -66,30 +65,29 @@ class Optimizer(object):
 
         Parameters
         ----------
-        model : Model
-            The Model to train.
         dataset : Dataset
             The Dataset to use when training the Model.
-        n_epoch : int
-            how many training iterations over the dataset to go.
+        model : Model
+            The Model to train. Needed if the Optimizer isn't being passed to a Model's .train() method.
+        epochs : int
+            How many training iterations over the dataset to go.
         batch_size : int
             How many examples from the training dataset to use in parallel.
-        minimum_batch_size : int
+        min_batch_size : int
             The minimum number of examples required at a time (for things like time series, this would be > 1).
-        save_frequency : int
+        save_freq : int, optional
             How many epochs to train between each new save of the Model's parameters.
-        early_stop_threshold : float
+        stop_threshold : float, optional
             The factor by how much the best validation training score needs to improve to determine early stopping.
-        early_stop_length : int
-            The patience or number of epochs to wait after the early_stop_threshold has been reached before stopping.
+        stop_patience : int, optional
+            The patience or number of epochs to wait after the stop_threshold has been reached before stopping.
         learning_rate : float
             The multiplicative amount to adjust parameters based on their gradient values.
         lr_decay : str
-            The type of decay function to use for changing the learning rate over epochs. See
-            `opendeep.utils.decay` for options.
-        lr_factor : float
-            The amount to use for the decay function when changing the learning rate over epochs. See
-            `opendeep.utils.decay` for its effect for given decay functions.
+            The decay function to use for changing the learning rate over epochs. See
+            `opendeep.utils.decay` for classes of decay and documentation.
+        lr_decay_factor : float
+            The amount of decay to use for the ``lr_decay`` type of decay.
         grad_clip : float, optional
             Whether to clip gradients. This will clip the norm of the gradients either with a hard cutoff or rescaling.
         hard_clip : bool
@@ -97,119 +95,93 @@ class Optimizer(object):
         """
         log.info("Initializing optimizer %s", str(type(self)))
 
-        if early_stop_threshold is None:
-            early_stop_threshold = 1.
-        if save_frequency is None:
-            save_frequency = 1000000
-        if early_stop_length is None:
-            early_stop_length = 100
+        # Deal with early stopping None initializations.
+        if not stop_threshold:
+            stop_threshold = numpy.inf
+        if not save_freq:
+            save_freq = 1000000
+        if not stop_patience:
+            stop_patience = 1
 
+        # Put all init parameters in self.args so we can log the initial configuration.
         self.args = locals().copy()
         self.args.pop('self')
         kwargs = self.args.pop('kwargs')
         self.args = add_kwargs_to_dict(kwargs, self.args)
         # log the arguments
-        log.info("optimizer config args: %s", str(self.args))
+        log.info("Optimizer config args: %s", str(self.args))
+        # if the optimizer wasn't initialized with a Model (train() being called from the model class itself),
+        # just return. (This seems kinda hacky but hey, people wanted .train() to happen from Model and there
+        # wasn't really a better way unless the epoch looping logic was in that method for Model. That wasn't
+        # the best option because other methods besides stochastic ones can exist for optimizers in the future.
+        # TODO: fix this up - feels like a hack just to make model.train() work...
+        if not model:
+            return
+        # Otherwise, things are proceeding as normal. Carry on...
 
-        assert isinstance(model, Model), "Optimizer input model needs to be an opendeep Model class!"
-        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be an opendeep Dataset class!"
+        assert isinstance(model, Model), "Optimizer input model needs to be a Model class! " \
+                                         "Found %s" % str(type(model))
+        assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! " \
+                                             "Found %s" % str(type(dataset))
+
+        n_model_inputs = len(raise_to_list(model.get_inputs()))
+        n_model_targets = len(raise_to_list(model.get_targets()) or [])
+        self.unsupervised = (n_model_targets is 0)
+        # make sure the number of inputs/targets matches up with the dataset properties
+        # train
+        assert n_model_inputs == len(raise_to_list(dataset.train_inputs)), \
+            "Dataset has %d train inputs, while model expects %d" % \
+            (len(raise_to_list(dataset.train_inputs)), n_model_inputs)
+        if not self.unsupervised:
+            assert n_model_targets == len(raise_to_list(dataset.train_targets) or []), \
+                "Dataset has %d train targets, while model expects %d" % \
+                (len(raise_to_list(dataset.train_targets) or []), n_model_targets)
+        # valid
+        if dataset.valid_inputs is not None:
+            assert n_model_inputs == len(raise_to_list(dataset.valid_inputs)), \
+                "Dataset has %d valid inputs, while model expects %d" % \
+                (len(raise_to_list(dataset.valid_inputs)), n_model_inputs)
+            if not self.unsupervised:
+                assert n_model_targets == len(raise_to_list(dataset.valid_targets) or []), \
+                    "Dataset has %d valid targets, while model expects %d" % \
+                    (len(raise_to_list(dataset.valid_targets) or []), n_model_targets)
+        # test
+        if dataset.test_inputs is not None:
+            assert n_model_inputs == len(raise_to_list(dataset.test_inputs)), \
+                "Dataset has %d test inputs, while model expects %d" % \
+                (len(raise_to_list(dataset.test_inputs)), n_model_inputs)
+            if not self.unsupervised:
+                assert n_model_targets == len(raise_to_list(dataset.test_targets) or []), \
+                    "Dataset has %d test targets, while model expects %d" % \
+                    (len(raise_to_list(dataset.test_targets) or []), n_model_targets)
+
+        # now we are happy, we can add them to `self`
         self.model = model
         self.dataset = dataset
 
         # Learning rate - how drastic of a step do the parameters change
         self.learning_rate = sharedX(learning_rate, 'learning_rate')
+        # whether to scale individual model parameters' learning rates.
         self.lr_scalers = self.model.get_lr_scalers()
+        # whether to decay
         if lr_decay:
             self.learning_rate_decay = get_decay_function(lr_decay,
                                                           self.learning_rate,
-                                                          self.learning_rate.get_value(),
-                                                          lr_factor)
+                                                          learning_rate,
+                                                          lr_decay_factor)
         else:
             self.learning_rate_decay = False
 
+        # rest of initial parameters needed for training.
         self.noise_switches = raise_to_list(self.model.get_noise_switch())
         self.batch_size = batch_size
-        self.minimum_batch_size = minimum_batch_size
-        self.n_epoch = n_epoch
-        self.save_frequency = save_frequency
-        self.early_stop_threshold = early_stop_threshold
-        self.early_stop_length = early_stop_length
+        self.min_batch_size = min_batch_size
+        self.n_epoch = epochs
+        self.save_frequency = save_freq
+        self.early_stop_threshold = stop_threshold
+        self.early_stop_length = stop_patience
         self.grad_clip = grad_clip
         self.hard_clip = hard_clip
-
-    def _get_batch_indices(self, data_lengths):
-        """
-        Computes the tuples of (start_index, end_index) that represent the appropriate slices of the concatenated
-        dataset with regards to the given data_lengths. This allows for lists of data lengths to represent sequences,
-        so that the concatenated batches returned do not overstep the start of a new sequence.
-
-        Parameters
-        ----------
-        data_lengths : list(int) or int
-            List of num_examples for each dataset (the length of the datasets - this is a list in the case of
-            sequences).
-
-        Returns
-        -------
-        list((int, int))
-            List of tuples (start, end) representing the batch slices for the total dataset if it were concatenated.
-        """
-        batch_indices = []
-        start_idx = 0
-        for len in raise_to_list(data_lengths):
-            # integer division to determine number of whole batches for this length
-            n_batches = len / int(self.batch_size)
-            # add the (start_idx, end_idx) tuple to the list
-            for i in range(n_batches):
-                end_idx = start_idx + self.batch_size
-                batch_indices.append((start_idx, end_idx))
-                start_idx = end_idx
-            # remainder to find number of leftover examples
-            remainder = numpy.remainder(len, self.batch_size)
-            end_idx = start_idx + remainder
-            # check if it is bigger than the minimum allowed size
-            if remainder >= self.minimum_batch_size:
-                batch_indices.append((start_idx, end_idx))
-            start_idx = end_idx
-        return batch_indices
-
-    def _get_givens_subset(self, subset, batch_slice):
-        """
-        This translates a batch slice of start and end indices into the actual data from the given subset.
-
-        Parameters
-        ----------
-        subset : int
-            The subset to use - determined in opendeep.data.datasets as TRAIN, VALID, or TEST attributes.
-        batch_slice : symbolic slice
-            The symbolic slice to grab from the data.
-
-        Returns
-        -------
-        OrderedDict
-            The givens to provide to a function where it sets the input variable to the actual batch representation
-            of data from the dataset: (input_variable: data[batch])
-        """
-        # translate the data_idx into the givens for the model
-        # first get the lists of input variables the model requires - inputs and targets
-        model_inputs = raise_to_list(self.model.get_inputs())
-        model_targets = raise_to_list(self.model.get_targets())
-        givens = None
-        if self.dataset.getSubset(subset)[0] is not None:
-            # grab the data and labels
-            data, labels = self.dataset.getSubset(subset)
-            # create the givens for the input function as pairs of (input_variable: sliced_data)
-            givens = OrderedDict(zip(model_inputs, [data[batch_slice]]))
-            # include labels as well if they are required by the model
-            if model_targets is not None and len(model_targets) > 0:
-                if labels is None:
-                    log.error("No labels in the dataset!")
-                    raise AssertionError("No labels in the dataset!")
-                givens.update(OrderedDict(zip(model_targets, [labels[batch_slice]])))
-        else:
-            log.warning("Dataset doesn't have subset %s" % get_subset_strings(subset))
-
-        return givens
 
     def get_updates(self, gradients):
         """
@@ -218,8 +190,7 @@ class Optimizer(object):
         Parameters
         ----------
         gradients : dict
-            A dictionary mapping from the model's parameters to their
-            gradients.
+            A dictionary mapping from the model's parameters to their gradients.
 
         Returns
         -------
@@ -234,18 +205,7 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def get_lr_monitor(self):
-        """
-        Returns a monitor dictionary to the Optimizer's learning rate.
-
-        Returns
-        -------
-        dict
-            Mapping 'learning_rate' to `self.learning_rate` shared variable.
-        """
-        return {'learning_rate': self.learning_rate}
-
-    def train(self, monitor_channels=None, train_outservice=None, plot=None, continue_training=False):
+    def train(self, monitor_channels=None, train_outservice=None, plot=None, additional_cost=None):
         """
         This method performs the training!!!
         It is an online training method that goes over minibatches from the dataset for a number of epochs,
@@ -263,56 +223,42 @@ class Optimizer(object):
             to logs.
         plot : Plot, optional
             The Plot object to use if we want to graph the outputs (uses bokeh server).
-        continue_training : bool
-            Whether to continue training from a previous point.
+        additional_cost : theano expression or list(theano expression), optional
+            Any additional cost expressions to use during training (things like regularization). These will be summed
+            with the existing cost.
         """
-        ###############################################
-        # theano index variable to use on the dataset #
-        ###############################################
-        # index to a [mini]batch - both start and end
-        data_idx = T.iscalar('data_index')
-        data_end_idx = T.iscalar('data_end_index')
-        function_input = [data_idx, data_end_idx]
-        batch_slice = slice(data_idx, data_end_idx)
+        if not self.model:
+            log.error("No self.model for the Optimizer!")
+            raise AssertionError("Needs to be initialized with a Model! (Or something went wrong if train() "
+                                 "was called from the Model. Try initializing the Optimizer with the model param "
+                                 "and calling optimizer.train().")
 
-        # compute number of minibatches for training, validation and testing
-        # shapes is list of list - input list of datasets to optimizer (for multiple inputs), and each dataset
-        # could be a list of shared variables (like multiple sequences from files)
-        train_data_shapes = raise_to_list(self.dataset.getDataShape(TRAIN))
-        valid_data_shapes = raise_to_list(self.dataset.getDataShape(VALID))
-        test_data_shapes = raise_to_list(self.dataset.getDataShape(TEST))
-
-        # train_batches is going to be lists of tuples that contain the start and end indices for train data.
-        # this is more useful in the case of datasets that are lists of sequences, so that the start and end
-        # indices can make sure a batch does not cross the sequence boundary on the concatenated data
-        train_data_lens = [shape[0] for shape in train_data_shapes]
-        self.train_batches = self._get_batch_indices(train_data_lens)
-
-        if valid_data_shapes is not None:
-            valid_data_lens = [shape[0] for shape in valid_data_shapes]
-            self.valid_batches = self._get_batch_indices(valid_data_lens)
-        else:
-            self.valid_batches = None
-        if test_data_shapes is not None:
-            test_data_lens = [shape[0] for shape in test_data_shapes]
-            self.test_batches = self._get_batch_indices(test_data_lens)
-        else:
-            self.test_batches = None
-
-        # create the givens for the input function as pairs of (input_variable: sliced_data)
-        train_givens = self._get_givens_subset(TRAIN, batch_slice)
-        valid_givens = self._get_givens_subset(VALID, batch_slice)
-        test_givens = self._get_givens_subset(TEST, batch_slice)
-
-        # Now time to create the gradient updates for the model - make sure to handle the possible
+        #####################################################
+        # handle additional costs (normally regularization) #
+        #####################################################
+        # Create the gradient updates for the model - make sure to handle the possible
         # list of costs used for pretraining of certain parts of the model.
         train_costs = raise_to_list(self.model.get_train_cost())
+        # deal with any other additional costs (like regularization, etc.)
+        if additional_cost is not None:
+            additional_costs = raise_to_list(additional_cost)
+            if len(additional_costs) > 1:
+                additional_cost = T.sum(additional_costs)
+
+        #########################
+        # gradients and updates #
+        #########################
         train_updates = []
         self.gradients = []
         for i, train_cost in enumerate(train_costs):
             # Now create the training cost function for the model to use while training - update parameters
             # gradient!
-            gradients, _ = self.model.get_gradient(cost=train_cost)
+            if len(train_costs) > 1 and additional_cost is not None:
+                log.warning("additional_cost will double count with gradients during layer-wise pretraining!")
+                warnings.warn("additional_cost will double count with gradients during layer-wise pretraining!")
+            # TODO: additional_cost will double count with gradients during layer-wise pretraining.
+            # Need to somehow make w.r.t. params appropriate for the individual training costs.
+            gradients, _ = self.model.get_gradient(cost=train_cost, additional_cost=additional_cost)
             # clip gradients if we want.
             gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
             # append to list
@@ -335,6 +281,9 @@ class Optimizer(object):
         self.params = self.model.get_params()
         log.info("%s params: %s", str(type(self.model)), str(self.params))
 
+        ############
+        # monitors #
+        ############
         # deal with the monitor channels if they were given (or take them from the plot)
         if monitor_channels is None and plot is not None and len(plot.channels) > 0:
             monitor_channels = plot.channels
@@ -368,10 +317,9 @@ class Optimizer(object):
         #######################################
         # compile train and monitor functions #
         #######################################
+        function_input = raise_to_list(self.model.get_inputs()) + raise_to_list(self.model.get_targets())
         train_functions = []
-        for i in range(len(train_costs)):
-            updates = train_updates[i]
-            train_cost = train_costs[i]
+        for i, (updates, train_cost) in enumerate(zip(train_updates, train_costs)):
             # Compile the training function!
             log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_updates),
                      str(type(self.model)))
@@ -380,15 +328,14 @@ class Optimizer(object):
             f_learn = function(inputs=function_input,
                                updates=updates,
                                outputs=[train_cost] + self.train_monitors_dict.values(),
-                               givens=train_givens,
                                name='f_learn_%d' % i)
 
-            log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
+            log.info('f_learn %d compilation took %s', i + 1, make_time_units_string(time.time() - t))
             train_functions.append(f_learn)
 
-        # figure out if we want valid and test
-        self.valid_flag = (self.dataset.getSubset(VALID)[0] is not None) and (len(self.valid_monitors_dict) > 0)
-        self.test_flag = (self.dataset.getSubset(TEST)[0] is not None) and (len(self.test_monitors_dict) > 0)
+        # figure out if we want valid and test (monitors)
+        self.valid_flag = (self.dataset.valid_inputs is not None) and (len(self.valid_monitors_dict) > 0)
+        self.test_flag = (self.dataset.test_inputs is not None) and (len(self.test_monitors_dict) > 0)
         # Now compile the monitor functions!
         log.debug("Compiling monitor functions...")
         monitor_t = time.time()
@@ -398,7 +345,6 @@ class Optimizer(object):
                 inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.valid_monitors_dict.values(),
-                givens=valid_givens,
                 name='valid_monitor_function'
             )
         else:
@@ -410,7 +356,6 @@ class Optimizer(object):
                 inputs=function_input,
                 updates=self.model.get_updates(),
                 outputs=self.test_monitors_dict.values(),
-                givens=test_givens,
                 name='test_monitor_function'
             )
         else:
@@ -425,21 +370,14 @@ class Optimizer(object):
         # this list of training functions was created during __init__()
         start_time = time.time()
         for func_i, train_function in enumerate(train_functions):
-            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS (continue_training=%s)-----------",
-                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch, str(continue_training))
-
-            log.debug("Train dataset size is: %s", self.dataset.getDataShape(TRAIN))
-            if self.dataset.getSubset(VALID)[0] is not None:
-                log.debug("Valid dataset size is: %s", self.dataset.getDataShape(VALID))
-            if self.dataset.getSubset(TEST)[0] is not None:
-                log.debug("Test dataset size is: %s", self.dataset.getDataShape(TEST))
+            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS-----------",
+                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch)
 
             self.STOP = False
             self.epoch_counter = 0
-            if not continue_training:
-                # reset any decay params
-                for decay_param in self.get_decay_params():
-                    decay_param.reset()
+            # reset any decay params
+            for decay_param in self.get_decay_params():
+                decay_param.reset()
 
             self.times = []
             self.best_cost = numpy.inf
@@ -467,7 +405,6 @@ class Optimizer(object):
         log.info("------------TOTAL %s TRAIN TIME TOOK %s---------",
                  str(type(self.model)), make_time_units_string(time.time() - start_time))
 
-
     def _perform_one_epoch(self, f_learn, plot=None):
         """
         Performs a single training iteration with the given learn function.
@@ -483,11 +420,23 @@ class Optimizer(object):
             switch_vals = [switch.get_value() for switch in self.noise_switches]
             [switch.set_value(1.) for switch in self.noise_switches]
 
-        # train
+        #########
+        # train #
+        #########
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
-        for batch_start, batch_end in self.train_batches:
-            _outs = raise_to_list(f_learn(batch_start, batch_end))
+        train_data = [
+            minibatch(input, self.batch_size, self.min_batch_size)
+            for input in raise_to_list(self.dataset.train_inputs)
+            ]
+        if self.dataset.train_targets is not None and not self.unsupervised:
+            train_data += [
+                minibatch(target, self.batch_size, self.min_batch_size)
+                for target in raise_to_list(self.dataset.train_targets)
+                ]
+
+        for batch in min_normalized_izip(*train_data):
+            _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
             # handle any user defined monitors
             if len(train_monitors) > 0:
@@ -505,10 +454,10 @@ class Optimizer(object):
             log.info('Train monitors: %s', str(current_mean_monitors))
         # send the values to their outservices
         if self.train_outservice:
-            self.train_outservice.write(mean_train, TRAIN)
+            self.train_outservice.write(mean_train, "train")
         for name, service in self.train_monitors_outservice_dict.items():
             if name in current_mean_monitors and service:
-                service.write(current_mean_monitors[name], TRAIN)
+                service.write(current_mean_monitors[name], "train")
         # if there is a plot, also send them over!
         if plot:
             current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
@@ -519,58 +468,32 @@ class Optimizer(object):
             log.debug("Turning off %s noise switches", str(len(self.noise_switches)))
             [switch.set_value(0.) for switch in self.noise_switches]
 
-        # valid
-        if self.valid_flag:
-            valid_monitors = {key: [] for key in self.valid_monitors_dict.keys()}
-            for batch_start, batch_end in self.valid_batches:
-                _outs = raise_to_list(self.valid_monitor_function(batch_start, batch_end))
-                current_monitors = zip(self.valid_monitors_dict.keys(), _outs)
-                for name, val in current_monitors:
-                    val = numpy.asarray(val)
-                    valid_monitors[name].append(val)
+        #########
+        # valid #
+        #########
+        self._compute_over_subset("valid", self.dataset.valid_inputs, self.dataset.valid_targets,
+                                  self.valid_monitors_dict, self.valid_monitor_function,
+                                  self.valid_monitors_outservice_dict, plot)
 
-            # get the mean values for the batches
-            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in valid_monitors.items()}
-            # log the mean values!
-            log.info('Valid monitors: %s', str(current_mean_monitors))
-            # send the values to their outservices
-            for name, service in self.valid_monitors_outservice_dict.items():
-                if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], VALID)
-            # if there is a plot, also send them over!
-            if plot:
-                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
+        ########
+        # test #
+        ########
+        self._compute_over_subset("test", self.dataset.test_inputs, self.dataset.test_targets,
+                                  self.test_monitors_dict, self.test_monitor_function,
+                                  self.test_monitors_outservice_dict, plot)
 
-        #test
-        if self.test_flag:
-            test_monitors = {key: [] for key in self.test_monitors_dict.keys()}
-            for batch_start, batch_end in self.test_batches:
-                _outs = raise_to_list(self.test_monitor_function(batch_start, batch_end))
-                current_monitors = zip(self.test_monitors_dict.keys(), _outs)
-                for name, val in current_monitors:
-                    val = numpy.asarray(val)
-                    test_monitors[name].append(val)
-
-            # get the mean values for the batches
-            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in test_monitors.items()}
-            # log the mean values!
-            log.info('Test monitors: %s', str(current_mean_monitors))
-            # send the values to their outservices
-            for name, service in self.test_monitors_outservice_dict.items():
-                if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], TEST)
-            # if there is a plot, also send them over!
-            if plot:
-                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
-
+        ###########
+        # cleanup #
+        ###########
         # check for early stopping on train costs
         cost = numpy.sum(train_costs)
+        # if the cost improved, reset the patience and record the best cost.
         if cost < self.best_cost * self.early_stop_threshold:
             self.patience = 0
             self.best_cost = cost
             # save the parameters that made it the best
             self.best_params = get_shared_values(self.params)
-        else:
+        elif not numpy.isnan(cost):
             self.patience += 1
 
         # check for stopping either from n_epochs or from threshold/patience
@@ -606,6 +529,36 @@ class Optimizer(object):
 
         # return whether or not to stop this epoch
         return stop
+
+    def _compute_over_subset(self, subset, inputs, targets,
+                             monitors_dict, monitor_function, monitors_outservice_dict,
+                             plot):
+        inputs = raise_to_list(inputs)
+        targets = raise_to_list(targets)
+        if inputs is not None and len(monitors_dict) > 0:
+            monitors = {key: [] for key in monitors_dict.keys()}
+            data = [minibatch(input, self.batch_size, self.min_batch_size) for input in inputs]
+            if targets is not None and not self.unsupervised:
+                data += [minibatch(target, self.batch_size, self.min_batch_size) for target in targets]
+
+            for batch in min_normalized_izip(*data):
+                _outs = raise_to_list(monitor_function(*batch))
+                current_monitors = zip(monitors_dict.keys(), _outs)
+                for name, val in current_monitors:
+                    val = numpy.asarray(val)
+                    monitors[name].append(val)
+
+            # get the mean values for the batches
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in monitors.items()}
+            # log the mean values!
+            log.info('%s monitors: %s', subset, str(current_mean_monitors))
+            # send the values to their outservices
+            for name, service in monitors_outservice_dict.items():
+                if name in current_mean_monitors and service:
+                    service.write(current_mean_monitors[name], "test")
+            # if there is a plot, also send them over!
+            if plot:
+                plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
     def get_decay_params(self):
         """

@@ -9,13 +9,6 @@ image from a set of samples or weights.
 Written by Li Yao (University of Montreal)
 https://github.com/yaoli/GSN
 """
-__authors__ = "Li Yao"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Li Yao"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # third party libraries
 import numpy
 

@@ -1,21 +1,13 @@
 """
 This module provides the most basic neural net layers. This goes from an input to an output with an optional activation.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import sharedX
+from opendeep.utils.constructors import sharedX
 from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights, get_bias
@@ -27,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 @inherit_docs
-class BasicLayer(Model):
+class Dense(Model):
     """
     This is your basic input -> nonlinear(output) layer. No hidden representation. It is also known as a
     fully-connected layer.
@@ -94,7 +86,7 @@ class BasicLayer(Model):
         # init Model to combine the defaults and config dictionaries with the initial parameters.
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
-        super(BasicLayer, self).__init__(**initial_parameters)
+        super(Dense, self).__init__(**initial_parameters)
 
         ##################
         # specifications #
@@ -129,7 +121,7 @@ class BasicLayer(Model):
         if params_hook is not None:
             # make sure the params_hook has W (weights matrix) and b (bias vector)
             assert len(params_hook) == 2, \
-                "Expected 2 params (W and b) for BasicLayer, found {0!s}!".format(len(params_hook))
+                "Expected 2 params (W and b) for Dense, found {0!s}!".format(len(params_hook))
             W, b = params_hook
         else:
             W = get_weights(weights_init=weights_init,
@@ -199,16 +191,16 @@ class BasicLayer(Model):
         return self.params
 
     def save_args(self, args_file="basiclayer_config.pkl"):
-        super(BasicLayer, self).save_args(args_file)
+        super(Dense, self).save_args(args_file)
 
 
 @inherit_docs
-class SoftmaxLayer(BasicLayer):
+class SoftmaxLayer(Dense):
     """
     The softmax layer is meant as a last-step prediction layer using the softmax activation function -
     this class exists to provide easy access to methods for errors and log-likelihood for a given truth label y.
 
-    It is a special subclass of the BasicLayer (a fully-connected layer),
+    It is a special subclass of the Dense (a fully-connected layer),
     with the activation function forced to be 'softmax'
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/softmax',

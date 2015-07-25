@@ -47,7 +47,7 @@ setup(
     version=version,
     description='A modular and extensible deep learning library built on Theano.',
     long_description=read('README.rst'),
-    keywords='opendeep theano modular deep learning neural net ai',
+    keywords='opendeep theano modular deep learning neural net ai machine representation',
 
     url='https://github.com/vitruvianscience/opendeep/',
 

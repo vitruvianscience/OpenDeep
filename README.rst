@@ -8,9 +8,9 @@
    :alt: OpenDeep
    :align: center
 
-==============================================================
-OpenDeep: a fully modular & extensible deep learning framework
-==============================================================
+========================================================================
+OpenDeep: a fully modular & extensible deep learning framework in Python
+========================================================================
 Developer hub: http://www.opendeep.org/
 
 OpenDeep_ is a deep learning framework for Python built from the ground up
@@ -38,24 +38,25 @@ Quick example usage
 Train and evaluate a Multilayer Perceptron (MLP - your generic feedforward neural network for classification)
 on the MNIST handwritten digit dataset::
 	
-    from opendeep.models.container import Prototype
-    from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
-    from opendeep.optimization.adadelta import AdaDelta
-    from opendeep.data.standard_datasets.image.mnist import MNIST, datasets
+    from opendeep.models import Prototype, Dense, SoftmaxLayer
+    from opendeep.optimization import AdaDelta
+    from opendeep.data import MNIST
 
+    print "Creating model..."
     mlp = Prototype()
-    mlp.add(BasicLayer(input_size=28*28, output_size=512, activation='rectifier', noise='dropout'))
-    mlp.add(BasicLayer(output_size=512, activation='rectifier', noise='dropout'))
+    mlp.add(Dense(input_size=28*28, output_size=512, activation='rectifier', noise='dropout'))
+    mlp.add(Dense(output_size=512, activation='rectifier', noise='dropout'))
     mlp.add(SoftmaxLayer(output_size=10))
 
+    print "Training..."
     data = MNIST()
-    trainer = AdaDelta(model=mlp, dataset=data, n_epoch=10)
-    trainer.train()
+    optimizer = AdaDelta(dataset=data, epochs=10)
+    mlp.train(optimizer)
 
-    test_data, test_labels = data.getSubset(datasets.TEST)
-    predictions = mlp.run(test_data.eval())
+    print "Predicting..."
+    predictions = mlp.run(data.test_inputs)
 
-    print "Accuracy: ", float(sum(predictions==test_labels.eval())) / len(test_labels.eval())
+    print "Accuracy: ", float(sum(predictions==data.test_targets)) / len(data.test_targets)
 
 
 Installation
@@ -64,7 +65,6 @@ Because OpenDeep is still in alpha, you have to install via setup.py. Also, plea
 
 Dependencies
 ------------
-
 * Theano_: Theano and its dependencies are required to use OpenDeep. You need to install the bleeding-edge version directly from their GitHub, which has `installation instructions here`_.
 
   * For GPU integration with Theano, you also need the latest `CUDA drivers`_. Here are `instructions for setting up Theano for the GPU`_. If you prefer to use a server on Amazon Web Services, here are instructions for setting up an `EC2 gpu server with Theano`_.
@@ -77,20 +77,20 @@ Dependencies
 
 * Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
 
-.. _installation instructions here: http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions
+* NLTK_ (optional): if you want nlp functions like word tokenization.
 
+All of these Python dependencies (not the system-specific ones like CUDA or HDF5), can be installed with :code:`pip install -r requirements.txt` inside the root OpenDeep folder.
+
+.. _installation instructions here: http://deeplearning.net/software/theano/install.html#bleeding-edge-install-instructions
 .. _CUDA drivers: https://developer.nvidia.com/cuda-toolkit
 .. _instructions for setting up Theano for the GPU: http://deeplearning.net/software/theano/tutorial/using_gpu.html
 .. _EC2 gpu server with Theano: http://markus.com/install-theano-on-aws
-
 .. _CuDNN: https://developer.nvidia.com/cuDNN
 .. _Theano cuDNN integration: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
-
 .. _Pillow (PIL): https://pillow.readthedocs.org/installation.html
-
 .. _PyYAML: http://pyyaml.org/
-
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
+.. _NLTK: http://www.nltk.org/
 
 Install from source
 -------------------
@@ -117,20 +117,13 @@ You can also go through tutorials on OpenDeep's documentation site: http://www.o
 Let's say you want to train a Denoising Autoencoder on the MNIST handwritten digit dataset. You can get started
 in just a few lines of code::
 
-    # standard libraries
-    import logging
-    # third-party imports
-    from opendeep.log.logger import config_root_logger
-    import opendeep.data.dataset as datasets
-    from opendeep.data.standard_datasets.image.mnist import MNIST
-    from opendeep.models.single_layer.autoencoder import DenoisingAutoencoder
-    from opendeep.optimization.adadelta import AdaDelta
+    from opendeep.log import config_root_logger
+    from opendeep.data import MNIST
+    from opendeep.models import DenoisingAutoencoder
+    from opendeep.optimization import AdaDelta
 
-    # grab the logger to record our progress
-    log = logging.getLogger(__name__)
-    # set up the logging to display to std.out and files.
+    # set up the logging to display to std.out and files so we can see what is happening.
     config_root_logger()
-    log.info("Creating a new Denoising Autoencoder")
 
     # create the MNIST dataset
     mnist = MNIST()
@@ -138,24 +131,23 @@ in just a few lines of code::
     # define some model configuration parameters (this could have come from json!)
     config = {
         "input_size": 28*28, # dimensions of the MNIST images
-        "hidden_size": 1500  # number of hidden units - generally bigger than input size
+        "hidden_size": 1500  # number of hidden units - generally bigger than input size for DAE
     }
     # create the denoising autoencoder
     dae = DenoisingAutoencoder(**config)
 
     # create the optimizer to train the denoising autoencoder
     # AdaDelta is normally a good generic optimizer
-    optimizer = AdaDelta(dae, mnist)
+    optimizer = AdaDelta(dataset=mnist, model=dae)
     optimizer.train()
+    # note: the syntactic sugar of dae.train() calls optimizer.train() internally
 
     # test the trained model and save some reconstruction images
     n_examples = 100
     # grab 100 test examples
-    test_xs, _ = mnist.getSubset(datasets.TEST)
-    test_xs = test_xs[:n_examples].eval()
+    test_xs = mnist.test_inputs[:n_examples]
     # test and save the images
     dae.create_reconstruction_image(test_xs)
-
 
 Congrats, you just:
 

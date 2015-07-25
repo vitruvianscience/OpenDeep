@@ -27,6 +27,14 @@ opendeep.models.multi_layer.generative_stochastic_network module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.multi_layer.recurrent module
+--------------------------------------------
+
+.. automodule:: opendeep.models.multi_layer.recurrent
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.multi_layer.rnn_gsn module
 ------------------------------------------
 

@@ -1,20 +1,13 @@
 """
 Functions used for decaying Theano parameters as shared variables.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
 import numpy
 import theano.compat.six as six
 # internal references
-from opendeep import as_floatX
+from opendeep.utils.constructors import as_floatX
 from opendeep.utils.decorators import inherit_docs
 
 log = logging.getLogger(__name__)

@@ -1,14 +1,6 @@
 """
 This module is for interacting with outputs for :class:`Monitor` objects (i.e. send the output to a file or database).
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os
@@ -16,7 +8,6 @@ import os
 from theano.compat.six import string_types  # for basestring compatability
 # internal
 from opendeep.utils.file_ops import mkdir_p
-from opendeep.data.dataset import TRAIN, VALID, TEST
 
 log = logging.getLogger(__name__)
 
@@ -95,17 +86,17 @@ class FileService(OutService):
         ----------
         value : object
             The value to append to the file.
-        subset : int
-            The subset that the value was created from (integers for data subsets determined in the
-            opendeep.data.dataset module as attributes `TRAIN` `VALID` and `TEST`)
+        subset : str
+            The subset that the value was created from (i.e. "train", "valid", or "test").
         """
         val_to_write = str(value) + self.value_separator
-        if subset == TRAIN:
+        subset = subset.lower()
+        if subset == "train":
             with open(self.train_filename, 'ab') as f:
                 f.write(val_to_write)
-        elif subset == VALID:
+        elif subset == "valid":
             with open(self.valid_filename, 'ab') as f:
                 f.write(val_to_write)
-        elif subset == TEST:
+        elif subset == "test":
             with open(self.test_filename, 'ab') as f:
                 f.write(val_to_write)

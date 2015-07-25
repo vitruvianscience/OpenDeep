@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
 
     opendeep.utils.midi
+    opendeep.utils.tests
 
 Submodules
 ----------
@@ -19,10 +20,26 @@ opendeep.utils.activation module
     :undoc-members:
     :show-inheritance:
 
+opendeep.utils.batch module
+---------------------------
+
+.. automodule:: opendeep.utils.batch
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.utils.config module
 ----------------------------
 
 .. automodule:: opendeep.utils.config
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.utils.constructors module
+----------------------------------
+
+.. automodule:: opendeep.utils.constructors
     :members:
     :undoc-members:
     :show-inheritance:

@@ -2,14 +2,6 @@
 This module provides the RNN-RBM: an unsupervised, probabilistic, generative recurrent model.
 http://deeplearning.net/tutorial/rnnrbm.html
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os
@@ -19,7 +11,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import function
+from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
 from opendeep.utils.nnet import get_weights, get_bias

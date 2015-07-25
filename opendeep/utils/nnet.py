@@ -6,13 +6,6 @@ https://github.com/yaoli/GSN
 
 And theano_alexnet (https://github.com/uoguelph-mlrg/theano_alexnet)
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 from functools import partial
@@ -22,7 +15,7 @@ import theano
 import theano.tensor as T
 import theano.compat.six as six
 # internal imports
-from opendeep import as_floatX, sharedX
+from opendeep.utils.constructors import as_floatX, sharedX
 
 log = logging.getLogger(__name__)
 

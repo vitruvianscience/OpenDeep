@@ -64,7 +64,6 @@ if __name__ == '__main__':
     log.info("Creating a Denoising Autoencoder!")
 
     # import the dataset and optimizer to use
-    from opendeep.data.dataset import TEST
     from opendeep.data.standard_datasets.image.mnist import MNIST
     from opendeep.optimization.adadelta import AdaDelta
 
@@ -80,8 +79,7 @@ if __name__ == '__main__':
     optimizer.train()
 
     # test it on some images!
-    test_data, _ = mnist.getSubset(TEST)
-    test_data = test_data[:25].eval()
+    test_data = mnist.test_inputs[:25]
     corrupted_test = salt_and_pepper(test_data, 0.4).eval()
     # use the run function!
     reconstructed_images = dae.run(corrupted_test)

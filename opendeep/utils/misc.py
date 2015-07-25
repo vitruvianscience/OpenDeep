@@ -1,21 +1,16 @@
 """
 This module contains utils that are general and can't be grouped logically into the other opendeep.utils modules.
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
+import functools
+import itertools
 # third party libraries
 import numpy
 import theano
 import theano.tensor as T
 # internal imports
-from opendeep import trunc, safe_zip
+from opendeep.utils.constructors import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -241,6 +236,8 @@ def numpy_one_hot(vector, n_classes=None):
     numpy.ndarray
         A matrix of the one-hot encodings of the input vector.
     """
+    vector = numpy.asarray(vector)
+    assert isinstance(vector, numpy.ndarray), "Input vector couldn't be made into numpy array."
     # check if input is vector
     assert vector.ndim == 1, "Dimension mismatch for input vector, found %d dimensions!" % vector.ndim
     assert numpy.min(vector) > -1, "Found negative numbers in the vector, need all elements to be >= 0."
@@ -280,3 +277,110 @@ def add_kwargs_to_dict(kwargs, dictionary):
             inner_kwargs = kwargs['kwargs']
             dictionary = add_kwargs_to_dict(inner_kwargs, dictionary)
     return dictionary
+
+def trunc(input, length=8):
+    """
+    Casts the input to a string and cuts it off after `length` characters.
+
+    Parameters
+    ----------
+    input : object
+        The input to truncate. Must be able to convert to String.
+    length : int, optional
+        The length of the resulting string (number of characters).
+
+    Returns
+    -------
+    str
+        The appropriately truncated string representation of `input`.
+    """
+    return str(input)[:length]
+
+def binarize(input, cutoff=0.5):
+    """
+    Elementwise converts the input to 0 or 1.
+    If element >= `cutoff` : 1; otherwise : 0.
+
+    Parameters
+    ----------
+    input : tensor or array
+        The number, vector, matrix, or tensor to binarize.
+    cutoff : float
+        The threshold value between [0, 1].
+
+    Returns
+    -------
+    tensor or numpy array
+        The input converted to 0 or 1 and cast to float.
+    """
+    return as_floatX(input >= cutoff)
+
+def safe_zip(*args):
+    """
+    Like zip, but ensures arguments are of same length.
+
+    Parameters
+    ----------
+    *args
+        Argument list to `zip`
+
+    Returns
+    -------
+    list
+        The zipped list of inputs.
+
+    Raises
+    ------
+    ValueError
+        If the length of any argument is different than the length of args[0].
+    """
+    base = len(args[0])
+    for i, arg in enumerate(args[1:]):
+        if len(arg) != base:
+            raise ValueError("Argument[0] has length %d but argument %d has "
+                             "length %d" % (base, i+1, len(arg)))
+    return zip(*args)
+
+def compose(*functions):
+    """
+    A functional helper for dealing with function compositions. It ignores any None functions, and if all are None,
+    it returns None.
+
+    Parameters
+    ----------
+    *functions
+        function arguments to compose
+
+    Returns
+    -------
+    function or None
+        The composition f(g(...)) functions.
+    """
+    # help from here: https://mathieularose.com/function-composition-in-python/
+    def f_of_g(f, g):
+        if f is not None and g is not None:
+            return lambda x: f(g(x))
+        elif f is not None:
+            return f
+        elif g is not None:
+            return g
+        else:
+            return lambda x: x
+
+    if any(functions):
+        return functools.reduce(f_of_g, functions, lambda x: x)
+    else:
+        return None
+
+def min_normalized_izip(*iterables):
+    """
+    A function to make sure the length of all iterables is the same and normalize to the minimum if not.
+
+    Parameters
+    ----------
+    *iterables
+        A list of iterable objects (most typically going to be minibatches)
+    """
+    for elems in itertools.izip(*iterables):
+        min_len = min([elem.shape[0] if hasattr(elem, 'shape') else len(raise_to_list(elem)) for elem in elems])
+        yield [elem[:min_len] for elem in elems]

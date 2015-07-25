@@ -1,16 +1,24 @@
-# Main requirements
+#####################
+# Main requirements #
+#####################
 numpy>=1.8.1
-# scipy>=0.13.3
+
+# The latest bleeding-edge Theano
+--allow-external theano
+--allow-unverified theano
+git+https://github.com/Theano/Theano.git#egg=theano
+# Normal Theano
+# theano>=0.7.0
+
 # Pillow is the successor to PIL for image processing
 Pillow>=2.8.1
-# The latest bleeding-edge Theano
-#--allow-external theano
-#--allow-unverified theano
-#git+https://github.com/Theano/Theano.git#egg=theano
-theano >= 0.7.0
 
-# Optional requirements
+#########################
+# Optional requirements #
+#########################
 # PyYAML for YAML parsing capability
 PyYAML>=3.11
 # Bokeh for plotting (with bokeh-server)
 bokeh>=0.8.2
+# NLTK for nlp tasks (like word tokenization)
+nltk>=3.0.1

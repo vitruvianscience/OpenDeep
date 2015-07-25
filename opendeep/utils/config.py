@@ -6,13 +6,6 @@ Attributes
 has_pyyaml : bool
     Whether the user has the PyYAML library installed (for parsing YAML files).
 """
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import collections

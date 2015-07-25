@@ -2,18 +2,17 @@
 Please refer to the following tutorial in the documentation at www.opendeep.org
 
 Guide: Live Plotting and Monitoring
+Make sure you run bokeh-server from the command line!
 """
 # standard libraries
 import logging
 # third party libraries
 import theano.tensor as T
-from opendeep.log.logger import config_root_logger
-from opendeep.models.container import Prototype
-from opendeep.models.single_layer.basic import BasicLayer, SoftmaxLayer
-from opendeep.optimization.stochastic_gradient_descent import SGD
-from opendeep.data.standard_datasets.image.mnist import MNIST
-from opendeep.monitor.plot import Plot
-from opendeep.monitor.monitor import Monitor, MonitorsChannel
+from opendeep.log import config_root_logger
+from opendeep.models import Prototype, Dense, SoftmaxLayer
+from opendeep.optimization import SGD
+from opendeep.data import MNIST
+from opendeep.monitor import Plot, Monitor, MonitorsChannel
 
 # grab a log to output useful info
 config_root_logger()
@@ -22,7 +21,7 @@ log = logging.getLogger(__name__)
 def main():
     # First, let's create a simple feedforward MLP with one hidden layer as a Prototype.
     mlp = Prototype()
-    mlp.add(BasicLayer(input_size=28*28, output_size=1000, activation='rectifier', noise='dropout'))
+    mlp.add(Dense(input_size=28*28, output_size=1000, activation='rectifier', noise='dropout'))
     mlp.add(SoftmaxLayer(output_size=10))
 
     # Now, we get to choose what values we want to monitor, and what datasets we would like to monitor on!
@@ -52,8 +51,8 @@ def main():
     # use SGD optimizer
     optimizer = SGD(model=mlp,
                     dataset=MNIST(concat_train_valid=False),
-                    n_epoch=500,
-                    save_frequency=100,
+                    epochs=500,
+                    save_freq=100,
                     batch_size=600,
                     learning_rate=.01,
                     lr_decay=False,

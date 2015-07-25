@@ -2,13 +2,6 @@
 This module provides a framework for constructing recurrent networks. Recurrent networks have an internal hidden
 state that keeps memory over time.
 """
-__authors__ = ["Markus Beissinger", "Skylar Payne"]
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger", "Skylar Payne"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 # third party libraries
@@ -16,7 +9,7 @@ import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep import sharedX, function, theano_allclose
+from opendeep.utils.constructors import sharedX
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.cost import get_cost_function
@@ -26,7 +19,6 @@ from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import get_noise
 
 log = logging.getLogger(__name__)
-
 
 @inherit_docs
 class RNN(Model):
@@ -45,6 +37,11 @@ class RNN(Model):
     Awni Hannun, Carl Case, Jared Casper, Bryan Catanzaro, Greg Diamos, Erich Elsen,
     Ryan Prenger, Sanjeev Satheesh, Shubho Sengupta, Adam Coates, Andrew Y. Ng.
     http://arxiv.org/pdf/1412.5567v2.pdf
+
+    Stacked layers implemented like in:
+    "Gated Feedback Recurrent Neural Networks"
+    Junyoung Chung, Caglar Gulcehre, Kyunghyun Cho, Yoshua Bengio
+    http://arxiv.org/abs/1502.02367
     """
     def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/rnn/',
                  input_size=None, hidden_size=None, output_size=None,
@@ -58,7 +55,7 @@ class RNN(Model):
                  cost_function='mse', cost_args=None,
                  noise='dropout', noise_level=None, noise_decay=False, noise_decay_amount=.99,
                  direction='forward',
-                 use_scan=True):
+                 clip_recurrent_grads=False):
         """
         Initialize a simple recurrent network.
 
@@ -142,8 +139,11 @@ class RNN(Model):
             The direction this recurrent model should go over its inputs. Can be 'forward', 'backward', or
             'bidirectional'. In the case of 'bidirectional', it will make two passes over the sequence,
             computing two sets of hiddens and merging them before running through the final decoder.
-        use_scan : bool
-            Whether to use a scan implementation or a for loop.
+        clip_recurrent_grads : False or float, optional
+            Whether to clip the gradients for the parameters that unroll over timesteps (such as the weights
+            connecting previous hidden states to the current hidden state, and not the weights from current
+            input to hiddens). If it is a float, the gradients for the weights will be hard clipped to the range
+            `+-clip_recurrent_grads`.
 
         Raises
         ------
@@ -175,8 +175,6 @@ class RNN(Model):
 
         self.bias_init = bias_init
         self.r_bias_init = r_bias_init
-
-        self.use_scan = use_scan
 
         #########################################
         # activation, cost, and noise functions #
@@ -224,11 +222,11 @@ class RNN(Model):
             self.input = self.inputs_hook[1]
 
             if self.input.ndim == 1:
-                self.input = self.input.dimshuffle(0, 'x', 'x')
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
                 self.input_size = 1
 
             elif self.input.ndim == 2:
-                self.input = self.input.dimshuffle(0, 'x', 1)
+                self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
             elif self.input.ndim > 3:
                 self.input = self.input.flatten(3)
@@ -377,43 +375,40 @@ class RNN(Model):
         # vanilla case! there will be only 1 hidden layer for each depth layer.
         for layer in range(self.layers):
             log.debug("Updating hidden layer %d" % (layer+1))
-            if self.use_scan:
-                # normal case - either forward or just backward!
-                hiddens_new, updates = theano.scan(
+            # normal case - either forward or just backward!
+            hiddens_new, updates = theano.scan(
+                fn=self.recurrent_step,
+                sequences=hiddens,
+                outputs_info=self.h_init,
+                non_sequences=[W_x_h[layer], W_h_h[layer], b_h[layer]],
+                go_backwards=self.backward,
+                name="rnn_scan_normal_%d" % layer,
+                strict=True
+            )
+            updates.update(updates)
+
+            # bidirectional case - need to add a backward sequential pass to compute new hiddens!
+            if self.bidirectional:
+                # now do the opposite direction for the scan!
+                hiddens_opposite, updates_opposite = theano.scan(
                     fn=self.recurrent_step,
                     sequences=hiddens,
                     outputs_info=self.h_init,
-                    non_sequences=[W_x_h[layer], W_h_h[layer], b_h[layer]],
-                    go_backwards=self.backward,
-                    name="rnn_scan_normal_%d" % layer,
+                    non_sequences=[W_x_h[layer], W_h_hb[layer], b_h[layer]],
+                    go_backwards=(not self.backward),
+                    name="rnn_scan_backward_%d" % layer,
                     strict=True
                 )
-                updates.update(updates)
+                updates.update(updates_opposite)
+                hiddens_new = hiddens_new + hiddens_opposite
 
-                # bidirectional case - need to add a backward sequential pass to compute new hiddens!
-                if self.bidirectional:
-                    # now do the opposite direction for the scan!
-                    hiddens_opposite, updates_opposite = theano.scan(
-                        fn=self.recurrent_step,
-                        sequences=hiddens,
-                        outputs_info=self.h_init,
-                        non_sequences=[W_x_h[layer], W_h_hb[layer], b_h[layer]],
-                        go_backwards=(not self.backward),
-                        name="rnn_scan_backward_%d" % layer,
-                        strict=True
-                    )
-                    updates.update(updates_opposite)
-                    hiddens_new = hiddens_new + hiddens_opposite
-
-                # replace the hiddens with the newly computed hiddens (and add noise)!
-                hiddens = hiddens_new
-                # add noise (like dropout) if we wanted it!
-                if self.noise:
-                    self.hiddens = T.switch(self.noise_switch,
-                                            self.noise_func(input=hiddens),
-                                            hiddens)
-            else:
-                raise NotImplementedError("Non-scan RNN not implemented yet!")
+            # replace the hiddens with the newly computed hiddens (and add noise)!
+            hiddens = hiddens_new
+            # add noise (like dropout) if we wanted it!
+            if self.noise:
+                self.hiddens = T.switch(self.noise_switch,
+                                        self.noise_func(input=hiddens),
+                                        hiddens)
 
         # now compute the outputs from the leftover (top level) hiddens
         output = self.activation_func(

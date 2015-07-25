@@ -5,14 +5,6 @@ which represents everything from a single layer to a full-blown deep network.
 Models are the reusable, modular building blocks for deep networks. Their power comes from
 their ability to connect with other Models.
 """
-
-__authors__ = "Markus Beissinger"
-__copyright__ = "Copyright 2015, Vitruvian Science"
-__credits__ = ["Markus Beissinger"]
-__license__ = "Apache"
-__maintainer__ = "OpenDeep"
-__email__ = "opendeep-dev@googlegroups.com"
-
 # standard libraries
 import logging
 import os
@@ -22,9 +14,11 @@ import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
-from opendeep import function
+from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
-from opendeep.utils.misc import set_shared_values, get_shared_values, make_time_units_string, raise_to_list, add_kwargs_to_dict
+from opendeep.utils.constructors import function
+from opendeep.utils.misc import set_shared_values, get_shared_values, \
+    make_time_units_string, raise_to_list, add_kwargs_to_dict
 from opendeep.utils.file_ops import mkdir_p
 
 try:
@@ -149,7 +143,7 @@ class Model(object):
         # in that case.
         if not self.output_size:
             # Could be an error (hopefully not), so give the warning.
-            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the"
+            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the "
                         "same as input_size. Setting output_size=input_size now...")
             self.output_size = self.input_size
 
@@ -264,15 +258,18 @@ class Model(object):
             The run function defaults like so::
 
                 self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                      outputs = self.get_outputs(),
+                                      outputs = raise_to_list(self.get_outputs()),
                                       updates = self.get_updates(),
                                       name    = 'f_run')
         """
         if not hasattr(self, 'f_run'):
             log.debug("Compiling f_run...")
             t = time.time()
+            outputs = raise_to_list(self.get_outputs())
+            if outputs is not None and len(outputs) == 1:
+                outputs = outputs[0]
             self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                  outputs = self.get_outputs(),
+                                  outputs = outputs,
                                   updates = self.get_updates(),
                                   name    = 'f_run')
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
@@ -377,8 +374,8 @@ class Model(object):
 
         Returns
         -------
-        theano expression or list of theano expressions
-            The model's training cost(s), from which parameter gradients will be computed.
+        theano expression
+            The model's training cost from which parameter gradients will be computed.
 
         Raises
         ------
@@ -515,7 +512,7 @@ class Model(object):
         The variables should be set to either 0. or 1.
         These switch variables are used in theano Switch operations, such as adding noise during training and removing
         it during testing.
-        For a usage example, see the BasicLayer in opendeep.models.single_layer.basic package.
+        For a usage example, see the Dense in opendeep.models.single_layer.basic package.
 
         Returns
         -------
@@ -523,6 +520,14 @@ class Model(object):
             List of SharedVariable used to set the Switches. Defaults to an empty list.
         """
         return []
+
+    @init_optimizer
+    def train(self, optimizer, **kwargs):
+        """
+        This is a syntactic sugar method for training the model with a given Optimizer.
+        See train() in Optimizer for parameters.
+        """
+        optimizer.train(**kwargs)
 
     #######################################
     # Methods to do with model parameters #
@@ -689,7 +694,7 @@ class Model(object):
             log.debug("loading model %s parameters from %s",
                       str(type(self)), str(param_file))
             # try to grab the pickled params from the specified param_file path
-            with open(param_file, 'r') as f:
+            with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
             self.set_param_values(loaded_params)
             return True

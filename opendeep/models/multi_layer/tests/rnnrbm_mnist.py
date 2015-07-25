@@ -1,6 +1,6 @@
 import numpy
 import logging
-import opendeep.log.logger as logger
+from opendeep.log import config_root_logger
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 from opendeep.models.multi_layer.rnn_rbm import RNN_RBM
 from opendeep.data.standard_datasets.image.mnist import MNIST
@@ -39,12 +39,12 @@ def run_sequence(sequence=0):
     # make an optimizer to train it (AdaDelta is a good default)
     optimizer = AdaDelta(model=rnnrbm,
                          dataset=mnist,
-                         n_epoch=200,
+                         epochs=200,
                          batch_size=100,
-                         minimum_batch_size=2,
+                         min_batch_size=2,
                          learning_rate=1e-8,
-                         save_frequency=10,
-                         early_stop_length=200)
+                         save_freq=10,
+                         stop_patience=200)
 
     crossentropy = Monitor('crossentropy', rnnrbm.get_monitors()['crossentropy'], test=True)
     error = Monitor('error', rnnrbm.get_monitors()['mse'], test=True)
@@ -91,7 +91,7 @@ def run_sequence(sequence=0):
 if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
-    logger.config_root_logger()
+    config_root_logger()
     run_sequence(1)
     run_sequence(2)
     run_sequence(3)
