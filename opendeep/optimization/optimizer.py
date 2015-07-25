@@ -493,7 +493,7 @@ class Optimizer(object):
             self.best_cost = cost
             # save the parameters that made it the best
             self.best_params = get_shared_values(self.params)
-        elif cost is not numpy.NaN:
+        elif not numpy.isnan(cost):
             self.patience += 1
 
         # check for stopping either from n_epochs or from threshold/patience
