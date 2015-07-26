@@ -4,8 +4,19 @@ Code used throughout the entire OpenDeep package.
 from __future__ import division, absolute_import, print_function
 
 # get the package version number from a single location
-from . import version
-__version__ = version.__version__
+try:
+    from . import version
+    v = version.__version__
+except ImportError:
+    import os
+    here = os.path.abspath(os.path.dirname(__file__))
+    versionfile = os.path.join(here, 'version.py')
+    # Grab the appropriate version number from opendeep/version.py so we only have to keep track of it in one place!
+    exec(compile(open(versionfile).read(), versionfile, 'exec'))
+    # now we have the appropriate version in __version__
+    v = __version__  # it is there, trust me :) IDE's won't recognize that exec does anything.
+
+__version__ = v
 __copyright__ = "Copyright 2015, Vitruvian Science"
 __license__ = "Apache"
 __maintainer__ = "OpenDeep"
