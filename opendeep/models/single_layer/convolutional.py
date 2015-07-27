@@ -127,7 +127,7 @@ class Conv1D(Model):
         it by performing a 'full' convolution and then cropping the result, which
         may negatively affect performance.
         """
-        super(Conv1D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(Conv1D, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
         ##################
         # specifications #
@@ -291,7 +291,7 @@ class Conv2D(Model):
         it by performing a 'full' convolution and then cropping the result, which
         may negatively affect performance.
         """
-        super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
         ##################
         # specifications #
@@ -462,7 +462,7 @@ class ConvPoolLayer(Model):
             A random number generator that is used when adding noise.
             I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
         """
-        super(ConvPoolLayer, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(ConvPoolLayer, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
         # deal with the inputs coming from inputs_hook - necessary for now to give an input hook
         # inputs_hook is a tuple of (Shape, Input)

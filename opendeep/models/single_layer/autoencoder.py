@@ -149,6 +149,6 @@ class DenoisingAutoencoder(GSN):
         layers = 1
         # init GSN because DenoisingAutoencoder is a special case with layers=1
         super(DenoisingAutoencoder, self).__init__(
-            **{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'}
+            **{arg: val for (arg, val) in locals().items() if arg is not 'self'}
         )
         # Done, since this is a special case of the GSN! Easy peasy.

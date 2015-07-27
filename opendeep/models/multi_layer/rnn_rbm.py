@@ -106,7 +106,7 @@ class RNN_RBM(Model):
         generate_n_steps : int
             When generating from the model, how many steps to generate.
         """
-        super(RNN_RBM, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(RNN_RBM, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
         ##################
         # specifications #

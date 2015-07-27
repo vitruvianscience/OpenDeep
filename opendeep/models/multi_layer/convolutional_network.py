@@ -82,7 +82,7 @@ class AlexNet(Model):
             The batch size (number of images) to process in parallel.
         """
         # combine everything by passing to Model's init
-        super(AlexNet, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(AlexNet, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
         # configs can now be accessed through self dictionary
 
         if self.inputs_hook or self.params_hook:

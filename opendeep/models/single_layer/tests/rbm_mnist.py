@@ -15,8 +15,8 @@ if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
     import logging
-    import opendeep.log.logger as logger
-    logger.config_root_logger()
+    from opendeep import config_root_logger
+    config_root_logger()
     log = logging.getLogger(__name__)
     log.info("Creating RBM!")
 
@@ -31,15 +31,14 @@ if __name__ == '__main__':
 
     # optimizer = SGD(model=rbm, dataset=mnist, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False, momentum=False)
 
-    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_freq=1)
+    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_freq=1, epochs=100)
 
     ll = Monitor('pseudo-log', rbm.get_monitors()['pseudo-log'])
 
     # perform training!
     optimizer.train(monitor_channels=ll)
     # test it on some images!
-    test_data = mnist.test_inputs[0]
-    test_data = test_data[:25]
+    test_data = mnist.test_inputs[:25]
     # use the run function!
     preds = rbm.run(test_data)
 
@@ -75,7 +74,6 @@ if __name__ == '__main__':
         )
     )
     image.save('rbm_weights.png')
-
 
     del mnist
     del rbm

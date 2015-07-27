@@ -73,10 +73,8 @@ def main():
     optimizer.train(monitor_channels=recon_cost_channel)
 
     # Save some reconstruction output images
-    import opendeep.data.dataset as datasets
     n_examples = 100
-    xs_test, _ = mnist.getSubset(datasets.TEST)
-    xs_test = xs_test[:n_examples].eval()
+    xs_test = mnist.test_inputs[:n_examples]
     noisy_xs_test = gsn.f_noise(xs_test)
     reconstructed = gsn.run(noisy_xs_test)
     # Concatenate stuff

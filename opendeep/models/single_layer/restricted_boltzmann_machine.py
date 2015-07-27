@@ -97,7 +97,7 @@ class RBM(Model):
             generated from the model to train against reconstructing the original input.
         """
         # init Model to combine the defaults and config dictionaries with the initial parameters.
-        super(RBM, self).__init__(**{arg: val for (arg, val) in locals().iteritems() if arg is not 'self'})
+        super(RBM, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
         ##################
         # specifications #

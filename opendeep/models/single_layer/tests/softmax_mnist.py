@@ -9,8 +9,8 @@ if __name__ == '__main__':
     # set up the logging environment to display outputs (optional)
     # although this is recommended over print statements everywhere
     import logging
-    import opendeep.log.logger as logger
-    logger.config_root_logger()
+    from opendeep.log import config_root_logger
+    config_root_logger()
     log = logging.getLogger(__name__)
     log.info("Creating softmax!")
 
@@ -23,9 +23,7 @@ if __name__ == '__main__':
     # perform training!
     optimizer.train()
     # test it on some images!
-    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
-    test_data = test_data[:25]
-    test_labels = test_labels[:25]
+    test_data, test_labels = mnist.test_inputs[:25], mnist.test_targets[:25]
     # use the run function!
     preds = s.run(test_data)
     print('-------')
@@ -37,7 +35,6 @@ if __name__ == '__main__':
     del s
     del optimizer
 
-
     log.info("Creating softmax with categorical cross-entropy!")
     # grab the MNIST dataset
     mnist = MNIST(one_hot=True)
@@ -48,9 +45,7 @@ if __name__ == '__main__':
     # perform training!
     optimizer.train()
     # test it on some images!
-    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
-    test_data = test_data[:5]
-    test_labels = test_labels[:5]
+    test_data, test_labels = mnist.test_inputs[:5], mnist.test_targets[:5]
     # use the run function!
     preds = s.run(test_data)
     print('-------')

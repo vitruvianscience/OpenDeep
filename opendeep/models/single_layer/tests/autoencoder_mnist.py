@@ -30,15 +30,15 @@ def run_dae():
     # params_to_load = 'dae_params.pkl'
     # dae.load_params(params_to_load)
 
-    optimizer = AdaDelta(dae, mnist)
+    optimizer = AdaDelta(model=dae, dataset=mnist, epochs=100)
     optimizer.train()
 
     # Save some reconstruction output images
-    import opendeep.data.dataset as datasets
     n_examples = 100
-    test_xs, _ = mnist.getSubset(subset=datasets.TEST)
-    test_xs = test_xs[:n_examples].eval()
+    test_xs = mnist.test_inputs[:n_examples]
     dae.create_reconstruction_image(test_xs)
+
+    del dae, mnist
 
 
 if __name__ == '__main__':

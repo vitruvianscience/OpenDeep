@@ -24,9 +24,8 @@ class OutService(object):
         ----------
         value : object
             The value to write in the service.
-        subset : int
-            The subset that the value was created from (integers for data subsets determined in the
-            opendeep.data.dataset module as attributes `TRAIN` `VALID` and `TEST`)
+        subset : str
+            The subset that the value was created from (i.e. "train", "valid", or "test").
 
         Raises
         ------

@@ -31,7 +31,7 @@ if __name__ == '__main__':
     mlp.train(optimizer)
 
     # test it on some images!
-    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
+    test_data, test_labels = mnist.test_inputs, mnist.test_targets
     test_data = test_data[:25]
     test_labels = test_labels[:25]
     # use the run function!

@@ -26,10 +26,9 @@ def run_stacked_dae():
     #
     # mnist = MNIST()
     #
-    # optimizer = AdaDelta(model=stacked_dae, dataset=MNIST(), n_epoch=20)
+    # optimizer = AdaDelta(model=stacked_dae, dataset=MNIST(), epochs=20)
     # optimizer.train()
     #
-    # test_data = mnist.getDataByIndices(indices=range(5), subset=TEST)
     pass
 
 def run_mlp():
@@ -51,7 +50,7 @@ def run_mlp():
     optimizer = AdaDelta(model=mlp, dataset=mnist, epochs=10)
     optimizer.train()
 
-    test_data, test_labels = mnist.test_inputs[0], mnist.test_targets[0]
+    test_data, test_labels = mnist.test_inputs, mnist.test_targets
     test_data = test_data[:25]
     test_labels = test_labels[:25]
     # use the run function!
