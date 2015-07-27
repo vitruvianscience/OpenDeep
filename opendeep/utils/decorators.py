@@ -41,7 +41,7 @@ def init_optimizer(train_method):
         model = args[0]
         init_params['model'] = model
         new_optimizer = type(optimizer)(**init_params)
-        return train_method(model, new_optimizer)
+        return train_method(model, new_optimizer, **kwargs)
     return wrapper
 
 
