@@ -438,7 +438,7 @@ def cross_channel_normalization_bc01(bc01, alpha=1e-4, k=2, beta=0.75, n=5):
     extra_channels = T.alloc(0., b, ch + 2 * half, r, c)
     sq = T.set_subtensor(extra_channels[:, half:half + ch, :, :], sq)
     scale = k
-    for i in xrange(n):
+    for i in iter(range(n)):
         scale += alpha * sq[:, i:i + ch, :, :]
     scale = scale ** beta
 
@@ -470,7 +470,7 @@ def cross_channel_normalization_c01b(c01b, alpha=1e-4, k=2, beta=0.75, n=5):
     extra_channels = T.alloc(0., ch + 2 * half, r, c, b)
     sq = T.set_subtensor(extra_channels[half:half + ch, :, :, :], sq)
     scale = k
-    for i in xrange(n):
+    for i in iter(range(n)):
         scale += alpha * sq[i:i + ch, :, :, :]
     scale = scale ** beta
 

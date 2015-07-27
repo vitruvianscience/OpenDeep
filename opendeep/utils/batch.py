@@ -99,7 +99,7 @@ def numpy_minibatch(numpy_array, batch_size=1, min_batch_size=1):
         "batch_size (%d) has to be larger than min_batch_size (%d) and they both have to be greater than zero!" % \
         (batch_size, min_batch_size)
     # go through the first dimension of the input array.
-    for i in xrange((numpy_array.shape[0] // batch_size) + 1):
+    for i in iter(range((numpy_array.shape[0] // batch_size) + 1)):
         idx = i * batch_size
         data = numpy_array[idx:(idx + batch_size)]
         if data.shape[0] >= min_batch_size:

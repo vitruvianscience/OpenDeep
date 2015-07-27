@@ -594,7 +594,7 @@ class GSN(Model):
             x0 = initial
             samples = [x0]
             x = self.f_noise(x0)
-            for _ in xrange(n_samples-1):
+            for _ in iter(range(n_samples-1)):
                 x = self.f_sample(x)
                 samples.append(x)
                 x = self.visible_sampling(n=1, p=x, size=x.shape).astype(theano.config.floatX)
@@ -629,7 +629,7 @@ class GSN(Model):
             sampled_h = []
 
             times = []
-            for i in xrange(n_samples-1):
+            for i in iter(range(n_samples-1)):
                 _t = time.time()
 
                 # feed the last state into the network, run new state, and obtain visible units expectation chain
