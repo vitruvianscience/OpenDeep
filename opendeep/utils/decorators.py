@@ -2,7 +2,10 @@
 This module provides various decorators used throughout OpenDeep.
 """
 import inspect
+import logging
 # __all__ is created at the bottom of this file - go there for publicly available decorator names.
+
+log = logging.getLogger(__name__)
 
 def inherit_missing_function_docs(cls):
     """
@@ -30,19 +33,14 @@ def init_optimizer(train_method):
         if not optimizer:
             optimizer = args[1]
         # get the initialization parameters from the optimizer if it is initialized
-        if not inspect.isclass(optimizer):
-            init_params = optimizer.args.copy()
-        else:
-            init_params = dict()
+        if inspect.isclass(optimizer):
+            log.exception("Please initialize the Optimizer passed to train().")
+            raise AssertionError("Please initialize the Optimizer passed to train().")
+        init_params = optimizer.args.copy()
         # add the model's 'self' (must be args[0] of the method) to the optimizer initial config.
         model = args[0]
         init_params['model'] = model
-        # now override any optimizer params by those passed directly as kwargs
-        init_params.update(kwargs)
-        if not inspect.isclass(optimizer):
-            new_optimizer = type(optimizer)(**init_params)
-        else:
-            new_optimizer = optimizer(**init_params)
+        new_optimizer = type(optimizer)(**init_params)
         return train_method(model, new_optimizer)
     return wrapper
 
