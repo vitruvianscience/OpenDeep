@@ -9,7 +9,7 @@ from opendeep.monitor.monitor import Monitor, MonitorsChannel, collapse_channels
 from opendeep.monitor.plot import Plot
 from opendeep.utils.noise import add_uniform
 from opendeep.utils.statistics import get_stats
-from opendeep.utils.misc import make_time_units_string
+from opendeep.utils.misc import make_time_units_string, raise_to_list
 from opendeep.log.logger import config_root_logger
 
 log = logging.getLogger(__name__)
@@ -45,8 +45,8 @@ def main():
     plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, start_server=False, open_browser=True)
 
     log.debug('compiling...')
-    f = theano.function(inputs=[], outputs=train_collapsed.values(), updates=updates)
-    f2 = theano.function(inputs=[], outputs=valid_collapsed.values(), updates=updates)
+    f = theano.function(inputs=[], outputs=raise_to_list(train_collapsed.values()), updates=updates)
+    f2 = theano.function(inputs=[], outputs=raise_to_list(valid_collapsed.values()), updates=updates)
     log.debug('done')
 
     t1=time.time()

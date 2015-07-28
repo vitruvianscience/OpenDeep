@@ -327,7 +327,7 @@ class Optimizer(object):
 
             f_learn = function(inputs=function_input,
                                updates=updates,
-                               outputs=[train_cost] + self.train_monitors_dict.values(),
+                               outputs=[train_cost] + raise_to_list(self.train_monitors_dict.values()),
                                name='f_learn_%d' % i)
 
             log.info('f_learn %d compilation took %s', i + 1, make_time_units_string(time.time() - t))
@@ -344,7 +344,7 @@ class Optimizer(object):
             self.valid_monitor_function = function(
                 inputs=function_input,
                 updates=self.model.get_updates(),
-                outputs=self.valid_monitors_dict.values(),
+                outputs=raise_to_list(self.valid_monitors_dict.values()),
                 name='valid_monitor_function'
             )
         else:
@@ -355,7 +355,7 @@ class Optimizer(object):
             self.test_monitor_function = function(
                 inputs=function_input,
                 updates=self.model.get_updates(),
-                outputs=self.test_monitors_dict.values(),
+                outputs=raise_to_list(self.test_monitors_dict.values()),
                 name='test_monitor_function'
             )
         else:
