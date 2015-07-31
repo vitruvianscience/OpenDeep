@@ -1,14 +1,15 @@
 import numpy
 import theano
-from opendeep.models.single_layer.restricted_boltzmann_machine import RBM
-from opendeep.monitor.monitor import Monitor
-from opendeep.data.standard_datasets.image.mnist import MNIST
-from opendeep.optimization.adadelta import AdaDelta
-from opendeep.optimization.optimizer import Optimizer
-from opendeep.optimization.stochastic_gradient_descent import SGD
+from opendeep.models import RBM
+from opendeep.monitor import Monitor
+from opendeep.data import MNIST
+from opendeep.optimization import Optimizer
 from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
-import PIL.Image as Image
+try:
+    import PIL.Image as Image
+except ImportError:
+    import Image
 
 
 if __name__ == '__main__':
@@ -25,13 +26,18 @@ if __name__ == '__main__':
     # create the RBM
     rng = numpy.random.RandomState(1234)
     mrg = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(2**30))
-    rbm = RBM(input_size=28*28, hidden_size=500, k=15, weights_init='uniform', weights_interval=4*numpy.sqrt(6./(28*28+500)), mrg=mrg)
+    config_args = {
+        'input_size': 28*28,
+        'hidden_size': 500,
+        'k': 15,
+        'weights_init': 'uniform',
+        'weights_interval': 4*numpy.sqrt(6./28*28+500),
+        'mrg': mrg
+    }
+    rbm = RBM(**config_args)
     # rbm.load_params('rbm_trained.pkl')
-    # make an optimizer to train it (AdaDelta is a good default)
 
-    # optimizer = SGD(model=rbm, dataset=mnist, batch_size=20, learning_rate=0.1, lr_decay=False, nesterov_momentum=False, momentum=False)
-
-    optimizer = Optimizer(lr_decay=False, learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, save_freq=1, epochs=100)
+    optimizer = Optimizer(learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, epochs=15)
 
     ll = Monitor('pseudo-log', rbm.get_monitors()['pseudo-log'])
 
@@ -69,7 +75,7 @@ if __name__ == '__main__':
         tile_raster_images(
             X=rbm.W.get_value(borrow=True).T,
             img_shape=(28, 28),
-            tile_shape=closest_to_square_factors(rbm.hidden_size),
+            tile_shape=closest_to_square_factors(config_args['hidden_size']),
             tile_spacing=(1, 1)
         )
     )

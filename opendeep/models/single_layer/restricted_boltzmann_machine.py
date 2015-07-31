@@ -31,6 +31,8 @@ class RBM(Model):
     This is a probabilistic, energy-based model.
     Basic binary implementation from:
     http://deeplearning.net/tutorial/rnnrbm.html
+    and
+    http://deeplearning.net/tutorial/rbm.html
 
     .. todo::
         Implement non-binary support for visible and hiddens (this means changing sampling method).
@@ -42,7 +44,7 @@ class RBM(Model):
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
                  mrg=RNG_MRG.MRG_RandomStreams(1),
-                 k=15):
+                 k=15, persistent=True):
         """
         RBM constructor. Defines the parameters of the model along with
         basic operations for inferring hidden from visible (and vice-versa),
@@ -198,7 +200,6 @@ class RBM(Model):
             Last sample in the chain - last generated visible sample from the Gibbs process.
         tensor
             Last hidden sample in the chain from the Gibbs process.
-        :rtype: List
         """
         # initialize from visibles if we aren't generating from some hiddens
         if self.hiddens_init is None:
@@ -281,7 +282,12 @@ class RBM(Model):
         theano expression
             The free energy calculation given the input tensor.
         """
-        vbias_term  = -(v * self.bv).sum()
+        # vbias_term = -T.dot(v, self.bv)
+        # hidden_term = -T.sum(
+        #     T.log(1 + T.exp(T.dot(v, self.W) + self.bh)),
+        #     axis=1
+        # )
+        vbias_term = -(v * self.bv).sum()
         hidden_term = -T.log(1 + T.exp(T.dot(v, self.W) + self.bh)).sum()
         return vbias_term + hidden_term
 
