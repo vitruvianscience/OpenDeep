@@ -3,9 +3,12 @@
 # standard library imports
 from __future__ import absolute_import
 import sys
-from types import StringType
+from theano.compat.six import string_types as StringType
 from struct import unpack
-from cStringIO import StringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
 # custom import
 from .DataTypeConverters import writeBew, writeVar, fromBytes

@@ -25,7 +25,6 @@ import logging
 import time
 import os
 import warnings
-from itertools import izip
 # third party
 import numpy
 import theano.tensor as T

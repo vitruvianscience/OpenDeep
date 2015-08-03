@@ -21,6 +21,15 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+# python 2 vs. python 3 mnist source
+import sys
+if sys.version_info > (3, 0):
+    mnist_source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist_py3k.pkl.gz'
+    mnist_path = 'datasets/mnist_py3k.pkl.gz'
+else:
+    mnist_source = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
+    mnist_path = 'datasets/mnist.pkl.gz'
+
 class MNIST(FileDataset):
     """
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
@@ -28,8 +37,8 @@ class MNIST(FileDataset):
     """
     def __init__(self, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
                  sequence_number=0, seq_3d=False, seq_length=30, rng=None,
-                 path='datasets/mnist.pkl.gz',
-                 source='http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'):
+                 path=mnist_path,
+                 source=mnist_source):
         """
         Parameters
         ----------

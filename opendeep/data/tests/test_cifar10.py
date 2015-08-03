@@ -20,21 +20,21 @@ class TestCifar10(unittest.TestCase):
         print("lengths:")
         print("\ntrain")
         if self.cifar.train_inputs is not None:
-            print len(self.cifar.train_inputs)
+            print(len(self.cifar.train_inputs))
         if self.cifar.train_targets is not None:
-            print len(self.cifar.train_targets)
+            print(len(self.cifar.train_targets))
 
         print("\nvalid")
         if self.cifar.valid_inputs is not None:
-            print len(self.cifar.valid_inputs)
+            print(len(self.cifar.valid_inputs))
         if self.cifar.valid_targets is not None:
-            print len(self.cifar.valid_targets)
+            print(len(self.cifar.valid_targets))
 
         print("\ntest")
         if self.cifar.test_inputs is not None:
-            print len(self.cifar.test_inputs)
+            print(len(self.cifar.test_inputs))
         if self.cifar.test_targets is not None:
-            print len(self.cifar.test_targets)
+            print(len(self.cifar.test_targets))
 
 
     def tearDown(self):

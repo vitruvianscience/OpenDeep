@@ -2,7 +2,10 @@
 import unittest
 import os
 import sys
-from StringIO import StringIO
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 import logging
 # internal references
 from opendeep.log import config_root_logger

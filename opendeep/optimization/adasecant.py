@@ -171,7 +171,7 @@ class AdaSecant(Optimizer):
         #
         #     gradients = OrderedDict({p: T.switch(gnorm/nparams > self.grad_clip,
         #                          g * self.grad_clip * nparams / gnorm , g)\
-        #                          for p, g in gradients.iteritems()})
+        #                          for p, g in gradients.items()})
 
         for param in gradients.keys():
             gradients[param].name = "grad_%s" % param.name

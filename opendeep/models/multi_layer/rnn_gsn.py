@@ -5,7 +5,10 @@ This module provides the RNN-GSN: an unsupervised, generative recurrent model.
 # standard libraries
 import logging
 import os
-import cPickle as pickle
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 # third party libraries
 import theano
 import theano.tensor as T

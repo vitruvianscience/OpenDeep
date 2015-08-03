@@ -1,8 +1,8 @@
 # -*- coding: ISO-8859-1 -*-
 
 # standard library imports
-from __future__ import absolute_import, print_function
-from types import StringType
+from __future__ import absolute_import
+from theano.compat.six import string_types as StringType
 
 # custom import
 from .DataTypeConverters import readBew, readVar, varLen
