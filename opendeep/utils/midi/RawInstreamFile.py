@@ -1,11 +1,11 @@
 # -*- coding: ISO-8859-1 -*-
 
 # standard library imports
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 from types import StringType
 
 # custom import
-from DataTypeConverters import readBew, readVar, varLen
+from .DataTypeConverters import readBew, readVar, varLen
 
 
 class RawInstreamFile:

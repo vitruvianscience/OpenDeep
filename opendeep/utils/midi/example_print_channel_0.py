@@ -1,6 +1,6 @@
-from __future__ import print_function
-from MidiOutStream import MidiOutStream
-from MidiInFile import MidiInFile
+from __future__ import absolute_import, print_function
+from .MidiOutStream import MidiOutStream
+from .MidiInFile import MidiInFile
 
 """
 This prints all note on events on midi channel 0

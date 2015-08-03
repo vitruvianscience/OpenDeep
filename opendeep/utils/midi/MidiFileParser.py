@@ -1,13 +1,15 @@
 # -*- coding: ISO-8859-1 -*-
 
+from __future__ import absolute_import
+
 # std library
 from struct import unpack
 
 # uhh I don't really like this, but there are so many constants to 
 # import otherwise
-from constants import *
+from .constants import *
 
-from EventDispatcher import EventDispatcher
+from .EventDispatcher import EventDispatcher
 
 class MidiFileParser:
 

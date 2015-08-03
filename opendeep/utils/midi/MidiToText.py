@@ -1,7 +1,6 @@
 # -*- coding: ISO-8859-1 -*-
-
-from __future__ import print_function
-from MidiOutStream import MidiOutStream
+from __future__ import absolute_import, print_function
+from .MidiOutStream import MidiOutStream
 
 
 class MidiToText(MidiOutStream):

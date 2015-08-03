@@ -1,5 +1,6 @@
-from MidiOutFile import MidiOutFile
-from MidiInFile import MidiInFile
+from __future__ import absolute_import
+from .MidiOutFile import MidiOutFile
+from .MidiInFile import MidiInFile
 
 """
 This is an example of the smallest possible type 0 midi file, where 

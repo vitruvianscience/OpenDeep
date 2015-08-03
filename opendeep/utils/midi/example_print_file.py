@@ -8,12 +8,12 @@ So it prints all the events from the infile to the console. great for
 debugging :-s
 """
 
-
+# from __future__ import absolute_import
 # # get data
 # test_file = 'test/midifiles/minimal-cubase-type0.mid'
 #
 # # do parsing
-# from MidiInFile import MidiInFile
-# from MidiToText import MidiToText # the event handler
+# from .MidiInFile import MidiInFile
+# from .MidiToText import MidiToText # the event handler
 # midiIn = MidiInFile(MidiToText(), test_file)
 # midiIn.read()

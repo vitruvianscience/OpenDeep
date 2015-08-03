@@ -1,9 +1,5 @@
 # -*- coding: ISO-8859-1 -*-
-
-#import MidiOutStream
-#import MidiInStream
-#import MidiInFile
-#import MidiToText
+from __future__ import division, absolute_import, print_function
 
 # Author: Nicolas Boulanger-Lewandowski
 # University of Montreal (2013)
@@ -12,9 +8,9 @@
 # Implements midiread and midiwrite functions to read/write MIDI files to/from piano-rolls
 
 
-from MidiOutFile import MidiOutFile
-from MidiInFile import MidiInFile
-from MidiOutStream import MidiOutStream
+from .MidiOutFile import MidiOutFile
+from .MidiInFile import MidiInFile
+from .MidiOutStream import MidiOutStream
 
 import numpy
 

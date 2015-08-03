@@ -1,4 +1,5 @@
-from MidiToText import MidiToText
+from __future__ import absolute_import
+from .MidiToText import MidiToText
 
 """
 This is an example that uses the MidiToText eventhandler. When an 

@@ -1,10 +1,10 @@
 # -*- coding: ISO-8859-1 -*-
+from __future__ import absolute_import
+from .MidiOutStream import MidiOutStream
+from .RawOutstreamFile import RawOutstreamFile
 
-from MidiOutStream import MidiOutStream
-from RawOutstreamFile import RawOutstreamFile
-
-from constants import *
-from DataTypeConverters import fromBytes, writeVar
+from .constants import *
+from .DataTypeConverters import fromBytes, writeVar
 
 class MidiOutFile(MidiOutStream):
     """

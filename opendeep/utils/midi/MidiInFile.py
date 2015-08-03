@@ -1,7 +1,7 @@
 # -*- coding: ISO-8859-1 -*-
-
-from RawInstreamFile import RawInstreamFile
-from MidiFileParser import MidiFileParser
+from __future__ import absolute_import
+from .RawInstreamFile import RawInstreamFile
+from .MidiFileParser import MidiFileParser
 
 
 class MidiInFile:
@@ -12,11 +12,11 @@ class MidiInFile:
     object.
     
     Get example data from a minimal midi file, generated with cubase.
-    >>> test_file = 'C:/Documents and Settings/maxm/Desktop/temp/midi/src/midi/tests/midifiles/minimal-cubase-type0.mid'
+    >>> test_file = 'minimal-cubase-type0.mid'
     
     Do parsing, and generate events with MidiToText,
     so we can see what a minimal midi file contains
-    >>> from MidiToText import MidiToText
+    >>> from opendeep.utils.midi.MidiToText import MidiToText
     >>> midi_in = MidiInFile(MidiToText(), test_file)
     >>> midi_in.read()
     format: 0, nTracks: 1, division: 480

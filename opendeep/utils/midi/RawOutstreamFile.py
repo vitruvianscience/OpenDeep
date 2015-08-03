@@ -1,13 +1,14 @@
 # -*- coding: ISO-8859-1 -*-
 
 # standard library imports
+from __future__ import absolute_import
 import sys
 from types import StringType
 from struct import unpack
 from cStringIO import StringIO
 
 # custom import
-from DataTypeConverters import writeBew, writeVar, fromBytes
+from .DataTypeConverters import writeBew, writeVar, fromBytes
 
 class RawOutstreamFile:
     

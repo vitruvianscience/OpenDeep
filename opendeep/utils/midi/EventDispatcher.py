@@ -1,14 +1,14 @@
 # -*- coding: ISO-8859-1 -*-
-
+from __future__ import absolute_import
 # std library
 from struct import unpack
 
 # custom
-from DataTypeConverters import readBew, readVar, varLen, toBytes
+from .DataTypeConverters import readBew, readVar, varLen, toBytes
 
 # uhh I don't really like this, but there are so many constants to 
 # import otherwise
-from constants import *
+from .constants import *
 
 
 class EventDispatcher:
@@ -280,7 +280,7 @@ class EventDispatcher:
 if __name__ == '__main__':
 
 
-    from MidiToText import MidiToText
+    from .MidiToText import MidiToText
     
     outstream = MidiToText()
     dispatcher = EventDispatcher(outstream)

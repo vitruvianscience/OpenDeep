@@ -1,6 +1,6 @@
 # -*- coding: ISO-8859-1 -*-
-
-from MidiOutStream import MidiOutStream
+from __future__ import absolute_import
+from .MidiOutStream import MidiOutStream
 
 class MidiInStream:
 

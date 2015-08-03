@@ -4,10 +4,10 @@
 #
 # Implements midiread and midiwrite functions to read/write MIDI files to/from piano-rolls
 
-
-from MidiOutFile import MidiOutFile
-from MidiInFile import MidiInFile
-from MidiOutStream import MidiOutStream
+from __future__ import absolute_import
+from .MidiOutFile import MidiOutFile
+from .MidiInFile import MidiInFile
+from .MidiOutStream import MidiOutStream
 
 import numpy
 
