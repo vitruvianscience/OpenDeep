@@ -23,7 +23,12 @@ UNKNOWN : int
 # standard imports
 import os
 import errno
-import urllib
+try:
+    # For Python 3.0 and later
+    from urllib.request import urlopen, urlretrieve
+except ImportError:
+    # Fall back to Python 2's urllib2
+    from urllib import urlopen, urlretrieve
 import zipfile
 import tarfile
 import logging
@@ -169,11 +174,11 @@ def download_file(url, destination):
     destination = os.path.realpath(destination)
     log.debug('Downloading data from %s to %s', url, destination)
     try:
-        page = urllib.urlopen(url)
+        page = urlopen(url)
         if page.getcode() is not 200:
             log.warning('Tried to download data from %s and got http response code %s', url, str(page.getcode()))
             return False
-        urllib.urlretrieve(url, destination)
+        urlretrieve(url, destination)
         return True
     except:
         log.exception('Error downloading data from %s to %s', url, destination)

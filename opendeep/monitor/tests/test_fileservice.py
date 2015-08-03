@@ -44,8 +44,8 @@ def main():
     valid_services = OrderedDict([(item[0], item[2]) for item in valid_collapsed_raw])
 
     log.debug('compiling...')
-    f = theano.function(inputs=[], outputs=raise_to_list(train_collapsed.values()), updates=updates)
-    f2 = theano.function(inputs=[], outputs=raise_to_list(valid_collapsed.values()), updates=updates)
+    f = theano.function(inputs=[], outputs=list(train_collapsed.values()), updates=updates)
+    f2 = theano.function(inputs=[], outputs=list(valid_collapsed.values()), updates=updates)
     log.debug('done')
 
     t1=time.time()

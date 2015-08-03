@@ -45,8 +45,8 @@ def main():
     plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, start_server=False, open_browser=True)
 
     log.debug('compiling...')
-    f = theano.function(inputs=[], outputs=raise_to_list(train_collapsed.values()), updates=updates)
-    f2 = theano.function(inputs=[], outputs=raise_to_list(valid_collapsed.values()), updates=updates)
+    f = theano.function(inputs=[], outputs=list(train_collapsed.values()), updates=updates)
+    f2 = theano.function(inputs=[], outputs=list(valid_collapsed.values()), updates=updates)
     log.debug('done')
 
     t1=time.time()
