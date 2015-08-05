@@ -4,7 +4,10 @@ This module contains utils that are general and can't be grouped logically into 
 # standard libraries
 import logging
 import functools
-import itertools
+try:
+    from itertools import izip as zip
+except ImportError: # will be 3.x series
+    pass
 # third party libraries
 import numpy
 import theano
@@ -381,6 +384,6 @@ def min_normalized_izip(*iterables):
     *iterables
         A list of iterable objects (most typically going to be minibatches)
     """
-    for elems in itertools.izip(*iterables):
+    for elems in zip(*iterables):
         min_len = min([elem.shape[0] if hasattr(elem, 'shape') else len(raise_to_list(elem)) for elem in elems])
         yield [elem[:min_len] for elem in elems]

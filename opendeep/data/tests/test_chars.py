@@ -2,7 +2,10 @@
 from __future__ import print_function
 import unittest
 import os
-import itertools
+try:
+    from itertools import izip as zip
+except ImportError: # will be 3.x series
+    pass
 import numpy as np
 try:
     import nltk
@@ -33,7 +36,7 @@ class TestCharsDataset(unittest.TestCase):
                                   target_n_future=n_future)
             i = 0
             chars, labels = dataset.train_inputs, dataset.train_targets
-            for char, label in itertools.izip(chars, labels):
+            for char, label in zip(chars, labels):
                 char = dataset.vocab_inverse[np.argmax(char, 0)]
                 label = dataset.label_vocab_inverse[np.argmax(label, 0)]
                 if i >= self.n_chars - n_future:
@@ -52,7 +55,7 @@ class TestCharsDataset(unittest.TestCase):
                                   sequence_length=len)
 
             chars, labels = dataset.train_inputs, dataset.train_targets
-            for i, (char_seq, label_seq) in enumerate(itertools.izip(chars, labels)):
+            for i, (char_seq, label_seq) in enumerate(zip(chars, labels)):
                 char_s = [dataset.vocab_inverse[np.argmax(char, 0)] for char in char_seq]
                 label_s = [dataset.label_vocab_inverse[np.argmax(label, 0)] for label in label_seq]
 
