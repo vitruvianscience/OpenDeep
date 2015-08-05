@@ -22,6 +22,7 @@ Multimodal transition operator (using NADE) discussed in:
 Sherjil Ozair, Li Yao, Yoshua Bengio
 http://arxiv.org/abs/1312.5578
 '''
+from __future__ import division
 # standard libraries
 import os
 import time
@@ -732,7 +733,7 @@ class GSN(Model):
                 )
             else:
                 h_list.append(
-                    (hiddens_tensor.T[(idx/2)*self.layer_sizes[idx] : (idx/2 + 1)*self.layer_sizes[idx+1]]).T
+                    (hiddens_tensor.T[(idx//2)*self.layer_sizes[idx] : (idx//2 + 1)*self.layer_sizes[idx+1]]).T
                 )
 
         return h_list
