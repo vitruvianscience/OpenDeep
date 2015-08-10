@@ -228,6 +228,9 @@ class RNN(Model):
             elif self.input.ndim == 2:
                 self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
+            elif self.input.ndim == 3:
+                pass
+
             elif self.input.ndim > 3:
                 self.input = self.input.flatten(3)
                 self.input_size = sum(self.input_size)
