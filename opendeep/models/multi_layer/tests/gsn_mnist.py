@@ -23,15 +23,15 @@ def main():
     # Initialization things with arguments #
     ########################################
     # use these arguments to get results from paper referenced above
-    _train_args = {"n_epoch": 1000,  # maximum number of times to run through the dataset
+    _train_args = {"epochs": 1000,  # maximum number of times to run through the dataset
                    "batch_size": 100,  # number of examples to process in parallel (minibatch)
                    "min_batch_size": 1,  # the minimum number of examples for a batch to be considered
-                   "save_frequency": 1,  # how many epochs between saving parameters
-                   "early_stop_threshold": .9995,  # multiplier for how much the train cost to improve to not stop early
-                   "early_stop_length": 500,  # how many epochs to wait to see if the threshold has been reached
+                   "save_freq": 1,  # how many epochs between saving parameters
+                   "stop_threshold": .9995,  # multiplier for how much the train cost to improve to not stop early
+                   "stop_patience": 500,  # how many epochs to wait to see if the threshold has been reached
                    "learning_rate": .25,  # initial learning rate for SGD
                    "lr_decay": 'exponential',  # the decay function to use for the learning rate parameter
-                   "lr_factor": .995,  # by how much to decay the learning rate each epoch
+                   "lr_decay_factor": .995,  # by how much to decay the learning rate each epoch
                    "momentum": 0.5,  # the parameter momentum amount
                    'momentum_decay': False,  # how to decay the momentum each epoch (if applicable)
                    'momentum_factor': 0,  # by how much to decay the momentum (in this case not at all)
@@ -69,7 +69,7 @@ def main():
     # gsn.load_params(params_to_load)
 
     optimizer = SGD(model=gsn, dataset=mnist, **_train_args)
-    # optimizer = AdaDelta(model=gsn, dataset=mnist, n_epoch=200, batch_size=100, learning_rate=1e-6)
+    # optimizer = AdaDelta(model=gsn, dataset=mnist, epochs=200, batch_size=100, learning_rate=1e-6)
     optimizer.train(monitor_channels=recon_cost_channel)
 
     # Save some reconstruction output images
