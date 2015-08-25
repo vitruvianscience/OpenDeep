@@ -10,10 +10,12 @@ import logging
 import os
 import time
 # third party libraries
+import numpy
 import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
+import opendeep.models
 from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
 from opendeep.utils.constructors import function
@@ -25,6 +27,16 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
+try:
+    import h5py
+    HAS_H5PY = True
+except ImportError:
+    HAS_H5PY = False
+
+hdf5_param_key = "params"
+class_key = "class"
+hdf5_config_key = "config"
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +124,8 @@ class Model(object):
             This will be all the other left-over keyword parameters passed to the class as a
             dictionary of {param: value}. These get created into `self.args` along with outdir and output_size.
         """
-        log.info("Creating a new instance of %s", str(type(self)))
+        classname = self.__class__.__name__
+        log.info("Creating a new instance of %s", classname)
 
         # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
         self.inputs_hook  = inputs_hook
@@ -161,7 +174,7 @@ class Model(object):
             mkdir_p(self.args['outdir'])
 
         # log the arguments.
-        log.info("%s self.args: %s", str(type(self)), str(self.args))
+        log.info("%s self.args: %s", classname, str(self.args))
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
@@ -188,8 +201,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s does not have a get_inputs function!", str(type(self)))
-        raise NotImplementedError("Please implement a get_inputs method for %s" % str(type(self)))
+        log.critical("%s does not have a get_inputs function!", self.__class__.__name__)
+        raise NotImplementedError("Please implement a get_inputs method for %s" % self.__class__.__name__)
 
     def get_hiddens(self):
         """
@@ -210,8 +223,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s get_hiddens method not implemented!", str(type(self)))
-        raise NotImplementedError("Please implement a get_hiddens method for %s" % str(type(self)))
+        log.critical("%s get_hiddens method not implemented!", self.__class__.__name__)
+        raise NotImplementedError("Please implement a get_hiddens method for %s" % self.__class__.__name__)
 
     def get_outputs(self):
         """
@@ -241,8 +254,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s get_outputs method not implemented!", str(type(self)))
-        raise NotImplementedError("Please implement a get_outputs method for %s" % str(type(self)))
+        log.critical("%s get_outputs method not implemented!", self.__class__.__name__)
+        raise NotImplementedError("Please implement a get_outputs method for %s" % self.__class__.__name__)
 
     #############################################
     # Methods for running the model on an input #
@@ -336,8 +349,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.exception("Generate method not implemented for Model %s", str(type(self)))
-        raise NotImplementedError("Generate method not implemented for Model %s" % str(type(self)))
+        log.exception("Generate method not implemented for Model %s", self.__class__.__name__)
+        raise NotImplementedError("Generate method not implemented for Model %s" % self.__class__.__name__)
 
     #########################################
     # Methods to do with training the model #
@@ -382,8 +395,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s does not have a get_train_cost function!", str(type(self)))
-        raise NotImplementedError("Please implement a get_train_cost method for %s" % str(type(self)))
+        log.critical("%s does not have a get_train_cost function!", self.__class__.__name__)
+        raise NotImplementedError("Please implement a get_train_cost method for %s" % self.__class__.__name__)
 
     def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
         """
@@ -548,8 +561,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s does not have a get_params function!", str(type(self)))
-        raise NotImplementedError("Please implement a get_params method for %s" % str(type(self)))
+        log.critical("%s does not have a get_params function!", self.__class__.__name__)
+        raise NotImplementedError("Please implement a get_params method for %s" % self.__class__.__name__)
 
     def get_param_values(self, borrow=True):
         """
@@ -578,12 +591,12 @@ class Model(object):
         try:
             params = get_shared_values(self.get_params(), borrow=borrow)
         except NotImplementedError:
-            log.exception("%s cannot get parameters, is missing get_params() method!", str(type(self)))
+            log.exception("%s cannot get parameters, is missing get_params() method!", self.__class__.__name__)
             raise
         except AttributeError as e:
             log.exception("%s cannot get parameters, there was an AttributeError %s "
                           "when going through the get_params()",
-                          str(type(self)), str(e))
+                          self.__class__.__name__, str(e))
             raise
 
         return params
@@ -615,7 +628,7 @@ class Model(object):
         if len(param_values) != len(params):
             log.error("%s length of input params to set_param_values() different from length of self.get_params(). "
                       "Input was %s, expected %s",
-                      str(type(self)), str(len(param_values)), str(len(self.get_params())))
+                      self.__class__.__name__, str(len(param_values)), str(len(self.get_params())))
             return False
 
         # for each parameter and value in order, set the value!
@@ -623,19 +636,22 @@ class Model(object):
             set_shared_values(params, param_values, borrow=borrow)
         except Exception as e:
             log.exception("%s had Exception %s",
-                          str(type(self)), str(e))
+                          self.__class__.__name__, str(e))
             return False
 
         return True
 
-    def save_params(self, param_file):
+    def save_params(self, param_file, use_hdf5=True):
         """
-        This saves the model's parameters (pickles them) to the `param_file` (pickle file)
+        This saves the model's parameters (HDF5 file or pickles them) to the `param_file`.
 
         Parameters
         ----------
         param_file : str
-            Filename of pickled params file to save to.
+            Filename of HDF5 or pickled params file to save to.
+        use_hdf5 : bool
+            Whether to use an HDF5 file for the saved parameters (if h5py is installed).
+            Otherwise, it will use pickle.
 
         Returns
         -------
@@ -650,36 +666,68 @@ class Model(object):
             param_path = os.path.join(self.outdir, param_file)
             param_file = os.path.realpath(param_path)
 
-            # force extension to be .pkl if it isn't a pickle file
-            _, extension = os.path.splitext(param_file)
-            if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
-                ''.join([param_file, '.pkl'])
+            ftype = file_ops.get_extension_type(param_file)
 
-            log.debug('Saving %s parameters to %s',
-                      str(type(self)), str(param_file))
-            # try to dump the param values
-            with open(param_file, 'wb') as f:
+            if HAS_H5PY and use_hdf5:
+                # force extension to be .hdf5 if it isn't a pickle file
+                if ftype != file_ops.HDF5:
+                    param_file = ''.join([param_file, '.hdf5'])
+
+                log.debug('Saving %s parameters to %s',
+                          self.__class__.__name__, str(param_file))
+
+                # try to dump the param values
+                f = h5py.File(param_file, 'w')
                 try:
-                    pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    if hdf5_param_key not in f:
+                        param_group = f.create_group(hdf5_param_key)
+                    else:
+                        param_group = f[hdf5_param_key]
+                    for n, param in enumerate(params):
+                        name = str(n)
+                        if name in param_group:
+                            dset = param_group[name]
+                            dset[...] = param
+                        else:
+                            dset = param_group.create_dataset(name, data=param)
+                    f.flush()
                 except Exception as e:
                     log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                                  str(type(self)), str(param_file), str(e))
+                                  self.__class__.__name__, str(param_file), str(e))
                     return False
                 finally:
                     f.close()
+            else:
+                # force extension to be .pkl if it isn't a pickle file
+                if ftype != file_ops.PKL:
+                    param_file = ''.join([param_file, '.pkl'])
 
+                log.debug('Saving %s parameters to %s',
+                          self.__class__.__name__, str(param_file))
+
+                # try to dump the param values
+                with open(param_file, 'wb') as f:
+                    try:
+                        pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    except Exception as e:
+                        log.exception("Some issue saving model %s parameters to %s! Exception: %s",
+                                      self.__class__.__name__, str(param_file), str(e))
+                        return False
+                    finally:
+                        f.close()
+            # all done
             return True
         else:
             return False
 
     def load_params(self, param_file):
         """
-        This loads the model's parameters from the param_file (pickle file)
+        This loads the model's parameters from the param_file (hdf5 or pickle file)
 
         Parameters
         ----------
         param_file : str
-            Filename of pickled params file (the file holding the pickled model parameters).
+            Filename of hdf5 or pickled params file (the file holding the model parameters).
 
         Returns
         -------
@@ -690,31 +738,52 @@ class Model(object):
 
         # make sure it is a pickle file
         ftype = file_ops.get_file_type(param_file)
+
         if ftype == file_ops.PKL:
             log.debug("loading model %s parameters from %s",
-                      str(type(self)), str(param_file))
+                      self.__class__.__name__, str(param_file))
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
             self.set_param_values(loaded_params)
             return True
-        # if get_file_type didn't return pkl or none, it wasn't a pickle file
+        elif ftype == file_ops.HDF5:
+            if HAS_H5PY:
+                f = h5py.File(param_file)
+                try:
+                    param_group = f[hdf5_param_key]
+                    params = OrderedDict(sorted(list(param_group.items())))
+                    param_values = [v[...] for k, v in list(params.items())]
+                    self.set_param_values(param_values)
+                except Exception as e:
+                    log.exception("Some issue loading model %s parameters from %s! Exception: %s",
+                                  self.__class__.__name__, str(param_file), str(e))
+                    return False
+                finally:
+                    f.close()
+            else:
+                log.error("Please install the h5py package to read HDF5 files!")
+                return False
+        # if get_file_type didn't return pkl, hdf5, or none
         elif ftype:
-            log.error("Param file %s doesn't have a supported pickle extension!", str(param_file))
+            log.error("Param file %s doesn't have a supported pickle or HDF5 extension!", str(param_file))
             return False
         # if get_file_type returned none, it couldn't find the file
         else:
             log.error("Param file %s couldn't be found!", str(param_file))
             return False
 
-    def save_args(self, args_file="config.pkl"):
+    def save_args(self, args_file="config", use_hdf5=True):
         """
-        This saves the model's initial configuration parameters (`self.args`) in a pickle file.
+        This saves the model's initial configuration parameters (`self.args`) in an hdf5 or pickle file.
 
         Parameters
         ----------
         args_file : str, optional
-            Filename of pickled configuration parameters. Defaults to 'config.pkl'.
+            Filename of pickled or hdf5 configuration parameters. Defaults to 'config'.
+        use_hdf5 : bool
+            Whether to use an HDF5 file for the saved parameters (if h5py is installed).
+            Otherwise, it will use pickle.
 
         Returns
         -------
@@ -726,23 +795,53 @@ class Model(object):
             args_path = os.path.join(self.outdir, args_file)
             args_file = os.path.realpath(args_path)
 
-            # force extension to be .pkl if it isn't a pickle file
-            _, extension = os.path.splitext(args_file)
-            if extension.lower() != ".pkl" or extension.lower() != ".pickle" or extension.lower() != ".p":
-                ''.join([args_file, '.pkl'])
+            ftype = file_ops.get_extension_type(args_file)
 
-            log.debug('Saving %s configuration to %s',
-                      str(type(self)), str(args_file))
-            # try to dump the param values
-            with open(args_file, 'wb') as f:
+            args = self.args.copy()
+            classname = self.__class__.__name__
+            args[class_key] = classname
+
+            if HAS_H5PY and use_hdf5:
+                # force extension to be .hdf5 if it isn't a pickle file
+                if ftype != file_ops.HDF5:
+                    args_file = ''.join([args_file, '.hdf5'])
+
+                log.debug('Saving %s configuration to %s',
+                          classname, str(args_file))
+
+                # try to dump the param values
+                f = h5py.File(args_file, 'w')
                 try:
-                    pickle.dump(self.args, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    if hdf5_config_key not in f:
+                        args_group = f.create_group(hdf5_config_key)
+                    else:
+                        args_group = f[hdf5_config_key]
+                    for arg_name, arg_value in list(args.items()):
+                        args_group.attrs[arg_name] = arg_value
+                    f.flush()
                 except Exception as e:
-                    log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                                  str(type(self)), str(args_file), str(e))
+                    log.exception("Some issue saving model %s configuration to %s! Exception: %s",
+                                  classname, str(args_file), str(e))
                     return False
                 finally:
                     f.close()
+            # otherwise pickle
+            else:
+                # force extension to be .pkl if it isn't a pickle file
+                if ftype != file_ops.PKL:
+                    args_file = ''.join([args_file, '.pkl'])
+                log.debug('Saving %s configuration to %s',
+                          classname, str(args_file))
+                # try to dump the args values
+                with open(args_file, 'wb') as f:
+                    try:
+                        pickle.dump(args, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    except Exception as e:
+                        log.exception("Some issue saving model %s configuration to %s! Exception: %s",
+                                      classname, str(args_file), str(e))
+                        return False
+                    finally:
+                        f.close()
 
             return True
         else:
@@ -766,3 +865,92 @@ class Model(object):
         args = self.args.copy()
         args.update(kwargs)
         return type(self)(**args)
+
+    def save(self, config_file, param_file=None, use_hdf5=True):
+        """
+        Saves this model (and its current parameters) to files.
+
+        Parameters
+        ----------
+        config_file : str
+            Filename of hdf5 or pickled configuration file. (if hdf5, parameters will be saved to the same file)
+        param_file : str, optional
+            Filename of hdf5 or pickle file holding the model parameters (if in a separate file from `config_file`
+            and you want to load some starting parameters).
+        use_hdf5 : bool
+            Whether to use an HDF5 file for the saved config and parameters (if h5py is installed).
+            Otherwise, it will use pickle with separate files.
+        """
+        # make sure outdir is not set to False (no outputs/saving)
+        if hasattr(self, 'outdir') and self.outdir:
+            self.save_args(args_file=config_file, use_hdf5=use_hdf5)
+            if HAS_H5PY and use_hdf5:
+                pfile = param_file or config_file
+                self.save_params(param_file=pfile, use_hdf5=use_hdf5)
+            else:
+                self.save_params(param_file=param_file, use_hdf5=use_hdf5)
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def load(config_file, param_file=None):
+        """
+        Returns a new Model from a configuration file.
+
+        Parameters
+        ----------
+        config_file : str
+            Filename of hdf5 or pickled configuration file. (if hdf5, parameters will be loaded if they exist)
+        param_file : str, optional
+            Filename of hdf5 or pickle file holding the model parameters (if in a separate file from `config_file`
+            and you want to load some starting parameters).
+
+        Returns
+        -------
+        :class:`Model`
+            A `Model` instance from the configuration and optionally loaded parameters.
+        """
+        config_file = os.path.realpath(config_file)
+
+        ftype = file_ops.get_file_type(config_file)
+
+        # deal with pickle
+        if ftype == file_ops.PKL:
+            log.debug("loading model from %s",
+                      str(config_file))
+            with open(config_file, 'rb') as f:
+                loaded_config = pickle.load(f)
+        # deal with hdf5
+        elif ftype == file_ops.HDF5:
+            if HAS_H5PY:
+                log.debug("loading model from %s",
+                          str(config_file))
+                f = h5py.File(config_file)
+                try:
+                    config_group = f[hdf5_config_key]
+                    loaded_config = dict(config_group.attrs)
+                except Exception as e:
+                    log.exception("Some issue loading model config from %s! Exception: %s",
+                                  str(config_file), str(e))
+                    return False
+                finally:
+                    f.close()
+            else:
+                log.exception("Please install the h5py package to read HDF5 files!")
+                raise AssertionError("Please install the h5py package to read HDF5 files!")
+        # if get_file_type didn't return pkl, hdf5, or none
+        elif ftype:
+            log.exception("Config file %s doesn't have a supported pickle or HDF5 extension!", str(config_file))
+            raise AssertionError("Config file %s doesn't have a supported pickle or HDF5 extension!", str(config_file))
+        # if get_file_type returned none, it couldn't find the file
+        else:
+            log.exception("Config file %s couldn't be found!", str(config_file))
+            raise AssertionError("Config file %s couldn't be found!", str(config_file))
+
+        classname = loaded_config.pop(class_key)
+        class_ = getattr(opendeep.models, classname)
+        model = class_(**loaded_config)
+        model.load_params(param_file=param_file or config_file)
+
+        return model

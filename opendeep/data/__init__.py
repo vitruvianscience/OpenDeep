@@ -4,6 +4,8 @@ from __future__ import division, absolute_import, print_function
 from .dataset import *
 from .dataset_file import *
 from .dataset_memory import *
+from .text import *
+from .dataset_image import *
 # to get premade datasets
 from .standard_datasets import *
 

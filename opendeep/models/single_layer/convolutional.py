@@ -212,9 +212,6 @@ class Conv1D(Model):
     def get_params(self):
         return self.params
 
-    def save_args(self, args_file="conv1d_config.pkl"):
-        super(Conv1D, self).save_args(args_file)
-
 
 @inherit_docs
 class Conv2D(Model):
@@ -381,9 +378,6 @@ class Conv2D(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="conv2d_config.pkl"):
-        super(Conv2D, self).save_args(args_file)
 
 
 class Conv3D(Model):
@@ -613,6 +607,3 @@ class ConvPoolLayer(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="convpool_config.pkl"):
-        super(ConvPoolLayer, self).save_args(args_file)

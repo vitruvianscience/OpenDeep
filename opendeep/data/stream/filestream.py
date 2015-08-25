@@ -1,17 +1,22 @@
 """
 A wrapper object for generators of data from files.
 """
+import logging
+from PIL import Image
+import numpy
 import opendeep.utils.file_ops as files
 from opendeep.utils.misc import raise_to_list
 
+log = logging.getLogger(__name__)
+
 class FileStream:
     """
-    Creates an iterable stream of tokens from a filepath.
+    Creates an iterable stream of data from a filepath of text-based files.
 
     Parameters
     ----------
-    path : str
-        The filesystem path to stream.
+    path : str or iterable(str)
+        The filesystem path to stream, or an iterable of filenames.
     filter : str or compiled regex, optional
         The regex filter to apply to the `path` when finding files.
     preprocess : function, optional
@@ -31,13 +36,75 @@ class FileStream:
     def __iter__(self):
         idx = 0
         for fname in files.find_files(self.path, self.filter):
-            with open(fname, 'r') as f:
-                for line in f:
-                    if self.preprocess is not None:
-                        line = self.preprocess(line)
-                    line = raise_to_list(line)
-                    for token in line:
-                        if idx >= self.n_future:
-                            yield token
-                        else:
-                            idx += 1
+            try:
+                with open(fname, 'r') as f:
+                    for line in f:
+                        if self.preprocess is not None and callable(self.preprocess):
+                            line = self.preprocess(line)
+                        line = raise_to_list(line)
+                        for token in line:
+                            if idx >= self.n_future:
+                                yield token
+                            else:
+                                idx += 1
+            except Exception as err:
+                log.exception(err.__str__())
+
+class ImageStream:
+    """
+    Creates an iterable stream of data from a filepath of image files.
+
+    Parameters
+    ----------
+    path : str or iterable(str)
+        The filesystem path to stream, or an iterable of filenames.
+    filter : str or compiled regex, optional
+        The regex filter to apply to the `path` when finding files.
+    preprocess : function, optional
+        A function to apply to the image returned from files found in the `path`. If a list is returned from
+        the preprocess function, each element will be yielded separately during iteration.
+    """
+    def __init__(self, path, filter=None, preprocess=None):
+        self.path = path
+        self.filter = filter
+        self.preprocess = preprocess
+
+    def __iter__(self):
+        for fname in files.find_files(self.path, self.filter):
+            try:
+                with Image.open(fname) as im:
+                    data = numpy.array(im)
+                    if self.preprocess is not None and callable(self.preprocess):
+                        data = self.preprocess(data)
+                    data = raise_to_list(data)
+                    for d in data:
+                        yield d
+            except Exception as err:
+                log.exception(err.__str__())
+
+class FilepathStream:
+    """
+    Creates an iterable stream from filepath names in a path.
+
+    Parameters
+    ----------
+    path : str or iterable(str)
+        The filesystem path to stream, or an iterable of filenames.
+    filter : str or compiled regex, optional
+        The regex filter to apply to the `path` when finding files.
+    preprocess : function, optional
+        A function to apply to the names of files found in the `path`. If a list is returned from
+        the preprocess function, each element will be yielded separately during iteration.
+    """
+    def __init__(self, path, filter=None, preprocess=None):
+        self.path = path
+        self.filter = filter
+        self.preprocess = preprocess
+
+    def __iter__(self):
+        for fname in files.find_files(self.path, self.filter):
+            if self.preprocess is not None and callable(self.preprocess):
+                fname = self.preprocess(fname)
+            fnames = raise_to_list(fname)
+            for name in fnames:
+                yield name

@@ -390,6 +390,3 @@ class GRU(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="gru_config.pkl"):
-        super(GRU, self).save_args(args_file)

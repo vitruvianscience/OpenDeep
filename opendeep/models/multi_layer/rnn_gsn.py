@@ -565,6 +565,3 @@ class RNN_GSN(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="rnngsn_config.pkl"):
-        super(RNN_GSN, self).save_args(args_file)

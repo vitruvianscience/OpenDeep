@@ -447,6 +447,3 @@ class LSTM(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="lstm_config.pkl"):
-        super(LSTM, self).save_args(args_file)

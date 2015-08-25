@@ -318,6 +318,3 @@ class RBM(Model):
 
     def get_params(self):
         return self.params
-
-    def save_args(self, args_file="rbm_config.pkl"):
-        super(RBM, self).save_args(args_file)

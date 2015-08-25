@@ -11,6 +11,8 @@ GZ : int
     GZ file marker.
 PKL : int
     Pickle file marker.
+HDF5 : int
+    HDF5 file marker.
 TAR : int
     Tarfile marker.
 NPY : int
@@ -23,6 +25,7 @@ UNKNOWN : int
 # standard imports
 import os
 import errno
+from collections import Iterable
 try:
     # For Python 3.0 and later
     from urllib.request import urlopen, urlretrieve
@@ -36,6 +39,8 @@ import re
 import gzip
 # third party
 from theano.compat.six import string_types
+# internal
+from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -46,14 +51,16 @@ TAR       = 2
 GZ        = 3
 TARBALL   = 4
 PKL       = 5
-NPY       = 6
-TXT       = 7
-UNKNOWN   = 8
+HDF5      = 6
+NPY       = 7
+TXT       = 8
+UNKNOWN   = 9
 _types = {
     DIRECTORY: "DIRECTORY",
     ZIP: "ZIP",
     GZ: "GZ",
     PKL: "PKL",
+    HDF5: "HDF5",
     TAR: "TAR",
     TARBALL: "TARBALL",
     NPY: "NPY",
@@ -110,8 +117,8 @@ def find_files(path, path_filter=None):
 
     Parameters
     ----------
-    path : str
-        The path to the directory to walk or file to find.
+    path : str or iterable(str)
+        The path to the directory to walk or file to find, or an iterable of filepaths.
     path_filter : regular expression string or compiled regular expression object
         The regular expression to match against file path names.
     """
@@ -123,24 +130,33 @@ def find_files(path, path_filter=None):
     else:
         reg = None
 
-    path = os.path.realpath(path)
-    if os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            for basename in files:
-                filepath = os.path.join(root, basename)
-                try:
-                    if reg is None or reg.match(filepath) is not None:
-                        yield filepath
-                except TypeError as te:
-                    log.exception("TypeError exception when finding files. %s" % str(te.message))
-                    raise
-    elif os.path.isfile(path):
-        try:
-            if reg is None or reg.match(path) is not None:
-                yield path
-        except TypeError as te:
-            log.exception("TypeError exception when finding files. %s" % str(te.message))
+    try:
+        paths = raise_to_list(os.path.realpath(path))
+    except Exception:
+        if isinstance(path, Iterable):
+            paths = [os.path.realpath(p) for p in path]
+        else:
             raise
+
+    for path in paths:
+        if os.path.isdir(path):
+            for root, dirs, files in os.walk(path):
+                for basename in files:
+                    filepath = os.path.join(root, basename)
+                    try:
+                        if reg is None or reg.match(filepath) is not None:
+                            yield filepath
+                    except TypeError as te:
+                        log.exception("TypeError exception when finding files. %s" % str(te.message))
+                        raise
+        elif os.path.isfile(path):
+            try:
+                if reg is None or reg.match(path) is not None:
+                    yield path
+            except TypeError as te:
+                log.exception("TypeError exception when finding files. %s" % str(te.message))
+                raise
+
 
 def init_empty_file(filename):
     """
@@ -207,36 +223,55 @@ def get_file_type(file_path):
             return DIRECTORY
         # otherwise if it is a file
         elif os.path.isfile(file_path):
-            fname, extension = os.path.splitext(file_path)
-            extension = extension.lower()
-            if extension == '.zip':
-                return ZIP
-            elif extension == '.gz':
-                # check if tarball
-                _, ext2 = os.path.splitext(fname)
-                if ext2:
-                    ext2 = ext2.lower()
-                    if ext2 == '.tar':
-                        return TARBALL
-                # otherwise just gz
-                return GZ
-            elif extension == '.tar':
-                return TAR
-            elif extension == '.pkl' or extension == '.p' or extension =='.pickle':
-                return PKL
-            elif extension == '.npy':
-                return NPY
-            elif extension == '.txt':
-                return TXT
-            else:
-                log.warning('Didn\'t recognize file extension %s for file %s', extension, file_path)
-                return UNKNOWN
+            return get_extension_type(file_path)
         else:
             log.warning('File %s isn\'t a file or directory, but it exists... WHAT ARE YOU?!?', file_path)
             return UNKNOWN
     else:
         log.debug('File %s doesn\'t exist!', file_path)
         return None
+
+def get_extension_type(filename):
+    """
+    Given a filename, try to determine the type of file from the extension into one of the categories defined as
+    global variables above.
+
+    Parameters
+    ----------
+    file_path : str
+        The filename of the file in question.
+
+    Returns
+    -------
+    int
+        The integer code to the file type defined in file_ops.py, or None if the file doesn't exist.
+    """
+    fname, extension = os.path.splitext(filename)
+    extension = extension.lower()
+    if extension == '.zip':
+        return ZIP
+    elif extension == '.gz':
+        # check if tarball
+        _, ext2 = os.path.splitext(fname)
+        if ext2:
+            ext2 = ext2.lower()
+            if ext2 == '.tar':
+                return TARBALL
+        # otherwise just gz
+        return GZ
+    elif extension == '.tar':
+        return TAR
+    elif extension == '.pkl' or extension == '.p' or extension == '.pickle':
+        return PKL
+    elif extension == '.hdf5':
+        return HDF5
+    elif extension == '.npy':
+        return NPY
+    elif extension == '.txt':
+        return TXT
+    else:
+        log.warning('Didn\'t recognize file extension %s for file %s', extension, filename)
+        return UNKNOWN
 
 def unzip(source_filename, destination_dir='.'):
     """

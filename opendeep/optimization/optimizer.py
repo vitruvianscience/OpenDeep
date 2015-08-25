@@ -397,7 +397,7 @@ class Optimizer(object):
                 log.debug("Restoring best model parameters...")
                 set_shared_values(self.params, self.best_params)
             log.debug("Saving model parameters...")
-            self.model.save_params('trained_epoch_' + str(self.epoch_counter) + '.pkl')
+            self.model.save_params('trained_epoch_' + str(self.epoch_counter))
 
             log.info("------------TRAIN TIME TOOK %s---------", make_time_units_string(time.time() - t))
 
@@ -514,7 +514,7 @@ class Optimizer(object):
 
         if (self.epoch_counter % self.save_frequency) == 0:
             #save params
-            self.model.save_params('trained_epoch_' + str(self.epoch_counter) + '.pkl')
+            self.model.save_params('trained_epoch_' + str(self.epoch_counter))
 
         # ANNEAL!
         if not stop:

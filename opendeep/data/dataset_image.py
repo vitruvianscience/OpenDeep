@@ -6,12 +6,12 @@ import logging
 import os
 # internal imports
 from opendeep.data.dataset import Dataset
-from opendeep.data.stream.filestream import FileStream
+from opendeep.data.stream.filestream import ImageStream
 import opendeep.utils.file_ops as files
 
 log = logging.getLogger(__name__)
 
-class FileDataset(Dataset):
+class ImageDataset(Dataset):
     """
     Default interface for a file-based dataset object. Files should either exist in the ``path`` or have
     a downloadable source. Subclasses should implement the specific methods for extracting data from their
@@ -59,7 +59,7 @@ class FileDataset(Dataset):
         try:
             self.path = os.path.realpath(path)
         except Exception:
-            log.exception("Error creating os path for FileDataset from path %s" % self.path)
+            log.exception("Error creating os path for ImageDataset from path %s" % self.path)
             raise
 
         self.source = source
@@ -71,20 +71,20 @@ class FileDataset(Dataset):
         valid_inputs, valid_targets = None, None
         test_inputs, test_targets   = None, None
 
-        train_inputs = FileStream(self.path, train_filter, inputs_preprocess)
+        train_inputs = ImageStream(self.path, train_filter, inputs_preprocess)
         if targets_preprocess is not None:
-            train_targets = FileStream(self.path, train_filter, targets_preprocess)
+            train_targets = ImageStream(self.path, train_filter, targets_preprocess)
 
         if valid_filter is not None:
-            valid_inputs = FileStream(self.path, valid_filter, inputs_preprocess)
+            valid_inputs = ImageStream(self.path, valid_filter, inputs_preprocess)
             if targets_preprocess is not None:
-                valid_targets = FileStream(self.path, valid_filter, targets_preprocess)
+                valid_targets = ImageStream(self.path, valid_filter, targets_preprocess)
 
         if test_filter is not None:
-            test_inputs = FileStream(self.path, test_filter, inputs_preprocess)
+            test_inputs = ImageStream(self.path, test_filter, inputs_preprocess)
             if targets_preprocess is not None:
-                test_targets = FileStream(self.path, test_filter, targets_preprocess)
+                test_targets = ImageStream(self.path, test_filter, targets_preprocess)
 
-        super(FileDataset, self).__init__(train_inputs=train_inputs, train_targets=train_targets,
-                                          valid_inputs=valid_inputs, valid_targets=valid_targets,
-                                          test_inputs=test_inputs, test_targets=test_targets)
+        super(ImageDataset, self).__init__(train_inputs=train_inputs, train_targets=train_targets,
+                                           valid_inputs=valid_inputs, valid_targets=valid_targets,
+                                           test_inputs=test_inputs, test_targets=test_targets)

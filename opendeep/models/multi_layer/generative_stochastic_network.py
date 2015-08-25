@@ -775,9 +775,3 @@ class GSN(Model):
 
     def get_params(self):
         return self.params
-
-    def save_params(self, param_file):
-        super(GSN, self).save_params(param_file)
-
-    def save_args(self, args_file="gsn_config.pkl"):
-        super(GSN, self).save_args(args_file)
