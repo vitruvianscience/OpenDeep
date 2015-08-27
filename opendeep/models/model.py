@@ -274,6 +274,11 @@ class Model(object):
                                       outputs = raise_to_list(self.get_outputs()),
                                       updates = self.get_updates(),
                                       name    = 'f_run')
+
+        Returns
+        -------
+        Theano function
+            The compiled theano function for running the model.
         """
         if not hasattr(self, 'f_run'):
             log.debug("Compiling f_run...")
@@ -288,6 +293,8 @@ class Model(object):
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
         else:
             log.warn('f_run already exists!')
+
+        return self.f_run
 
     def run(self, input):
         """
@@ -846,6 +853,50 @@ class Model(object):
             return True
         else:
             return False
+
+    def save_run(self, filename):
+        """
+        Saves (pickle) the compiled theano function for running the model.
+
+        Parameters
+        ----------
+        filename : str
+            Filepath to save the compiled run function
+
+        Returns
+        -------
+        tuple(bool, str)
+            Tuple of [whether or not successful] and [complete filepath to saved file].
+        """
+        # make sure outdir is not set to False (no outputs/saving)
+        if hasattr(self, 'outdir') and self.outdir:
+            filepath = os.path.join(self.outdir, filename)
+            save_file = os.path.realpath(filepath)
+
+            ftype = file_ops.get_extension_type(save_file)
+
+            # force extension to be .pkl if it isn't a pickle file
+            if ftype != file_ops.PKL:
+                save_file = ''.join([save_file, '.pkl'])
+
+            log.debug('Saving %s compiled run function to %s',
+                      self.__class__.__name__, str(save_file))
+
+            # try to dump the param values
+            with open(save_file, 'wb') as f:
+                try:
+                    run_fn = self.compile_run_fn()
+                    pickle.dump(run_fn, f, protocol=pickle.HIGHEST_PROTOCOL)
+                except Exception as e:
+                    log.exception("Some issue saving model %s run function to %s! Exception: %s",
+                                  self.__class__.__name__, str(save_file), str(e))
+                    return (False, save_file)
+                finally:
+                    f.close()
+            # all done
+            return (True, save_file)
+        else:
+            return (False, None)
 
     def copy(self, **kwargs):
         """
