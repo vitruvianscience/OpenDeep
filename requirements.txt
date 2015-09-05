@@ -19,6 +19,6 @@ Pillow>=2.8.1
 # PyYAML for YAML parsing capability
 PyYAML>=3.11
 # Bokeh for plotting (with bokeh-server)
-bokeh>=0.8.2
+bokeh>=0.9.3
 # NLTK for nlp tasks (like word tokenization)
 nltk>=3.0.1

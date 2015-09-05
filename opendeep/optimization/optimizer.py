@@ -37,8 +37,9 @@ from opendeep.models.model import Model
 from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
-from opendeep.utils.misc import raise_to_list, make_time_units_string, \
-    get_shared_values, set_shared_values, add_kwargs_to_dict, trunc
+from opendeep.utils.misc import (raise_to_list, make_time_units_string,
+                                 get_shared_values, set_shared_values,
+                                 add_kwargs_to_dict, trunc)
 from opendeep.utils.batch import minibatch
 from opendeep.utils.misc import min_normalized_izip
 
@@ -94,7 +95,7 @@ class Optimizer(object):
         """
         log.info("Initializing optimizer %s", str(type(self)))
 
-        # Deal with early stopping None initializations.
+        # Deal with early stopping None initializations (no early stopping).
         if not stop_threshold:
             stop_threshold = numpy.inf
         if not save_freq:

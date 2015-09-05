@@ -20,16 +20,11 @@ from opendeep.utils.noise import get_noise
 log = logging.getLogger(__name__)
 
 @inherit_docs
-class LSTM(Model):
+class Recurrent(Model):
     """
-    Your normal lstm.
-
-    Implemented from:
-    "Gated Feedback Recurrent Neural Networks"
-    Junyoung Chung, Caglar Gulcehre, Kyunghyun Cho, Yoshua Bengio
-    http://arxiv.org/pdf/1502.02367v3.pdf
+    Your normal recurrent hidden units.
     """
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/lstm/',
+    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/single_rnn/',
                  input_size=None, hidden_size=None, output_size=None,
                  layers=1,
                  activation='sigmoid', hidden_activation='relu', inner_hidden_activation='sigmoid',

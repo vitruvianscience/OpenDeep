@@ -42,7 +42,7 @@ def main():
     valid_collapsed = collapse_channels(monitors, valid=True)
     valid_collapsed = OrderedDict([(name, expression) for name, expression, _ in valid_collapsed])
 
-    plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, start_server=False, open_browser=True)
+    plot = Plot(bokeh_doc_name='test_plots', monitor_channels=monitors, open_browser=True)
 
     log.debug('compiling...')
     f = theano.function(inputs=[], outputs=list(train_collapsed.values()), updates=updates)
@@ -72,4 +72,33 @@ def main():
 
 if __name__ == '__main__':
     config_root_logger()
-    main()
+    # main()
+
+    from bokeh.plotting import figure, cursession, show, output_server
+
+    output_server("test doc")
+
+    # plot settings
+    plot = figure(title="Combined Streams")
+    plot.line([],[],color="blue", name='Sample Streaming Data 1')
+    plot.line([],[],color="red", name='Sample Streaming Data 2')
+
+    show(plot)
+
+    ds1 = plot.select(dict(name='Sample Streaming Data 1'))[0].data_source
+    ds2 = plot.select(dict(name='Sample Streaming Data 2'))[0].data_source
+
+    for i in range(100, 200):
+        # update data into ds
+        ds1.data["x"].append(i - 100)
+        ds1.data["y"].append(i)
+
+        cursession().store_objects(ds1)
+
+    for i in range(100,400):
+
+
+        ds2.data["x"].append(i - 100)
+        ds2.data["y"].append(i - 20)
+
+        cursession().store_objects(ds2)

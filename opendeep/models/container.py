@@ -396,10 +396,12 @@ class Repeating(Model):
     The `Repeating` container takes a `Model` instance and repeats it across the first dimension of the input.
     """
     def __init__(self, model):
-        assert isinstance(model, Model), "The initial Model provided was type %s" % str(type(model))
+        # make sure the input model to repeat is a Model instance
+        assert isinstance(model, Model), "The initial model provided was type %s, not a Model." % str(type(model))
         self.model = model
         # make this input one dimension more than the provided Model's input (since we are repeating over the
         # first dimension)
         model_input = raise_to_list(self.model.get_inputs())[0]
         self.input = T.TensorType(model_input.dtype, (False,)*(model_input.ndim + 1))
-        raise NotImplementedError("Repeating is in development.")
+
+

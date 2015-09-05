@@ -12,9 +12,6 @@ BOKEH_AVAILABLE : bool
 """
 # standard libraries
 import logging
-import signal
-import time
-from subprocess import Popen, PIPE
 import warnings
 # third party libraries
 try:
@@ -45,7 +42,7 @@ class Plot(object):
       Depending on the number of plots, this can add 0.1 to 2 seconds per epoch
       to your training!
 
-    In most cases it is preferable to start the Bokeh plotting server
+    You must start the Bokeh plotting server
     manually, so that your plots are stored permanently.
 
     To start the server manually, type ``bokeh-server`` in the command line.
@@ -53,30 +50,13 @@ class Plot(object):
     If you want to make sure that you can access your plots
     across a network (or the internet), you can listen on all IP addresses
     using ``bokeh-server --ip 0.0.0.0``.
-
-    Alternatively, you can set the ``start_server_flag`` argument to ``True``,
-    to automatically start a server when training starts.
-    However, in that case your plots will be deleted when you shut
-    down the plotting server!
-
-    .. warning::
-
-       When starting the server automatically using the ``start_server_flag``
-       argument, the extension won't attempt to shut down the server at the
-       end of training (to make sure that you do not lose your plots the
-       moment training completes). You have to shut it down manually (the
-       PID will be shown in the logs). If you don't do this, this extension
-       will crash when you try and train another model with
-       ``start_server_flag`` set to ``True``, because it can't run two servers
-       at the same time.
-
     """
     # Tableau 10 colors
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
               '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
     def __init__(self, bokeh_doc_name, monitor_channels=None, open_browser=False,
-                 start_server=False, server_url='http://localhost:5006/',
+                 server_url='http://localhost:5006/',
                  colors=colors):
         """
         Initialize a Bokeh plot!
@@ -86,7 +66,7 @@ class Plot(object):
         bokeh_doc_name : str
             The name of the Bokeh document. Use a different name for each
             experiment if you are storing your plots.
-        channels : list(MonitorsChannel or Monitor)
+        monitor_channels : list(MonitorsChannel or Monitor)
             The monitor channels and monitors that you want to plot. The
             monitors within a :class:`MonitorsChannel` will be plotted together in a single
             figure.
@@ -94,12 +74,6 @@ class Plot(object):
             Whether to try and open the plotting server in a browser window.
             Defaults to ``True``. Should probably be set to ``False`` when
             running experiments non-locally (e.g. on a cluster or through SSH).
-        start_server_flag : bool, optional
-            Whether to try and start the Bokeh plotting server. Defaults to
-            ``False``. The server started is not persistent i.e. after shutting
-            it down you will lose your plots. If you want to store your plots,
-            start the server manually using the ``bokeh-server`` command. Also
-            see the warning above.
         server_url : str, optional
             Url of the bokeh-server. Ex: when starting the bokeh-server with
             ``bokeh-server --ip 0.0.0.0`` at ``alice``, server_url should be
@@ -115,11 +89,10 @@ class Plot(object):
                 monitor_channels = []
 
             self.channels = monitor_channels
-            self.plots = {}
             self.colors = colors
             self.bokeh_doc_name = bokeh_doc_name
             self.server_url = server_url
-            self.start_server(start_server_flag=start_server)
+            output_server(self.bokeh_doc_name, url=self.server_url)
 
             # Create figures for each group of channels
             self.figures = []
@@ -139,6 +112,8 @@ class Plot(object):
                     "Need channels to be type MonitorsChannel or Monitor. Found %s" % str(type(channel))
                 # create the figure
                 self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, channel.name),
+                                           x_axis_label='iterations',
+                                           y_axis_label='value',
                                            logo=None,
                                            toolbar_location='right'))
                 self.figure_color_indices.append(0)
@@ -207,9 +182,7 @@ class Plot(object):
                         else:
                             name = name[0]
                         # create a new line
-                        fig.line([epoch], [value], legend=name,
-                                 x_axis_label='iterations',
-                                 y_axis_label='value', name=name,
+                        fig.line([epoch], [value], legend=name, name=name,
                                  line_color=self.colors[color_idx % len(self.colors)])
                         color_idx += 1
                         # set the color index back in the figure list
@@ -222,28 +195,3 @@ class Plot(object):
                         self.plots[key].data['y'].append(value)
                         cursession().store_objects(self.plots[key])
             push()
-
-    def start_server(self, start_server_flag):
-        """
-        Starts a bokeh-server at the default URL location.
-
-        Parameters
-        ----------
-        start_server_flag : bool
-            Whether to start the bokeh server.
-        """
-        if BOKEH_AVAILABLE:
-            if start_server_flag:
-                def preexec_fn():
-                    """Prevents the server from dying on training interrupt."""
-                    signal.signal(signal.SIGINT, signal.SIG_IGN)
-                # Only memory works with subprocess, need to wait for it to start
-                log.info('Starting plotting server on %s', self.server_url)
-                self.sub = Popen('bokeh-server --ip 0.0.0.0 '
-                                 '--backend memory'.split(),
-                                 stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn)
-                time.sleep(2)
-                log.info('Plotting server PID: {}'.format(self.sub.pid))
-            else:
-                self.sub = None
-            output_server(self.bokeh_doc_name, url=self.server_url)
