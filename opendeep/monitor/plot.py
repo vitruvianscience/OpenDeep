@@ -95,6 +95,7 @@ class Plot(object):
             output_server(self.bokeh_doc_name, url=self.server_url)
 
             # Create figures for each group of channels
+            self.plots = {}
             self.figures = []
             self.figure_indices = {}
             self.figure_color_indices = []
