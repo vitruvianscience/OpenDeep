@@ -10,7 +10,6 @@ import logging
 import os
 import time
 # third party libraries
-import numpy
 import theano
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
@@ -44,7 +43,7 @@ log = logging.getLogger(__name__)
 class Model(object):
     """
     The :class:`Model` is a generic class for everything from a single layer to complex multi-layer behemoths
-    (which can be a combination of multiple models linked through input_hooks, hidden_hooks, and params_hooks).
+    (which can be a combination of multiple models linked through inputs, hiddens, and params).
 
     Think of a :class:`Model` like Legos - you can attach single pieces together as well as multi-piece units together.
     The main vision of OpenDeep is to provide a lightweight, highly modular structure that makes creating and
@@ -60,17 +59,15 @@ class Model(object):
     args : dict
         This is a dictionary containing all the input parameters that initialize the Model. Think of it
         as the configuration for initializing a :class:`Model`.
-    inputs_hook : tuple
-        Tuple of (shape, input_variable) or None describing the inputs to use for this Model.
-    hiddens_hook : tuple
-        Tuple of (shape, hiddens_variable) or None to use as the hidden representation for this Model.
-    params_hook : list
-        A list of SharedVariable representing the parameters to use for this Model.
-    input_size : int or shape tuple
-        The dimensionality of the input for this model. This is required for stacking models
-        automatically - where the input to one layer is the output of the previous layer.
-    output_size : int or shape tuple
+    inputs : list
+        List of [int or shape or tuple of (shape, input_variable) or None] describing the inputs to use for this Model.
+    hiddens : list
+        List of [int or shape or Tuple of (shape, hiddens_variable) or None] to use as the hidden
+        representation for this Model.
+    outputs : int or shape tuple
         Describes the shape of the output dimensionality for this Model.
+    params : dict
+        A dict of string_name: SharedVariable representing the parameters to use for this Model.
     outdir : str
         The filepath to save outputs for this Model (such as pickled parameters created during training,
         visualizations, etc.).
@@ -78,51 +75,50 @@ class Model(object):
         Theano function for running the model's computation on an input. This gets set during compile_run_fn().
     """
 
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None,
-                 input_size=None, output_size=None,
+    def __init__(self, inputs=None, hiddens=None, outputs=None,
+                 params=None,
                  outdir=None,
                  **kwargs):
         """
         Initialize a new Model.
 
-        Your model implementations should accept optional inputs_hook and hiddens_hook (if applicable)
+        Your model implementations should accept optional inputs and hiddens SharedVariables (if applicable)
         to set your inputs and hidden representation in a modular fashion, allowing models to link together.
-        inputs_hook is a tuple of (shape, variable) that should replace the default model inputs.
-        hiddens_hook is a tuple of (shape, variable) that should replace the default model hidden representation
+        inputs can have a tuple of (shape, variable) that should replace the default model inputs.
+        hiddens can have a tuple of (shape, variable) that should replace the default model hidden representation
         (which means you need to adapt creating your computation graph to not care about the inputs and to instead
         run outputs directly from the hidden variable provided).
-        You can also accept a params_hook to share model parameters rather than instantiate a new set of parameters.
+        You can also accept a params to share model parameters rather than instantiate a new set of parameters.
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
+        inputs : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None]
+            The dimensionality of the inputs for this model, and/or the routing information for the model
+            to accept inputs from elsewhere. This is used for linking
             different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
-            newly supervised classification model). For now, it needs to include the shape information (normally the
-            dimensionality of the input i.e. n_in).
-        hiddens_hook : Tuple of (shape, variable)
-            Routing information for the model to accept its hidden representation from elsewhere.
+            newly supervised classification model). For now, variable hook tuples need to
+            include the shape information (normally the dimensionality of the inputs i.e. n_in).
+        hiddens : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None]
+            The dimensionality of the hidden representation for this model, and/or the routing information for
+            the model to accept its hidden representation from elsewhere.
             This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
-            output layer gives the RNN-GSN model, a deep recurrent model.) For now, it needs to include the shape
-            information (normally the dimensionality of the hiddens i.e. n_hidden).
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
-            this model (instead of initializing your own shared variables). This parameter is useful when you want to
-            have two versions of the model that use the same parameters - such as a training model with dropout applied
-            to layers and one without for testing, where the parameters are shared between the two.
-        input_size : int or shape tuple
-            The dimensionality of the input for this model. This is required for stacking models
-            automatically - where the input to one layer is the output of the previous layer.
-        output_size : int or shape tuple
+            output layer gives the RNN-GSN model, a deep recurrent model.) For now, variable hook tuples need to
+            include the shape information (normally the dimensionality of the hiddens i.e. n_hidden).
+        outputs : int or shape tuple
             The dimensionality of the output for this model. This is required for stacking models
             automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
             run the size from Theano's graph, so it needs to be explicit.
+        params : Dict(string_name: theano SharedVariable)
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables). This parameter is useful when you want to
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
         kwargs : dict
             This will be all the other left-over keyword parameters passed to the class as a
-            dictionary of {param: value}. These get created into `self.args` along with outdir and output_size.
+            dictionary of {param: value}. These get created into `self.args` along with outdir and outputs.
         """
         classname = self.__class__.__name__
         log.info("Creating a new instance of %s", classname)
@@ -292,7 +288,7 @@ class Model(object):
                                   name    = 'f_run')
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
         else:
-            log.warn('f_run already exists!')
+            log.info('f_run already exists!')
 
         return self.f_run
 
@@ -888,9 +884,27 @@ class Model(object):
                     run_fn = self.compile_run_fn()
                     pickle.dump(run_fn, f, protocol=pickle.HIGHEST_PROTOCOL)
                 except Exception as e:
-                    log.exception("Some issue saving model %s run function to %s! Exception: %s",
-                                  self.__class__.__name__, str(save_file), str(e))
-                    return (False, save_file)
+                    if "maximum recursion depth exceeded" in str(e):
+                        recursion_limit = 50000
+                        import sys
+                        while "maximum recursion depth exceeded" in str(e):
+                            log.debug("found recursion depth bug when pickling function...bumping limit to %d"
+                                  % recursion_limit)
+                            sys.setrecursionlimit(recursion_limit)
+                            try:
+                                run_fn = self.compile_run_fn()
+                                pickle.dump(run_fn, f, protocol=pickle.HIGHEST_PROTOCOL)
+                                return (True, save_file)
+                            except Exception as e:
+                                if "maximum recursion depth exceeded" not in str(e):
+                                    log.exception("Some issue saving model %s run function to %s! Exception: %s",
+                                                  self.__class__.__name__, str(save_file), str(e))
+                                    return (False, save_file)
+                                recursion_limit += 10000
+                    else:
+                        log.exception("Some issue saving model %s run function to %s! Exception: %s",
+                                          self.__class__.__name__, str(save_file), str(e))
+                        return (False, save_file)
                 finally:
                     f.close()
             # all done

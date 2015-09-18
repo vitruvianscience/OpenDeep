@@ -236,19 +236,18 @@ class RNN(Model):
                 self.input_size = sum(self.input_size)
             else:
                 raise NotImplementedError("Recurrent input with %d dimensions not supported!" % self.input.ndim)
+            self.xs = self.input
         else:
             # Assume input coming from optimizer is (batches, timesteps, data)
             # so, we need to reshape to (timesteps, batches, data)
-            xs = T.tensor3("Xs")
-            xs = xs.dimshuffle(1, 0, 2)
-            self.input = xs
+            self.input = T.tensor3("Xs")
+            self.xs = self.input.dimshuffle(1, 0, 2)
 
         # The target outputs for supervised training - in the form of (batches, timesteps, output) which is
         # the same dimension ordering as the expected input from optimizer.
         # therefore, we need to swap it like we did to input xs.
-        ys = T.tensor3("Ys")
-        ys = ys.dimshuffle(1, 0, 2)
-        self.target = ys
+        self.target = T.tensor3("Ys")
+        self.ys = self.target.dimshuffle(1, 0, 2)
 
         ################
         # hiddens hook #
@@ -368,12 +367,12 @@ class RNN(Model):
 
         # make h_init the right sized tensor
         if not self.hiddens_hook:
-            self.h_init = T.zeros_like(T.dot(self.input[0], W_x_h[0]))
+            self.h_init = T.zeros_like(T.dot(self.xs[0], W_x_h[0]))
 
         ###############
         # computation #
         ###############
-        hiddens = self.input
+        hiddens = self.xs
         updates = dict()
         # vanilla case! there will be only 1 hidden layer for each depth layer.
         for layer in range(self.layers):
@@ -419,7 +418,7 @@ class RNN(Model):
         )
 
         # now to define the cost of the model - use the cost function to compare our output with the target value.
-        cost = self.cost_function(output=output, target=self.target, **self.cost_args)
+        cost = self.cost_function(output=output, target=self.ys, **self.cost_args)
 
         log.info("Initialized a %s RNN!" % self.direction)
         return output, hiddens, updates, cost, params

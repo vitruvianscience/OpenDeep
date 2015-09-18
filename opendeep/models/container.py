@@ -28,7 +28,7 @@ class Prototype(Model):
     models : list
         The list of :class:`Model` objects that make up the :class:`Prototype`.
     """
-    def __init__(self, config=None, layers=None, outdir='outputs/prototype/'):
+    def __init__(self, layers=None, config=None, outdir='outputs/prototype/'):
         """
         During initialization, use the optional config provided to pre-set up the models. This is used
         for repeatable experiments.
