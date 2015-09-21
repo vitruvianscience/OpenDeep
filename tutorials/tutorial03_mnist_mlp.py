@@ -41,7 +41,7 @@ def add_list_layers():
     class_layer = SoftmaxLayer(inputs_hook=(512, hidden2.get_outputs()),
                                output_size=10)
 
-    mlp = Prototype([hidden1, hidden2, class_layer])
+    mlp = Prototype(layers=[hidden1, hidden2, class_layer])
     return mlp
 
 

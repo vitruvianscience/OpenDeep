@@ -242,6 +242,8 @@ class LSTM(Model):
                  W_h_y, b_c, b_i, b_f, b_o,
                  b_y) = self.params_hook
                 recurrent_params = [U_h_c, U_h_i, U_h_f, U_h_o]
+                U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = None, None, None, None
+
             else:
                 (W_x_c, W_x_i, W_x_f, W_x_o,
                  U_h_c, U_h_i, U_h_f, U_h_o,
@@ -301,24 +303,26 @@ class LSTM(Model):
                 clip = abs(clip_recurrent_grads)
                 U_h_c, U_h_i, U_h_f, U_h_o = [theano.gradient.grad_clip(p, -clip, clip) for p in recurrent_params]
             # bidirectional params
-                if bidirectional:
-                    # all hidden-to-hidden weights
-                    U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [
-                        get_weights(weights_init=r_weights_init,
-                                    shape=(self.hidden_size, self.hidden_size),
-                                    name="U_h_%s_b" % sub,
-                                    # if gaussian
-                                    mean=r_weights_mean,
-                                    std=r_weights_std,
-                                    # if uniform
-                                    interval=r_weights_interval)
-                        for sub in ['c', 'i', 'f', 'o']
-                    ]
-                    recurrent_params += [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]
-                    if clip_recurrent_grads:
-                        clip = abs(clip_recurrent_grads)
-                        U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [theano.gradient.grad_clip(p, -clip, clip) for p in
-                                                              [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]]
+            if bidirectional:
+                # all hidden-to-hidden weights
+                U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [
+                    get_weights(weights_init=r_weights_init,
+                                shape=(self.hidden_size, self.hidden_size),
+                                name="U_h_%s_b" % sub,
+                                # if gaussian
+                                mean=r_weights_mean,
+                                std=r_weights_std,
+                                # if uniform
+                                interval=r_weights_interval)
+                    for sub in ['c', 'i', 'f', 'o']
+                ]
+                recurrent_params += [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]
+                if clip_recurrent_grads:
+                    clip = abs(clip_recurrent_grads)
+                    U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = [theano.gradient.grad_clip(p, -clip, clip) for p in
+                                                          [U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b]]
+            else:
+                U_h_c_b, U_h_i_b, U_h_f_b, U_h_o_b = None, None, None, None
 
         # put all the parameters into our list, and make sure it is in the same order as when we try to load
         # them from a params_hook!!!
