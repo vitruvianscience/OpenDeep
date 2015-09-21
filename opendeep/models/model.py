@@ -648,7 +648,7 @@ class Model(object):
 
         return True
 
-    def save_params(self, param_file, use_hdf5=True):
+    def save_params(self, param_file, use_hdf5=False):
         """
         This saves the model's parameters (HDF5 file or pickles them) to the `param_file`.
 
@@ -746,9 +746,9 @@ class Model(object):
         # make sure it is a pickle file
         ftype = file_ops.get_file_type(param_file)
 
+        log.debug("loading model %s parameters from %s",
+                  self.__class__.__name__, str(param_file))
         if ftype == file_ops.PKL:
-            log.debug("loading model %s parameters from %s",
-                      self.__class__.__name__, str(param_file))
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
@@ -780,7 +780,7 @@ class Model(object):
             log.error("Param file %s couldn't be found!", str(param_file))
             return False
 
-    def save_args(self, args_file="config", use_hdf5=True):
+    def save_args(self, args_file="config", use_hdf5=False):
         """
         This saves the model's initial configuration parameters (`self.args`) in an hdf5 or pickle file.
 
@@ -917,7 +917,7 @@ class Model(object):
         args.update(kwargs)
         return type(self)(**args)
 
-    def save(self, config_file, param_file=None, use_hdf5=True):
+    def save(self, config_file, param_file=None, use_hdf5=False):
         """
         Saves this model (and its current parameters) to files.
 
