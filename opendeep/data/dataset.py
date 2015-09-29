@@ -76,18 +76,20 @@ def _check_type_and_return_as_list(iterables, name="Unknown"):
     (inputs the list of iterables as well as the name you want to use for this grouping of iterables,
     such as train_inputs, etc.)
     """
+    already_list = isinstance(iterables, list)
     iterables = raise_to_list(iterables)
     if iterables is not None:
         # type checking to make sure everything is iterable (and warn against generators).
         for idx, elem in enumerate(iterables):
-            assert isinstance(elem, Iterable), "%s (as a list) parameter index %d is not iterable!" % (name, idx)
-            assert not isinstance(elem, Generator), "%s (as a list) parameter index %d is a generator! " \
+            assert isinstance(elem, Iterable), "%s (raised to a list) parameter index %d is not iterable! Found %s" % \
+                                               (name, idx, str(type(elem)))
+            assert not isinstance(elem, Generator), "%s (raised to a list) parameter index %d is a generator! " \
                                                     "Because we loop through the data multiple times, the generator " \
                                                     "will run out after the first iteration. Please consider using " \
                                                     "one of the stream types in opendeep.data.stream instead, " \
                                                     "or define your own class that performs the generator function " \
                                                     "in an __iter__(self) method!" % (name, idx)
-        # if we only have one stream, just return it not in a list wrapper
-        if len(iterables) == 1:
+        # if we only have one stream, just return it not in a list wrapper (if we indeed raised it to a list)
+        if len(iterables) == 1 and not already_list:
             iterables = iterables[0]
     return iterables
