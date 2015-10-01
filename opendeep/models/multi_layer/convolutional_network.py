@@ -205,7 +205,7 @@ class AlexNet(Model):
         # Add this layer's parameters!
         self.params += fc_layer6.get_params()
         # Add the dropout noise switch
-        self.noise_switches += fc_layer6.get_noise_switch()
+        self.noise_switches += fc_layer6.get_switches()
 
         log.debug("fully connected layer 2 (model layer 7)...")
         fc_layer7 = Dense(inputs_hook=(4096, fc_layer6.get_outputs()),
@@ -217,7 +217,7 @@ class AlexNet(Model):
         # Add this layer's parameters!
         self.params += fc_layer7.get_params()
         # Add the dropout noise switch
-        self.noise_switches += fc_layer7.get_noise_switch()
+        self.noise_switches += fc_layer7.get_switches()
 
         # last layer is a softmax prediction output layer
         softmax_config = {
@@ -267,8 +267,8 @@ class AlexNet(Model):
     def get_targets(self):
         return self.targets
 
-    def get_noise_switch(self):
-        return self.get_noise_switch()
+    def get_switches(self):
+        return self.get_switches()
 
     def get_train_cost(self):
         return self.train_cost

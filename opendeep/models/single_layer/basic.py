@@ -181,7 +181,7 @@ class Dense(Model):
     def get_train_cost(self):
         return self.cost
 
-    def get_noise_switch(self):
+    def get_switches(self):
         if hasattr(self, 'switch'):
             return self.switch
         else:

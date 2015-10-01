@@ -173,7 +173,7 @@ class Optimizer(object):
             self.learning_rate_decay = False
 
         # rest of initial parameters needed for training.
-        self.noise_switches = raise_to_list(self.model.get_noise_switch())
+        self.noise_switches = raise_to_list(self.model.get_switches())
         self.batch_size = batch_size
         self.min_batch_size = min_batch_size
         self.n_epoch = epochs

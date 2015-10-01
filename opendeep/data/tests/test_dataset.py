@@ -39,6 +39,12 @@ class TestMemoryDataset(unittest.TestCase):
         targets = zip(*raise_to_list(self.dataset.valid_targets))
         assert numpy.array_equal(targets, [([3, 4],), ([6, 7],), ([9, 0],)])
 
+    def testTest(self):
+        inputs = zip(*raise_to_list(self.dataset.test_inputs))
+        assert numpy.array_equal(inputs, [([3, 4],), ([6, 7],), ([1, 2],), ([9, 0],)])
+        targets = zip(*raise_to_list(self.dataset.test_targets))
+        assert numpy.array_equal(targets, [([4, 5],), ([7, 8],), ([2, 3],), ([0, 1],)])
+
 
 
     def tearDown(self):

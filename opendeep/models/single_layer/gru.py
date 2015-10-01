@@ -382,11 +382,11 @@ class GRU(Model):
         else:
             return super(GRU, self).get_decay_params()
 
-    def get_noise_switch(self):
+    def get_switches(self):
         if hasattr(self, 'noise_switch'):
             return [self.noise_switch]
         else:
-            return super(GRU, self).get_noise_switch()
+            return super(GRU, self).get_switches()
 
     def get_params(self):
         return self.params

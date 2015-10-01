@@ -18,8 +18,8 @@ import opendeep.models
 from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
 from opendeep.utils.constructors import function
-from opendeep.utils.misc import set_shared_values, get_shared_values, \
-    make_time_units_string, raise_to_list, add_kwargs_to_dict
+from opendeep.utils.misc import (set_shared_values, get_shared_values, make_time_units_string,
+                                 raise_to_list, add_kwargs_to_dict)
 from opendeep.utils.file_ops import mkdir_p
 
 try:
@@ -64,15 +64,18 @@ class Model(object):
     hiddens : list
         List of [int or shape or Tuple of (shape, hiddens_variable) or None] to use as the hidden
         representation for this Model.
-    outputs : int or shape tuple
+    output_size : int or shape tuple
         Describes the shape of the output dimensionality for this Model.
     params : dict
         A dict of string_name: SharedVariable representing the parameters to use for this Model.
     outdir : str
         The filepath to save outputs for this Model (such as pickled parameters created during training,
         visualizations, etc.).
-    f_run : function
+    f_run : function, or attribute doesn't exist if not compiled.
         Theano function for running the model's computation on an input. This gets set during compile_run_fn().
+    switches_on : bool or None
+        If all the switches from `self.get_switches()` have been turned off (False) or on (True). It will be
+        None if we don't know the state of the switches.
     """
 
     def __init__(self, inputs=None, hiddens=None, outputs=None,
@@ -98,82 +101,61 @@ class Model(object):
             different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
             newly supervised classification model). For now, variable hook tuples need to
             include the shape information (normally the dimensionality of the inputs i.e. n_in).
-        hiddens : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None]
+        hiddens : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None], optional
             The dimensionality of the hidden representation for this model, and/or the routing information for
             the model to accept its hidden representation from elsewhere.
             This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
             output layer gives the RNN-GSN model, a deep recurrent model.) For now, variable hook tuples need to
             include the shape information (normally the dimensionality of the hiddens i.e. n_hidden).
-        outputs : int or shape tuple
-            The dimensionality of the output for this model. This is required for stacking models
+        outputs : List of [int or shape tuple], optional
+            The dimensionality of the output(s) for this model. This is required for stacking models
             automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
             run the size from Theano's graph, so it needs to be explicit.
-        params : Dict(string_name: theano SharedVariable)
+        params : Dict(string_name: theano SharedVariable), optional
             A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
             have two versions of the model that use the same parameters - such as siamese networks or pretraining some
             weights.
-        outdir : str
+        outdir : str, optional
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        kwargs : dict
+        kwargs : dict, optional
             This will be all the other left-over keyword parameters passed to the class as a
             dictionary of {param: value}. These get created into `self.args` along with outdir and outputs.
         """
-        classname = self.__class__.__name__
-        log.info("Creating a new instance of %s", classname)
+        self._classname = self.__class__.__name__
+        log.info("Creating a new instance of %s", self._classname)
 
         # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
-        self.inputs_hook  = inputs_hook
-        self.hiddens_hook = hiddens_hook
-        self.params_hook  = params_hook
-        self.input_size   = input_size
-        self.output_size  = output_size
-        self.outdir       = outdir
+        self.inputs = raise_to_list(inputs)
+        self.hiddens = raise_to_list(hiddens)
+        self.output_size = raise_to_list(outputs)
+        self.params = params
+        self.outdir = outdir
 
-        # make sure outdir ends in a directory separator
-        if self.outdir and self.outdir[-1] != os.sep:
-            self.outdir += os.sep
-
-        # Combine arguments that could specify input_size -> overwrite input_size with inputs_hook[0] if it exists.
-        if self.inputs_hook and self.inputs_hook[0] is not None:
-            self.input_size = self.inputs_hook[0]
-
-        # Check if the input_size wasn't provided - if this is the case, it could either be a programmer's error
-        # or it could be during the automatic stacking in a Container. Since that is a common use case, set
-        # the input_size to 1 to avoid errors when instantiating the model.
-        if not self.input_size:
-            # Could be error, or more commonly, when adding models to a Container
-            log.warning("No input_size or inputs_hook! Make sure this is done in a Container. Setting input_size"
-                        "=1 for the Container now...")
-            self.input_size = 1
-
-        # Also, check if no output_size was given - this could be the case for generative models. Copy input_size
-        # in that case.
-        if not self.output_size:
-            # Could be an error (hopefully not), so give the warning.
-            log.warning("No output_size given! Make sure this is from a generative model (where output_size is the "
-                        "same as input_size. Setting output_size=input_size now...")
-            self.output_size = self.input_size
+        # make the directory to output configuration and parameters from the model
+        if self.outdir:
+            self.outdir = os.path.realpath(self.outdir)
+            mkdir_p(self.outdir)
 
         # copy all of the parameters from the class into an args (configuration) dictionary
         self.args = {}
         self.args = add_kwargs_to_dict(kwargs.copy(), self.args)
 
-        self.args['input_size']  = self.input_size
+        self.args['inputs'] = self.inputs
+        self.args['hiddens'] = self.hiddens
         self.args['output_size'] = self.output_size
-
-        # Now create the directory for outputs of the model
-        # set up base path for the outputs of the model during training, etc.
+        self.args['params'] = self.params
         self.args['outdir'] = self.outdir
-        if self.args['outdir']:
-            mkdir_p(self.args['outdir'])
 
         # log the arguments.
-        log.info("%s self.args: %s", classname, str(self.args))
+        log.info("%s self.args: %s", self._classname, str(self.args))
         # save the arguments.
         self.save_args()
         # Boom! Hyperparameters are now dealt with. Take that!
+
+        # Don't know the position of switches!
+        self.switches_on = None
 
     ######################################################################
     # Methods for the symbolic inputs, hiddens, and outputs of the model #
@@ -197,8 +179,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s does not have a get_inputs function!", self.__class__.__name__)
-        raise NotImplementedError("Please implement a get_inputs method for %s" % self.__class__.__name__)
+        log.critical("%s does not have a get_inputs function!", self._classname)
+        raise NotImplementedError("Please implement a get_inputs method for %s" % self._classname)
 
     def get_hiddens(self):
         """
@@ -219,8 +201,8 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s get_hiddens method not implemented!", self.__class__.__name__)
-        raise NotImplementedError("Please implement a get_hiddens method for %s" % self.__class__.__name__)
+        log.critical("%s get_hiddens method not implemented!", self._classname)
+        raise NotImplementedError("Please implement a get_hiddens method for %s" % self._classname)
 
     def get_outputs(self):
         """
@@ -237,21 +219,20 @@ class Model(object):
 
         Examples
         --------
-        Here is an example showing the `get_outputs()` method in the GSN model used in an `inputs_hook`
+        Here is an example showing the `get_outputs()` method in the GSN model used in an `inputs` hook
         to a SoftmaxLayer model::
 
-            from opendeep.models.multi_layer.generative_stochastic_network import GSN
-            from opendeep.models.single_layer.basic import SoftmaxLayer
-            gsn = GSN(input_size=28*28, hidden_size=1000, layers=2, walkbacks=4)
-            softmax = SoftmaxLayer(inputs_hook=(gsn.output_size, gsn.get_outputs()), output_size=10)
+            from opendeep.models import GSN, SoftmaxLayer
+            gsn = GSN(inputs=28*28, hiddens=1000, layers=2, walkbacks=4)
+            softmax = SoftmaxLayer(inputs=zip(gsn.output_size, gsn.get_outputs()), output_size=10)
 
         Raises
         ------
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s get_outputs method not implemented!", self.__class__.__name__)
-        raise NotImplementedError("Please implement a get_outputs method for %s" % self.__class__.__name__)
+        log.critical("%s get_outputs method not implemented!", self._classname)
+        raise NotImplementedError("Please implement a get_outputs method for %s" % self._classname)
 
     #############################################
     # Methods for running the model on an input #
@@ -267,7 +248,7 @@ class Model(object):
             The run function defaults like so::
 
                 self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                      outputs = raise_to_list(self.get_outputs()),
+                                      outputs = self.get_outputs(),
                                       updates = self.get_updates(),
                                       name    = 'f_run')
 
@@ -276,19 +257,16 @@ class Model(object):
         Theano function
             The compiled theano function for running the model.
         """
-        if not hasattr(self, 'f_run'):
+        if not hasattr(self, 'f_run') or (hasattr(self, 'f_run') and self.f_run is None):
             log.debug("Compiling f_run...")
             t = time.time()
-            outputs = raise_to_list(self.get_outputs())
-            if outputs is not None and len(outputs) == 1:
-                outputs = outputs[0]
             self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
-                                  outputs = outputs,
+                                  outputs = self.get_outputs(),
                                   updates = self.get_updates(),
                                   name    = 'f_run')
             log.debug("Compilation done. Took %s", make_time_units_string(time.time() - t))
         else:
-            log.info('f_run already exists!')
+            log.debug('f_run already exists!')
 
         return self.f_run
 
@@ -298,25 +276,24 @@ class Model(object):
         input_hooks or hidden_hooks are used, the function should use them appropriately and assume they are the input.
 
         .. note::
-            If the Model doesn't have an f_run attribute,
+            If the Model doesn't have an `f_run` attribute,
             it will run `compile_run_fn()` to compile the appropriate function.
 
         Parameters
         ----------
-        input : tensor
-            Theano/numpy tensor-like object that is the input into the model's computation graph.
+        input : tensor or list(tensor)
+            Theano/numpy tensor-like object(s) that is the input(s) into the model's computation graph.
 
         Returns
         -------
-        array_like
-            Array_like object that is the output of the model's computation graph run on the given input.
+        array_like or list(array_like)
+            Array_like object that is the output(s) of the model's computation graph run on the given input(s).
         """
-        # set the noise switches off for running! we assume unseen data is noisy anyway :)
+        # set the noise switches off for running (this only happens the first time)!
         old_switch_vals = []
-        if len(self.get_noise_switch()) > 0:
-            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_noise_switch())))
-            old_switch_vals = [switch.get_value() for switch in self.get_noise_switch()]
-            [switch.set_value(0.) for switch in self.get_noise_switch()]
+        if self.switches_on is not False:
+            old_switch_vals = [switch.get_value() for switch in raise_to_list(self.get_switches())]
+            self.turn_off_switches()
 
         # check if the run function is already compiled, otherwise compile it!
         if not hasattr(self, 'f_run'):
@@ -328,8 +305,8 @@ class Model(object):
         output = self.f_run(*input)
 
         # reset any switches to how they were!
-        if len(self.get_noise_switch()) > 0:
-            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), old_switch_vals)]
+        if len(old_switch_vals) > 0:
+            self.set_switches(old_switch_vals)
 
         return output
 
@@ -344,7 +321,7 @@ class Model(object):
 
         Returns
         -------
-        list
+        list(tensor_like)
             The list of generated values from the Model (starting from `initial` if applicable).
 
         Raises
@@ -352,19 +329,19 @@ class Model(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.exception("Generate method not implemented for Model %s", self.__class__.__name__)
-        raise NotImplementedError("Generate method not implemented for Model %s" % self.__class__.__name__)
+        log.exception("Generate method not implemented for Model %s", self._classname)
+        raise NotImplementedError("Generate method not implemented for Model %s" % self._classname)
 
     #########################################
     # Methods to do with training the model #
     #########################################
     def get_targets(self):
         """
-        This function returns the list of inputs that are used for supervised training. It should be the 'correct' or
-        'target' variables to compare against the output of the model's computation. This method needs to be
-        implemented for supervised models.
+        This function returns the list of target tensors that are used for supervised training.
+        It should be the 'correct' or 'target' variables to compare against the output of the model's computation.
+        This method needs to be implemented for supervised models.
 
-        Example: the labels Y for a classification problem.
+        Example: the labels Y for a classification problem (as a theano.tensor or shared variable).
 
         Returns
         -------
@@ -521,14 +498,13 @@ class Model(object):
         # By default, no learning rate scaling.
         return {}
 
-    def get_noise_switch(self):
+    def get_switches(self):
         """
         This method returns a list of shared theano variables representing switches for values in the model that
-        get turned on for training and turned off for testing.
+        get turned on or off for training/testing.
         The variables should be set to either 0. or 1.
         These switch variables are used in theano Switch operations, such as adding noise during training and removing
         it during testing.
-        For a usage example, see the Dense in opendeep.models.single_layer.basic package.
 
         Returns
         -------
@@ -536,6 +512,53 @@ class Model(object):
             List of SharedVariable used to set the Switches. Defaults to an empty list.
         """
         return []
+
+    def flip_switches(self):
+        """
+        This helper method flips all Theano switches specified by `get_switches()` to 0. or 1. (the opposite value
+        that the switch is currently set to).
+        """
+        switches = raise_to_list(self.get_switches())
+        log.debug("Flipping %d switches for %s!" % (len(switches), self._classname))
+        [switch.set_value(1. - switch.get_value()) for switch in switches]
+        if self.switches_on is not None:
+            self.switches_on = not self.switches_on
+
+    def turn_off_switches(self):
+        """
+        This helper method turns all Theano switches by `get_switches()` to their off position of 0./False
+        """
+        switches = raise_to_list(self.get_switches())
+        log.debug("Turning off %d switches for %s!" % (len(switches), self._classname))
+        [switch.set_value(0.) for switch in switches]
+        self.switches_on = False
+
+    def turn_on_switches(self):
+        """
+        This helper method turns all Theano switches by `get_switches()` to their on position of 1./True
+        """
+        switches = raise_to_list(self.get_switches())
+        log.debug("Turning on %d switches for %s!" % (len(switches), self._classname))
+        [switch.set_value(1.) for switch in switches]
+        self.switches_on = True
+
+    def set_switches(self, values):
+        """
+        This helper method sets all Theano switches from `get_switches()` to the `values` parameter specified.
+
+        Parameters
+        ----------
+        values : list(boolean)
+        """
+        switches = raise_to_list(self.get_switches())
+        values = raise_to_list(values)
+        values = [1. if val else 0. for val in values]
+        assert len(switches) == len(values), "Switches (len %d) needs to be same length as values (len %d)!" % \
+                                             (len(switches), len(values))
+        log.debug("Setting specified values for %d switches!" % len(switches))
+        [switch.set_value(val) for switch, val in zip(switches, values)]
+        self.switches_on = None
+
 
     @init_optimizer
     def train(self, optimizer, **kwargs):

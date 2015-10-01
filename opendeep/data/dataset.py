@@ -89,6 +89,11 @@ def _check_type_and_return_as_list(iterables, name="Unknown"):
                                                     "one of the stream types in opendeep.data.stream instead, " \
                                                     "or define your own class that performs the generator function " \
                                                     "in an __iter__(self) method!" % (name, idx)
+            if isinstance(elem, list):
+                log.warning("%s (raised to a list) parameter index %d has type: list. Because we raise iterables to "
+                            "a list internally, this is generally bad practice. Please use something else like "
+                            "Tuples, Iterators, Numpy Arrays, etc. instead of Lists for the data source." %
+                            (name, idx))
         # if we only have one stream, just return it not in a list wrapper (if we indeed raised it to a list)
         if len(iterables) == 1 and not already_list:
             iterables = iterables[0]

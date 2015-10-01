@@ -191,10 +191,10 @@ class Prototype(Model):
         """
         # set the noise switches off for running! we assume unseen data is noisy anyway :)
         old_switch_vals = []
-        if len(self.get_noise_switch()) > 0:
-            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_noise_switch())))
-            old_switch_vals = [switch.get_value() for switch in self.get_noise_switch()]
-            [switch.set_value(0.) for switch in self.get_noise_switch()]
+        if len(self.get_switches()) > 0:
+            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_switches())))
+            old_switch_vals = [switch.get_value() for switch in self.get_switches()]
+            [switch.set_value(0.) for switch in self.get_switches()]
 
         # make sure the input is raised to a list - we are going to splat it!
         input = raise_to_list(input)
@@ -215,8 +215,8 @@ class Prototype(Model):
             output = self.f_run(*input)
 
         # reset any switches to how they were!
-        if len(self.get_noise_switch()) > 0:
-            [switch.set_value(val) for switch, val in zip(self.get_noise_switch(), old_switch_vals)]
+        if len(self.get_switches()) > 0:
+            [switch.set_value(val) for switch, val in zip(self.get_switches(), old_switch_vals)]
 
         return output
 
@@ -350,7 +350,7 @@ class Prototype(Model):
             lr_scalers.update(model.get_lr_scalers())
         return lr_scalers
 
-    def get_noise_switch(self):
+    def get_switches(self):
         """
         This method returns a list of shared theano variables representing switches for adding noise in the model.
 
@@ -364,7 +364,7 @@ class Prototype(Model):
         # Return the noise switches going through each model in the list
         noise_switches = []
         for model in self.models:
-            noise_switches.extend(raise_to_list(model.get_noise_switch()))
+            noise_switches.extend(raise_to_list(model.get_switches()))
         return noise_switches
 
     def get_params(self):

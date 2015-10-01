@@ -437,7 +437,7 @@ class Recurrent(Model):
         else:
             return super(LSTM, self).get_decay_params()
 
-    def get_noise_switch(self):
+    def get_switches(self):
         if hasattr(self, 'noise_switch'):
             return [self.noise_switch]
         else:
