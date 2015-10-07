@@ -9,17 +9,12 @@ their ability to connect with other Models.
 import logging
 import os
 import time
-# third party libraries
-import theano
-import theano.tensor as T
-from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 import opendeep.models
 from opendeep.utils.decorators import init_optimizer
 from opendeep.utils import file_ops
 from opendeep.utils.constructors import function
-from opendeep.utils.misc import (set_shared_values, get_shared_values, make_time_units_string,
-                                 raise_to_list, add_kwargs_to_dict)
+from opendeep.utils.misc import (make_time_units_string, raise_to_list, add_kwargs_to_dict)
 from opendeep.utils.file_ops import mkdir_p
 
 try:
@@ -35,7 +30,6 @@ except ImportError:
 
 hdf5_param_key = "params"
 class_key = "class"
-hdf5_config_key = "config"
 
 log = logging.getLogger(__name__)
 
@@ -193,8 +187,8 @@ class Model(object):
 
         Returns
         -------
-        theano expression
-            Theano expression of the hidden representation from this model's computation.
+        theano expression or list(theano expression)
+            Theano expression(s) of the hidden representation from this model's computation.
 
         Raises
         ------
@@ -214,8 +208,8 @@ class Model(object):
 
         Returns
         -------
-        theano expression
-            Theano expression of the outputs from this model's computation graph.
+        theano expression or list(theano expression)
+            Theano expression(s) of the outputs from this model's computation graph.
 
         Examples
         --------
@@ -234,9 +228,9 @@ class Model(object):
         log.critical("%s get_outputs method not implemented!", self._classname)
         raise NotImplementedError("Please implement a get_outputs method for %s" % self._classname)
 
-    #############################################
-    # Methods for running the model on an input #
-    #############################################
+    ##########################################################
+    # Methods for running and training the model on an input #
+    ##########################################################
     def compile_run_fn(self):
         """
         This is a helper function to compile the f_run function for computing the model's outputs given inputs.
@@ -257,7 +251,7 @@ class Model(object):
         Theano function
             The compiled theano function for running the model.
         """
-        if not hasattr(self, 'f_run') or (hasattr(self, 'f_run') and self.f_run is None):
+        if not getattr(self, 'f_run', None):
             log.debug("Compiling f_run...")
             t = time.time()
             self.f_run = function(inputs  = raise_to_list(self.get_inputs()),
@@ -296,7 +290,7 @@ class Model(object):
             self.turn_off_switches()
 
         # check if the run function is already compiled, otherwise compile it!
-        if not hasattr(self, 'f_run'):
+        if not getattr(self, 'f_run', None):
             self.compile_run_fn()
 
         # because we use the splat to account for multiple inputs to the function, make sure input is a list.
@@ -332,102 +326,6 @@ class Model(object):
         log.exception("Generate method not implemented for Model %s", self._classname)
         raise NotImplementedError("Generate method not implemented for Model %s" % self._classname)
 
-    #########################################
-    # Methods to do with training the model #
-    #########################################
-    def get_targets(self):
-        """
-        This function returns the list of target tensors that are used for supervised training.
-        It should be the 'correct' or 'target' variables to compare against the output of the model's computation.
-        This method needs to be implemented for supervised models.
-
-        Example: the labels Y for a classification problem (as a theano.tensor or shared variable).
-
-        Returns
-        -------
-        theano variable or List(theano variable)
-            Theano variables representing the target(s) to the model's computation. Defaults to returning an empty
-            list, which assumes the model is unsupervised.
-
-        """
-        # Assume we have an unsupervised function, so no extra training variables. If this is going to be a supervised
-        # model, you have to return the list of extra 'label' (aka 'target') variables you created for the cost
-        # function here.
-        return []
-
-    def get_train_cost(self):
-        """
-        This returns the expression that represents the cost given an input, which is used during training.
-        The reason we can't just compile an f_train theano function is because updates need to be calculated
-        for the parameters during gradient descent - and these updates are created in the :class:`Optimizer` object.
-
-        In the specialized case of layer-wise pretraining (or any version of pretraining in the model), you should
-        return a list of training cost expressions in order you want training to happen. This way the optimizer
-        will train each cost in sequence for your model, allowing for easy layer-wise pretraining in the model.
-
-        Returns
-        -------
-        theano expression
-            The model's training cost from which parameter gradients will be computed.
-
-        Raises
-        ------
-        NotImplementedError
-            If the function hasn't been implemented for the specific model.
-        """
-        log.critical("%s does not have a get_train_cost function!", self.__class__.__name__)
-        raise NotImplementedError("Please implement a get_train_cost method for %s" % self.__class__.__name__)
-
-    def get_gradient(self, starting_gradient=None, cost=None, additional_cost=None):
-        """
-        This method allows you to define the gradient for this model manually. It should either work with a provided
-        starting gradient (from upstream layers/models), or grab the training cost if no start gradient is provided.
-
-        Theano's subgraph gradient function specified here:
-        http://deeplearning.net/software/theano/library/gradient.html#theano.gradient.subgraph_grad
-
-        .. warning::
-            If the gradients of cost with respect to any of the start variables is already part of the
-            start dictionary, then it may be counted twice with respect
-            to wrt (`get_params()`) and end (`get_inputs()`).
-
-        You should only implement this method if you want to manually define your gradients for the model.
-
-        Parameters
-        ----------
-        starting_gradient : dictionary of {variable: known_gradient}, optional
-            The starting, known gradients for parameters.
-        cost : theano expression, optional
-            The cost expression to use when calculating the gradients. Defaults to `get_train_cost()`.
-        additional_cost : theano expression, optional
-            Any additional cost to add to the gradient.
-
-        Returns
-        -------
-        tuple
-            (Gradient with respect to params, gradient with respect to inputs)
-        """
-        # check if starting gradients was provided.
-        # if there are known gradients to start, use those instead of the cost for this model
-        if starting_gradient is not None:
-            params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
-                                                                   end=raise_to_list(self.get_inputs()),
-                                                                   start=starting_gradient,
-                                                                   cost=additional_cost,
-                                                                   details=False)
-        # otherwise, just use this model's cost to determine gradient
-        else:
-            # use the cost if it was given
-            cost = cost or self.get_train_cost()
-            if additional_cost is not None:
-                cost = T.sum(cost, additional_cost)
-            params_grad, next_starting_grad = theano.subgraph_grad(wrt=self.get_params(),
-                                                                   end=raise_to_list(self.get_inputs()),
-                                                                   cost=cost,
-                                                                   details=False)
-        return (OrderedDict(zip(self.get_params(), params_grad)),
-                OrderedDict(zip(raise_to_list(self.get_inputs()), next_starting_grad)))
-
     def get_updates(self):
         """
         This should return any theano updates from the model (used for things like random number generators).
@@ -449,21 +347,6 @@ class Model(object):
         # TODO: do we need a list of these as well to deal with the possible list of get_train_cost()?
         # by default, assume the model doesn't have updates - it's your job to return them in this method.
         return None
-
-    def get_monitors(self):
-        """
-        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
-        about during training. Often times, this is a log-likelihood estimator, mean squared error, weights
-        statistics, etc. The actual training cost value used in `get_train_cost()` does not need to be included -
-        it will automatically be monitored.
-
-        Returns
-        -------
-        dict
-            Dictionary of {string name: theano expression} for each monitor variable we care about in the model.
-        """
-        # no monitors by default
-        return {}
 
     def get_decay_params(self):
         """
@@ -559,7 +442,6 @@ class Model(object):
         [switch.set_value(val) for switch, val in zip(switches, values)]
         self.switches_on = None
 
-
     @init_optimizer
     def train(self, optimizer, **kwargs):
         """
@@ -573,26 +455,26 @@ class Model(object):
     #######################################
     def get_params(self):
         """
-        This returns the list of theano shared variables that will be trained by the :class:`Optimizer`.
-        These parameters are used in the gradient.
+        This returns the dictionary of {string_name: theano shared variables} that will be trained by
+        the :class:`Optimizer`. These parameters are used in the gradient.
 
         Returns
         -------
-        list(SharedVariable)
-            Flattened list of theano shared variables to be trained with an :class:`Optimizer`. These are the
-            parameters for the model.
+        dict(str: SharedVariable)
+            Dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
+            These are the parameters for the model.
 
         Raises
         ------
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s does not have a get_params function!", self.__class__.__name__)
-        raise NotImplementedError("Please implement a get_params method for %s" % self.__class__.__name__)
+        log.critical("%s does not have a get_params function!", self._classname)
+        raise NotImplementedError("Please implement a get_params method for %s" % self._classname)
 
     def get_param_values(self, borrow=True):
         """
-        This returns a list of the parameter values for the model.
+        This returns a dictionary of the parameter values for the model.
         This method is useful when you want to save the model parameters, or are doing distributed programming
         and want to train parallel models.
 
@@ -603,8 +485,8 @@ class Model(object):
 
         Returns
         -------
-        list(array_like)
-            List of theano/numpy arrays of values for the model parameters.
+        dict(str: array_like)
+            Dict of {string_name: theano/numpy arrays} of values for the model parameters.
 
         Raises
         ------
@@ -615,31 +497,28 @@ class Model(object):
         """
         # try to use theano's get_value() on each parameter returned by get_params()
         try:
-            params = get_shared_values(self.get_params(), borrow=borrow)
+            params = {name: variable.get_value(borrow=borrow) for name, variable in self.get_params().items()}
         except NotImplementedError:
-            log.exception("%s cannot get parameters, is missing get_params() method!", self.__class__.__name__)
+            log.exception("%s cannot get parameters, is missing get_params() method!", self._classname)
             raise
         except AttributeError as e:
             log.exception("%s cannot get parameters, there was an AttributeError %s "
                           "when going through the get_params()",
-                          self.__class__.__name__, str(e))
+                          self._classname, str(e))
             raise
 
         return params
 
     def set_param_values(self, param_values, borrow=True):
         """
-        This sets the model parameters from the list of values given.
+        This sets the model parameters from the dictionary of values given.
         This method is useful when you are loading model parameters, or are doing distributed programming and
         want to train parallel models.
 
-        The order of param_values matters! It must be the same as the order of parameters returned from
-        `self.get_params()`!
-
         Parameters
         ----------
-        param_values : list(array_like)
-            List of theano/numpy arrays of values to use for the model parameters.
+        param_values : dict(string: array_like)
+            Dict of {string_name: theano/numpy arrays} of values to use for the model parameters.
         borrow : bool
             Theano 'borrow' parameter for `set_value()` method on shared variables.
 
@@ -650,19 +529,24 @@ class Model(object):
         """
         params = self.get_params()
 
-        # make sure the input list of values is the same length as the params for the model.
-        if len(param_values) != len(params):
-            log.error("%s length of input params to set_param_values() different from length of self.get_params(). "
-                      "Input was %s, expected %s",
-                      self.__class__.__name__, str(len(param_values)), str(len(self.get_params())))
-            return False
+        # Find any differences in keys supplied vs keys of model params
+        param_values_keyset = set(param_values.keys())
+        params_keyset = set(params.keys())
+        intersection = param_values_keyset.intersection(params_keyset)
+        for key in param_values_keyset - intersection:
+            log.warning("Param value was supplied for param %s but it does not exist in the model %s params %s." %
+                        (str(key), self._classname, str(params_keyset)))
+        for key in params_keyset - intersection:
+            log.warning("Param value was supplied for param %s but it does not exist in the model %s params %s." %
+                        (str(key), self._classname, str(params_keyset)))
 
-        # for each parameter and value in order, set the value!
+        # for each parameter and value, set the value!
         try:
-            set_shared_values(params, param_values, borrow=borrow)
+            for key in intersection:
+                params[key].set_value(param_values[key], borrow=borrow)
         except Exception as e:
             log.exception("%s had Exception %s",
-                          self.__class__.__name__, str(e))
+                          self._classname, str(e))
             return False
 
         return True
@@ -685,22 +569,21 @@ class Model(object):
             Whether or not successfully saved the file.
         """
         # make sure outdir was not set to false (no saving or outputs)
-        if hasattr(self, 'outdir') and self.outdir:
-            # By default, try to dump all the values from get_param_values into a pickle file.
-            params = self.get_param_values()
-
+        if getattr(self, 'outdir', None):
             param_path = os.path.join(self.outdir, param_file)
             param_file = os.path.realpath(param_path)
 
             ftype = file_ops.get_extension_type(param_file)
 
+            params_dict = self.get_params()
+
             if HAS_H5PY and use_hdf5:
-                # force extension to be .hdf5 if it isn't a pickle file
+                # force extension to be .hdf5
                 if ftype != file_ops.HDF5:
                     param_file = ''.join([param_file, '.hdf5'])
 
                 log.debug('Saving %s parameters to %s',
-                          self.__class__.__name__, str(param_file))
+                          self._classname, str(param_file))
 
                 # try to dump the param values
                 f = h5py.File(param_file, 'w')
@@ -709,8 +592,7 @@ class Model(object):
                         param_group = f.create_group(hdf5_param_key)
                     else:
                         param_group = f[hdf5_param_key]
-                    for n, param in enumerate(params):
-                        name = str(n)
+                    for name, param in params_dict.items():
                         if name in param_group:
                             dset = param_group[name]
                             dset[...] = param
@@ -719,7 +601,7 @@ class Model(object):
                     f.flush()
                 except Exception as e:
                     log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                                  self.__class__.__name__, str(param_file), str(e))
+                                  self._classname, str(param_file), str(e))
                     return False
                 finally:
                     f.close()
@@ -729,15 +611,15 @@ class Model(object):
                     param_file = ''.join([param_file, '.pkl'])
 
                 log.debug('Saving %s parameters to %s',
-                          self.__class__.__name__, str(param_file))
+                          self._classname, str(param_file))
 
                 # try to dump the param values
                 with open(param_file, 'wb') as f:
                     try:
-                        pickle.dump(params, f, protocol=pickle.HIGHEST_PROTOCOL)
+                        pickle.dump(params_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
                     except Exception as e:
                         log.exception("Some issue saving model %s parameters to %s! Exception: %s",
-                                      self.__class__.__name__, str(param_file), str(e))
+                                      self._classname, str(param_file), str(e))
                         return False
                     finally:
                         f.close()
@@ -765,25 +647,25 @@ class Model(object):
         # make sure it is a pickle file
         ftype = file_ops.get_file_type(param_file)
 
-        log.debug("loading model %s parameters from %s",
-                  self.__class__.__name__, str(param_file))
+        log.debug("loading %s model parameters from %s",
+                  self._classname, str(param_file))
+
         if ftype == file_ops.PKL:
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
             self.set_param_values(loaded_params)
             return True
+
         elif ftype == file_ops.HDF5:
             if HAS_H5PY:
                 f = h5py.File(param_file)
                 try:
-                    param_group = f[hdf5_param_key]
-                    params = OrderedDict(sorted(list(param_group.items())))
-                    param_values = [v[...] for k, v in list(params.items())]
-                    self.set_param_values(param_values)
+                    params = f[hdf5_param_key]
+                    self.set_param_values(params)
                 except Exception as e:
                     log.exception("Some issue loading model %s parameters from %s! Exception: %s",
-                                  self.__class__.__name__, str(param_file), str(e))
+                                  self._classname, str(param_file), str(e))
                     return False
                 finally:
                     f.close()
@@ -799,17 +681,14 @@ class Model(object):
             log.error("Param file %s couldn't be found!", str(param_file))
             return False
 
-    def save_args(self, args_file="config", use_hdf5=False):
+    def save_args(self, args_file="config"):
         """
-        This saves the model's initial configuration parameters (`self.args`) in an hdf5 or pickle file.
+        This saves the model's initial configuration parameters (`self.args`) in a pickle file.
 
         Parameters
         ----------
         args_file : str, optional
-            Filename of pickled or hdf5 configuration parameters. Defaults to 'config'.
-        use_hdf5 : bool
-            Whether to use an HDF5 file for the saved parameters (if h5py is installed).
-            Otherwise, it will use pickle.
+            Filename of pickled configuration parameters. Defaults to 'config'.
 
         Returns
         -------
@@ -817,57 +696,30 @@ class Model(object):
             Whether or not successfully saved the file.
         """
         # make sure outdir is not set to False (no outputs/saving)
-        if hasattr(self, 'outdir') and self.outdir:
+        if getattr(self, 'outdir', None):
             args_path = os.path.join(self.outdir, args_file)
             args_file = os.path.realpath(args_path)
 
             ftype = file_ops.get_extension_type(args_file)
 
             args = self.args.copy()
-            classname = self.__class__.__name__
-            args[class_key] = classname
+            args[class_key] = self._classname
 
-            if HAS_H5PY and use_hdf5:
-                # force extension to be .hdf5 if it isn't a pickle file
-                if ftype != file_ops.HDF5:
-                    args_file = ''.join([args_file, '.hdf5'])
-
-                log.debug('Saving %s configuration to %s',
-                          classname, str(args_file))
-
-                # try to dump the param values
-                f = h5py.File(args_file, 'w')
+            # force extension to be .pkl if it isn't a pickle file
+            if ftype != file_ops.PKL:
+                args_file = ''.join([args_file, '.pkl'])
+            log.debug('Saving %s configuration to %s',
+                      self._classname, str(args_file))
+            # try to dump the args values
+            with open(args_file, 'wb') as f:
                 try:
-                    if hdf5_config_key not in f:
-                        args_group = f.create_group(hdf5_config_key)
-                    else:
-                        args_group = f[hdf5_config_key]
-                    for arg_name, arg_value in list(args.items()):
-                        args_group.attrs[arg_name] = arg_value
-                    f.flush()
+                    pickle.dump(args, f, protocol=pickle.HIGHEST_PROTOCOL)
                 except Exception as e:
                     log.exception("Some issue saving model %s configuration to %s! Exception: %s",
-                                  classname, str(args_file), str(e))
+                                  self._classname, str(args_file), str(e))
                     return False
                 finally:
                     f.close()
-            # otherwise pickle
-            else:
-                # force extension to be .pkl if it isn't a pickle file
-                if ftype != file_ops.PKL:
-                    args_file = ''.join([args_file, '.pkl'])
-                log.debug('Saving %s configuration to %s',
-                          classname, str(args_file))
-                # try to dump the args values
-                with open(args_file, 'wb') as f:
-                    try:
-                        pickle.dump(args, f, protocol=pickle.HIGHEST_PROTOCOL)
-                    except Exception as e:
-                        log.exception("Some issue saving model %s configuration to %s! Exception: %s",
-                                      classname, str(args_file), str(e))
-                        return False
-                    finally:
-                        f.close()
 
             return True
         else:
@@ -888,7 +740,7 @@ class Model(object):
             Tuple of [whether or not successful] and [complete filepath to saved file].
         """
         # make sure outdir is not set to False (no outputs/saving)
-        if hasattr(self, 'outdir') and self.outdir:
+        if getattr(self, 'outdir', None):
             filepath = os.path.join(self.outdir, filename)
             save_file = os.path.realpath(filepath)
 
@@ -899,7 +751,7 @@ class Model(object):
                 save_file = ''.join([save_file, '.pkl'])
 
             log.debug('Saving %s compiled run function to %s',
-                      self.__class__.__name__, str(save_file))
+                      self._classname, str(save_file))
 
             # try to dump the param values
             with open(save_file, 'wb') as f:
@@ -921,12 +773,12 @@ class Model(object):
                             except Exception as e:
                                 if "maximum recursion depth exceeded" not in str(e):
                                     log.exception("Some issue saving model %s run function to %s! Exception: %s",
-                                                  self.__class__.__name__, str(save_file), str(e))
+                                                  self._classname, str(save_file), str(e))
                                     return (False, save_file)
                                 recursion_limit += 10000
                     else:
                         log.exception("Some issue saving model %s run function to %s! Exception: %s",
-                                          self.__class__.__name__, str(save_file), str(e))
+                                          self._classname, str(save_file), str(e))
                         return (False, save_file)
                 finally:
                     f.close()
@@ -954,28 +806,25 @@ class Model(object):
         args.update(kwargs)
         return type(self)(**args)
 
-    def save(self, config_file, param_file=None, use_hdf5=False):
+    def save(self, config_file, param_file, use_hdf5=False):
         """
         Saves this model (and its current parameters) to files.
 
         Parameters
         ----------
         config_file : str
-            Filename of hdf5 or pickled configuration file. (if hdf5, parameters will be saved to the same file)
-        param_file : str, optional
-            Filename of hdf5 or pickle file holding the model parameters (if in a separate file from `config_file`
-            and you want to load some starting parameters).
+            Filename of pickled configuration file.
+        param_file : str or None
+            Filename of hdf5 or pickle file holding the model parameters (in a separate file from `config_file`). If
+            None, params will not be saved.
         use_hdf5 : bool
-            Whether to use an HDF5 file for the saved config and parameters (if h5py is installed).
+            Whether to use an HDF5 file for the saved parameters (if h5py is installed).
             Otherwise, it will use pickle with separate files.
         """
         # make sure outdir is not set to False (no outputs/saving)
-        if hasattr(self, 'outdir') and self.outdir:
-            self.save_args(args_file=config_file, use_hdf5=use_hdf5)
-            if HAS_H5PY and use_hdf5:
-                pfile = param_file or config_file
-                self.save_params(param_file=pfile, use_hdf5=use_hdf5)
-            else:
+        if getattr(self, 'outdir', None):
+            self.save_args(args_file=config_file)
+            if param_file is not None:
                 self.save_params(param_file=param_file, use_hdf5=use_hdf5)
             return True
         else:
@@ -989,10 +838,10 @@ class Model(object):
         Parameters
         ----------
         config_file : str
-            Filename of hdf5 or pickled configuration file. (if hdf5, parameters will be loaded if they exist)
+            Filename of pickled configuration file.
         param_file : str, optional
-            Filename of hdf5 or pickle file holding the model parameters (if in a separate file from `config_file`
-            and you want to load some starting parameters).
+            Filename of hdf5 or pickle file holding the model parameters (in a separate file from `config_file`
+            if you want to load some starting parameters).
 
         Returns
         -------
@@ -1009,28 +858,10 @@ class Model(object):
                       str(config_file))
             with open(config_file, 'rb') as f:
                 loaded_config = pickle.load(f)
-        # deal with hdf5
-        elif ftype == file_ops.HDF5:
-            if HAS_H5PY:
-                log.debug("loading model from %s",
-                          str(config_file))
-                f = h5py.File(config_file)
-                try:
-                    config_group = f[hdf5_config_key]
-                    loaded_config = dict(config_group.attrs)
-                except Exception as e:
-                    log.exception("Some issue loading model config from %s! Exception: %s",
-                                  str(config_file), str(e))
-                    return False
-                finally:
-                    f.close()
-            else:
-                log.exception("Please install the h5py package to read HDF5 files!")
-                raise AssertionError("Please install the h5py package to read HDF5 files!")
-        # if get_file_type didn't return pkl, hdf5, or none
+        # if get_file_type didn't return pkl, or none
         elif ftype:
-            log.exception("Config file %s doesn't have a supported pickle or HDF5 extension!", str(config_file))
-            raise AssertionError("Config file %s doesn't have a supported pickle or HDF5 extension!", str(config_file))
+            log.exception("Config file %s doesn't have a supported pickle extension!", str(config_file))
+            raise AssertionError("Config file %s doesn't have a supported pickle extension!", str(config_file))
         # if get_file_type returned none, it couldn't find the file
         else:
             log.exception("Config file %s couldn't be found!", str(config_file))
@@ -1039,6 +870,7 @@ class Model(object):
         classname = loaded_config.pop(class_key)
         class_ = getattr(opendeep.models, classname)
         model = class_(**loaded_config)
-        model.load_params(param_file=param_file or config_file)
+        if param_file is not None:
+            model.load_params(param_file=param_file)
 
         return model
