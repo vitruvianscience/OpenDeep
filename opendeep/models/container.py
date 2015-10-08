@@ -1,7 +1,7 @@
 """
 This module defines a container for quickly assembling multiple layers/models
-together without needing to define a new Model class. This should mainly be used
-for experimentation, and then later you should make your creation into a new Model class.
+together without needing to define a new :class:`Model` class. This should mainly be used
+for experimentation, and then later you should make your creation into a new :class:`Model` class.
 """
 # standard libraries
 import logging
@@ -18,10 +18,13 @@ log = logging.getLogger(__name__)
 
 class Prototype(Model):
     """
-    The Prototype lets you add Models in sequence, where the first model takes your input
+    The :class:`Prototype` lets you add :class:`Model`s in sequence, where the first model takes your input
     and the last model gives your output.
 
-    You can use an :class:`Optimizer` with the container as you would a Model - makes training easy :)
+    The :class:`Prototype` is an iterable class, so you can index specific models inside or iterate over them
+    with a for loop.
+
+    You can use an :class:`Optimizer` with the container as you would a :class:`Model` - makes training easy :)
 
     Attributes
     ----------
@@ -37,15 +40,15 @@ class Prototype(Model):
 
         Parameters
         ----------
+        layers : list(:class:`Model`), optional
+            A model or list of models to initialize the :class:`Prototype` with.
         config : dict or JSON/YAML filename, optional
             A configuration defining the multiple models/configurations for this container to have.
-        layers : list(:class:`Model`)
-            A model or list of models to initialize the :class:`Prototype` with.
-        outdir : str
+        outdir : str, optional
             The location to produce outputs from training or running the :class:`Prototype`.
         """
         # initialize superclass (model) with the config
-        super(Prototype, self).__init__(config=config, outdir=outdir)
+        super(Prototype, self).__init__(config=config, outdir=outdir, layers=layers)
 
         # TODO: add ability to create the models list from the input config.
 
@@ -68,10 +71,10 @@ class Prototype(Model):
 
     def add(self, model):
         """
-        This adds a model (or list of models) to the sequence that the :class:`Prototype` holds.
+        This adds a :class:`Model` (or list of models) to the sequence that the :class:`Prototype` holds.
 
         By default, we want single models added sequentially to use the outputs of the previous model as its
-        `inputs_hook` (if no `inputs_hook` was defined by the user).
+        `inputs` (if no `inputs` was defined by the user).
 
         Examples
         --------
