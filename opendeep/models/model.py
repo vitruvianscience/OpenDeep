@@ -344,7 +344,6 @@ class Model(object):
         """
         # TODO: should we do the parameter decays from get_decay_params() in the model updates?
         # TODO: Right now I'm not because it seems less modular
-        # TODO: do we need a list of these as well to deal with the possible list of get_train_cost()?
         # by default, assume the model doesn't have updates - it's your job to return them in this method.
         return None
 

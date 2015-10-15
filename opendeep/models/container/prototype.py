@@ -5,13 +5,11 @@ for experimentation, and then later you should make your creation into a new :cl
 """
 # standard libraries
 import logging
-import time
 # third party libraries
 import theano.tensor as T
 # internal references
 from opendeep.models.model import Model
-from opendeep.utils.constructors import function
-from opendeep.utils.misc import make_time_units_string, raise_to_list
+from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
 
@@ -91,26 +89,26 @@ class Prototype(Model):
         Parameters
         ----------
         model : :class:`Model` or list(:class:`Model`)
-            The model (or list of models) to add to the Prototype. In the case of a single model with no `inputs_hook`,
-            the Prototype will configure the `inputs_hook` to take the previous model's output from `get_outputs()`.
+            The model (or list of models) to add to the Prototype. In the case of a single model with no `inputs`,
+            the Prototype will configure the `inputs` to take the previous model's output from `get_outputs()`.
         """
         # check if model is a single model (not a list of models)
         if isinstance(model, Model):
             # if there is a previous layer added (more than one model in the Prototype)
             if len(self.models) > 0:
-                # check if inputs_hook (and hiddens_hook) wasn't already defined by the user - basically a blank slate
-                if model.inputs_hook is None and model.hiddens_hook is None:
-                    log.info('Overriding model %s with new inputs_hook!', str(type(model)))
+                # check if inputs (and hiddens) wasn't already defined by the user - basically a blank slate
+                if model.inputs is None and model.hiddens is None:
+                    log.info('Overriding model %s with new inputs from previous layer!', model._classname)
                     # get the previous layer output size and expression
                     previous_out_size = self.models[-1].output_size
                     previous_out      = self.models[-1].get_outputs()
-                    # create the inputs_hook from the previous outputs
-                    current_inputs_hook = (previous_out_size, previous_out)
+                    # create the inputs tuple from the previous outputs
+                    current_inputs = (previous_out_size, previous_out)
                     # grab the current model class
                     model_class = type(model)
                     # make the model a new instance of the current model (same arguments) except new inputs_hook
                     model_args = model.args.copy()
-                    model_args['inputs_hook'] = current_inputs_hook
+                    model_args['inputs'] = current_inputs
                     new_model = model_class(**model_args)
                     # clean up allocated variables from old model
                     for param in model.get_params():
@@ -126,8 +124,8 @@ class Prototype(Model):
     def get_inputs(self):
         """
         This should return the input(s) to the Prototype's computation graph as a list.
-        This is called by the :class:`Optimizer` when creating the theano train function on the cost expressions
-        returned by get_train_cost(). Therefore, these are the training function inputs! (Which is different
+        This is called by the :class:`Optimizer` when creating the theano train function on the cost expressions.
+        Therefore, these are the training function inputs! (Which is different
         from f_run inputs if you include the supervised labels)
 
         This gets a list of all unique inputs by going through each model in the Prototype and checking if its
@@ -173,97 +171,6 @@ class Prototype(Model):
             log.warning("This container doesn't have any models! So no outputs to get...")
             return None
 
-    def run(self, input):
-        """
-        This method will return the Prototype's output (run through the `f_run` function), given an input. The input
-        comes from all unique inputs to the models in the Prototype as calculated from `get_inputs()` and the outputs
-        computed similarly from `get_outputs`.
-
-        Try to avoid re-compiling the theano function created for run - check a `hasattr(self, 'f_run')` or
-        something similar first.
-
-        Parameters
-        ----------
-        input: array_like
-            Theano/numpy tensor-like object that is the input into the model's computation graph.
-
-        Returns
-        -------
-        array_like
-            Theano/numpy tensor-like object that is the output of the model's computation graph.
-        """
-        # set the noise switches off for running! we assume unseen data is noisy anyway :)
-        old_switch_vals = []
-        if len(self.get_switches()) > 0:
-            log.debug("Turning off %s noise switches, resetting them after run!", str(len(self.get_switches())))
-            old_switch_vals = [switch.get_value() for switch in self.get_switches()]
-            [switch.set_value(0.) for switch in self.get_switches()]
-
-        # make sure the input is raised to a list - we are going to splat it!
-        input = raise_to_list(input)
-        # first check if we already made an f_run function
-        if hasattr(self, 'f_run'):
-            output = self.f_run(*input)
-        # otherwise, compile it!
-        else:
-            inputs = raise_to_list(self.get_inputs())
-            outputs = raise_to_list(self.get_outputs())
-            if outputs is not None and len(outputs) == 1:
-                outputs = outputs[0]
-            updates = self.get_updates()
-            t = time.time()
-            log.info("Compiling f_run...")
-            self.f_run = function(inputs=inputs, outputs=outputs, updates=updates, name="f_run")
-            log.info("Compilation done! Took %s", make_time_units_string(time.time() - t))
-            output = self.f_run(*input)
-
-        # reset any switches to how they were!
-        if len(self.get_switches()) > 0:
-            [switch.set_value(val) for switch, val in zip(self.get_switches(), old_switch_vals)]
-
-        return output
-
-    def get_targets(self):
-        """
-        This grabs the targets (for supervised training) of the last layer in the model list to use for training.
-
-        Returns
-        -------
-        list(tensor)
-            List of the target variables to use during training. Comes from the last model's `get_targets()` function.
-        """
-        # if this container has models, return the targets to the very last model.
-        if len(self.models) > 0:
-            return self.models[-1].get_targets()
-        # otherwise, warn the user and return None
-        else:
-            log.warning("This container doesn't have any models! So no targets to get...")
-            return None
-
-    def get_train_cost(self):
-        """
-        This returns the expression that represents the cost given an input, which is used for the :class:`Optimizer`
-        during training. The reason we can't just compile a f_train theano function is because updates need to be
-        calculated for the parameters during gradient descent - and these updates are created in the :class:`Optimizer`
-        object.
-
-        Similar to other methods in the Prototype, this returns the last model's cost from `train_cost()`.
-
-        Returns
-        -------
-        tensor or list(tensor)
-            Theano expression (or list of theano expressions) of the model's training cost,
-            from which parameter gradients will be computed. Comes from calling `get_train_cost()` on
-            the last model in the Prototype.
-        """
-        # if this container has models, return the outputs to the very last model.
-        if len(self.models) > 0:
-            return self.models[-1].get_train_cost()
-        # otherwise, warn the user and return None
-        else:
-            log.warning("This container doesn't have any models! So no outputs to get...")
-            return None
-
     def get_updates(self):
         """
         This should return any theano updates from the models (used for things like random number generators).
@@ -292,28 +199,6 @@ class Prototype(Model):
             elif current_updates:
                 updates = current_updates
         return updates
-
-    def get_monitors(self):
-        """
-        This returns a dictionary of (monitor_name: monitor_expression) of variables (monitors) whose values we care
-        about during training.
-
-        .. note::
-            This is created by updating a dictionary with the monitors returned by `get_monitors()` called on every
-            model in the Prototype. This means that models that have monitors with the same name will override
-            previous expression values.
-
-        Returns
-        -------
-        dict
-            Dictionary of String: theano_expression for each monitor variable we would care about in the Prototype.
-        """
-        # Return the monitors going through each model in the list:
-        monitors = {}
-        for model in self.models:
-            current_monitors = model.get_monitors()
-            monitors.update(current_monitors)
-        return monitors
 
     def get_decay_params(self):
         """
@@ -379,32 +264,16 @@ class Prototype(Model):
 
         Returns
         -------
-        list
-            Flattened list of theano shared variables to be trained.
+        dict(str: SharedVariable)
+            Dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
+            These are the parameters to be trained.
         """
-        # Return the decay params going through each model in the list:
-        params = []
-        for model in self.models:
+        params = {}
+        for model_index, model in enumerate(self.models):
             model_params = model.get_params()
             # append the parameters only if they aren't already in the list!
-            # using a set would lose the order, which is important.
-            for param in model_params:
-                if param not in params:
-                    params.append(param)
+            for name, param in model_params.items():
+                if param not in list(params.values()):
+                    name = model._classname + '_%d_' % model_index + name
+                    params[name] = param
         return params
-
-
-class Repeating(Model):
-    """
-    The `Repeating` container takes a `Model` instance and repeats it across the first dimension of the input.
-    """
-    def __init__(self, model):
-        # make sure the input model to repeat is a Model instance
-        assert isinstance(model, Model), "The initial model provided was type %s, not a Model." % str(type(model))
-        self.model = model
-        # make this input one dimension more than the provided Model's input (since we are repeating over the
-        # first dimension)
-        model_input = raise_to_list(self.model.get_inputs())[0]
-        self.input = T.TensorType(model_input.dtype, (False,)*(model_input.ndim + 1))
-
-

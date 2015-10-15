@@ -27,7 +27,6 @@ class Dense(Model):
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/basic',
                  input_size=None, output_size=None,
                  activation='rectifier',
-                 cost='mse', cost_args=None,
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
                  noise=None, noise_level=None, mrg=RNG_MRG.MRG_RandomStreams(1),
@@ -57,11 +56,6 @@ class Dense(Model):
         activation : str or callable
             The activation function to use after the dot product going from input -> output. This can be a string
             representing an option from opendeep.utils.activation, or your own function as long as it is callable.
-        cost : str or callable
-            The cost function to use when training the layer. This should be appropriate for the output type, i.e.
-            mse for real-valued outputs, binary cross-entropy for binary outputs, etc.
-        cost_args : dict
-            Any additional named keyword arguments to pass to the specified `cost_function`.
         weights_init : str
             Determines the method for initializing input -> output weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
@@ -99,21 +93,12 @@ class Dense(Model):
             # make the input a symbolic matrix
             self.input = T.matrix('X')
 
-        # now that we have the input specs, define the output 'target' variable to be used in supervised training!
-        if kwargs.get('out_as_probs') == False:
-            self.target = T.vector('Y', dtype='int64')
-        else:
-            self.target = T.matrix('Y')
-
         # either grab the output's desired size from the parameter directly, or copy input_size
         self.output_size = self.output_size or self.input_size
 
         # other specifications
         # activation function!
         activation_func = get_activation_function(activation)
-        # cost function!
-        cost_func = get_cost_function(cost)
-        cost_args = cost_args or dict()
 
         ####################################################
         # parameters - make sure to deal with params_hook! #
@@ -163,9 +148,6 @@ class Dense(Model):
                                    noise_func(input=self.output),
                                    self.output)
 
-        # now to define the cost of the model - use the cost function to compare our output with the target value.
-        self.cost = cost_func(output=self.output, target=self.target, **cost_args)
-
         log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s",
                   str((self.input_size, self.output_size)), str(activation))
 
@@ -202,7 +184,6 @@ class SoftmaxLayer(Dense):
     """
     def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/softmax',
                  input_size=None, output_size=None,
-                 cost='nll', cost_args=None,
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
                  out_as_probs=False,
@@ -230,11 +211,6 @@ class SoftmaxLayer(Dense):
         output_size : int
             The size (dimensionality) of the output from the layer. This is normally the number of separate
             classification classes you have.
-        cost : str or callable
-            The cost function to use when training the layer. This should be appropriate for the output type, i.e.
-            mse for real-valued outputs, binary cross-entropy for binary outputs, etc.
-        cost_args : dict
-            Any additional named keyword arguments to pass to the specified `cost_function`.
         weights_init : str
             Determines the method for initializing input -> output weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
@@ -250,15 +226,10 @@ class SoftmaxLayer(Dense):
             over all classes. True means output the distribution of size `output_size` and False means output a single
             number index for the class that had the highest probability.
         """
-        if cost == 'nll':
-            cost_args = cost_args or dict()
-            cost_args['one_hot'] = out_as_probs
         # init the fully connected generic layer with a softmax activation function
         super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
                                            params_hook=params_hook,
                                            activation='softmax',
-                                           cost=cost,
-                                           cost_args=cost_args,
                                            input_size=input_size,
                                            output_size=output_size,
                                            weights_init=weights_init,
