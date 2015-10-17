@@ -54,9 +54,15 @@ class Model(object):
         This is a dictionary containing all the input parameters that initialize the Model. Think of it
         as the configuration for initializing a :class:`Model`.
     inputs : list
-        List of [int or shape or tuple of (shape, input_variable) or None] describing the inputs to use for this Model.
+        List of [tuple(shape, `Theano.TensorType`)] or None describing the inputs to use for this Model.
+        `shape` will be a monad tuple representing known sizes for each dimension in the `Theano.TensorType`.
+        The length of `shape` should be equal to number of dimensions in `Theano.TensorType`, where the shape
+        element is an integer representing the size for its dimension, or None if the shape isn't known.
+        For example, if you have a matrix with unknown batch size but fixed feature size of 784, `shape` would
+        be: (None, 784). The full form of `inputs` would be:
+        [((None, 784), <TensorType(float32, matrix)>)].
     hiddens : list
-        List of [int or shape or Tuple of (shape, hiddens_variable) or None] to use as the hidden
+        List of [int or shape or Tuple of (shape, hiddens_variable)] or None to use as the hidden
         representation for this Model.
     output_size : int or shape tuple
         Describes the shape of the output dimensionality for this Model.
