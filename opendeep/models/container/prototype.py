@@ -100,10 +100,10 @@ class Prototype(Model):
                 if model.inputs is None and model.hiddens is None:
                     log.info('Overriding model %s with new inputs from previous layer!', model._classname)
                     # get the previous layer output size and expression
-                    previous_out_size = self.models[-1].output_size
-                    previous_out      = self.models[-1].get_outputs()
-                    # create the inputs tuple from the previous outputs
-                    current_inputs = (previous_out_size, previous_out)
+                    previous_out_sizes = raise_to_list(self.models[-1].output_size)
+                    previous_outs      = raise_to_list(self.models[-1].get_outputs())
+                    # create the inputs from the previous outputs
+                    current_inputs = zip(previous_out_sizes, previous_outs)
                     # grab the current model class
                     model_class = type(model)
                     # make the model a new instance of the current model (same arguments) except new inputs_hook
@@ -111,7 +111,7 @@ class Prototype(Model):
                     model_args['inputs'] = current_inputs
                     new_model = model_class(**model_args)
                     # clean up allocated variables from old model
-                    for param in model.get_params():
+                    for param in model.get_params().values():
                         del param
                     del model
                     model = new_model
@@ -139,13 +139,13 @@ class Prototype(Model):
         inputs = []
         for model in self.models:
             # grab the inputs list from the model
-            model_inputs = model.get_inputs()
+            model_inputs = raise_to_list(model.get_inputs())
             # go through each and find the ones that are tensors in their basic input form (i.e. don't have an owner)
             for input in model_inputs:
                 # if it is a tensor
-                if isinstance(input, T.TensorVariable) and hasattr(input, 'owner'):
+                if isinstance(input, T.TensorVariable):
                     # if it doesn't have an owner
-                    if input.owner is None:
+                    if hasattr(input, 'owner') and input.owner is None:
                         # add it to the running inputs list
                         input = raise_to_list(input)
                         inputs.extend(input)
@@ -165,7 +165,7 @@ class Prototype(Model):
         """
         # if this container has models, return the outputs to the very last model.
         if len(self.models) > 0:
-            return self.models[-1].get_outputs()
+            return raise_to_list(self.models[-1].get_outputs())
         # otherwise, warn the user and return None
         else:
             log.warning("This container doesn't have any models! So no outputs to get...")

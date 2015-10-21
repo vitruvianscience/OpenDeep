@@ -12,7 +12,6 @@ from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function
-from opendeep.utils.cost import get_cost_function
 from opendeep.utils.noise import get_noise
 
 log = logging.getLogger(__name__)
@@ -24,8 +23,7 @@ class Dense(Model):
     This is your basic input -> nonlinear(output) layer. No hidden representation. It is also known as a
     fully-connected layer.
     """
-    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/basic',
-                 input_size=None, output_size=None,
+    def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/basic',
                  activation='rectifier',
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
@@ -36,23 +34,24 @@ class Dense(Model):
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together. For now, it needs to include the shape information (normally the
-            dimensionality of the input i.e. input_size).
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
+        inputs : List of [tuple(shape, `Theano.TensorType`)]
+            The dimensionality of the inputs for this model, and the routing information for the model
+            to accept inputs from elsewhere. `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. The length of `shape` should be equal to number of
+            dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
+            dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
+            but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
+            [((None, 784), <TensorType(float32, matrix)>)].
+        outputs : int
+            The dimensionality of the output for this model.
+        params : Dict(string_name: theano SharedVariable), optional
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
-            have two versions of the model that use the same parameters - such as a training model with dropout applied
-            to layers and one without for testing, where the parameters are shared between the two.
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_size : int
-            The size (dimensionality) of the input to the layer. If shape is provided in `inputs_hook`,
-            this is optional.
-        output_size : int
-            The size (dimensionality) of the output from the layer.
         activation : str or callable
             The activation function to use after the dot product going from input -> output. This can be a string
             representing an option from opendeep.utils.activation, or your own function as long as it is callable.
@@ -66,11 +65,11 @@ class Dense(Model):
             If Gaussian `weights_init`, the standard deviation to use.
         bias_init : float
             The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
-        noise : str
+        noise : str, optional
             What type of noise to use for corrupting the output (if not None). See opendeep.utils.noise
             for options. This should be appropriate for the output activation, i.e. Gaussian for tanh or other
             real-valued activations, etc. Often, you will use 'dropout' here as a regularization in BasicLayers.
-        noise_level : float
+        noise_level : float, optional
             The amount of noise to use for the noise function specified by `noise`. This could be the
             standard deviation for gaussian noise, the interval for uniform noise, the dropout amount, etc.
         mrg : random
@@ -85,45 +84,46 @@ class Dense(Model):
         ##################
         # specifications #
         ##################
-        # grab info from the inputs_hook, or from parameters
-        if inputs_hook is not None:  # inputs_hook is a tuple of (Shape, Input)
-            assert len(inputs_hook) == 2, 'Expected inputs_hook to be tuple!'  # make sure inputs_hook is a tuple
-            self.input = inputs_hook[1]
+        if len(self.inputs) > 1:
+            raise NotImplementedError("Expected 1 input to Dense, found %d. Please merge inputs before passing "
+                                      "to the Dense model!" % len(self.inputs))
+        # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
+        input_shape, self.input = self.inputs[0]
+        if isinstance(input_shape, int):
+            self.input_size = input_shape
         else:
-            # make the input a symbolic matrix
-            self.input = T.matrix('X')
+            self.input_size = input_shape[-1]
+        assert self.input_size is not None, "Need to specify the shape for the last dimension of the input!"
 
-        # either grab the output's desired size from the parameter directly, or copy input_size
-        self.output_size = self.output_size or self.input_size
+        # We also only have 1 output
+        self.output_size = self.output_size[0]
 
-        # other specifications
         # activation function!
         activation_func = get_activation_function(activation)
 
-        ####################################################
-        # parameters - make sure to deal with params_hook! #
-        ####################################################
-        if params_hook is not None:
-            # make sure the params_hook has W (weights matrix) and b (bias vector)
-            assert len(params_hook) == 2, \
-                "Expected 2 params (W and b) for Dense, found {0!s}!".format(len(params_hook))
-            W, b = params_hook
-        else:
-            W = get_weights(weights_init=weights_init,
-                            shape=(self.input_size, self.output_size),
-                            name="W",
-                            rng=mrg,
-                            # if gaussian
-                            mean=weights_mean,
-                            std=weights_std,
-                            # if uniform
-                            interval=weights_interval)
+        #########################################################
+        # parameters - make sure to deal with input dictionary! #
+        #########################################################
+        W = self.params.get(
+            "W",
+            get_weights(weights_init=weights_init,
+                        shape=(self.input_size, self.output_size),
+                        name="W",
+                        rng=mrg,
+                        # if gaussian
+                        mean=weights_mean,
+                        std=weights_std,
+                        # if uniform
+                        interval=weights_interval)
+        )
 
-            # grab the bias vector
-            b = get_bias(shape=output_size, name="b", init_values=bias_init)
+        b = self.params.get(
+            "b",
+            get_bias(shape=self.output_size, name="b", init_values=bias_init)
+        )
 
         # Finally have the two parameters - weights matrix W and bias vector b. That is all!
-        self.params = [W, b]
+        self.params = {"W": W, "b": b}
 
         ###############
         # computation #
@@ -152,16 +152,10 @@ class Dense(Model):
                   str((self.input_size, self.output_size)), str(activation))
 
     def get_inputs(self):
-        return [self.input]
+        return self.input
 
     def get_outputs(self):
         return self.output
-
-    def get_targets(self):
-        return [self.target]
-
-    def get_train_cost(self):
-        return self.cost
 
     def get_switches(self):
         if hasattr(self, 'switch'):
@@ -174,7 +168,7 @@ class Dense(Model):
 
 
 @inherit_docs
-class SoftmaxLayer(Dense):
+class Softmax(Dense):
     """
     The softmax layer is meant as a last-step prediction layer using the softmax activation function -
     this class exists to provide easy access to methods for errors and log-likelihood for a given truth label y.
@@ -182,35 +176,33 @@ class SoftmaxLayer(Dense):
     It is a special subclass of the Dense (a fully-connected layer),
     with the activation function forced to be 'softmax'
     """
-    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/softmax',
-                 input_size=None, output_size=None,
+    def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/softmax',
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
-                 out_as_probs=False,
-                 **kwargs):
+                 out_as_probs=False):
         """
         Initialize a Softmax layer.
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together. For now, you need to include the shape information (normally the
-            dimensionality of the input i.e. input_size).
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
+        inputs : List of [tuple(shape, `Theano.TensorType`)]
+            The dimensionality of the inputs for this model, and the routing information for the model
+            to accept inputs from elsewhere. `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. The length of `shape` should be equal to number of
+            dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
+            dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
+            but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
+            [((None, 784), <TensorType(float32, matrix)>)].
+        outputs : int
+            The dimensionality of the output for this model.
+        params : Dict(string_name: theano SharedVariable), optional
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
-            have two versions of the model that use the same parameters - such as a training model with dropout applied
-            to layers and one without for testing, where the parameters are shared between the two.
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_size : int
-            The size (dimensionality) of the input to the layer. If shape is provided in `inputs_hook`,
-            this is optional.
-        output_size : int
-            The size (dimensionality) of the output from the layer. This is normally the number of separate
-            classification classes you have.
         weights_init : str
             Determines the method for initializing input -> output weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
@@ -227,21 +219,20 @@ class SoftmaxLayer(Dense):
             number index for the class that had the highest probability.
         """
         # init the fully connected generic layer with a softmax activation function
-        super(SoftmaxLayer, self).__init__(inputs_hook=inputs_hook,
-                                           params_hook=params_hook,
-                                           activation='softmax',
-                                           input_size=input_size,
-                                           output_size=output_size,
-                                           weights_init=weights_init,
-                                           weights_mean=weights_mean,
-                                           weights_std=weights_std,
-                                           weights_interval=weights_interval,
-                                           bias_init=bias_init,
-                                           out_as_probs=out_as_probs,
-                                           outdir=outdir,
-                                           noise=False)
+        super(Softmax, self).__init__(inputs=inputs,
+                                      outputs=outputs,
+                                      params=params,
+                                      outdir=outdir,
+                                      activation='softmax',
+                                      weights_init=weights_init,
+                                      weights_mean=weights_mean,
+                                      weights_std=weights_std,
+                                      weights_interval=weights_interval,
+                                      bias_init=bias_init,
+                                      out_as_probs=out_as_probs,
+                                      noise=False)
         # the outputs of the layer are the probabilities of being in a given class
-        self.p_y_given_x = super(SoftmaxLayer, self).get_outputs()
+        self.p_y_given_x = super(Softmax, self).get_outputs()
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
         if out_as_probs:
@@ -250,13 +241,6 @@ class SoftmaxLayer(Dense):
             self.output = self.y_pred
 
         self.out_as_probs = out_as_probs
-
-    def get_monitors(self):
-        # grab the basiclayer's monitors
-        monitors = super(SoftmaxLayer, self).get_monitors()
-        # add the 'error' monitor.
-        monitors.update({'softmax_error': self.errors()})
-        return monitors
 
     def errors(self):
         """

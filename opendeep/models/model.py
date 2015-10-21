@@ -85,32 +85,35 @@ class Model(object):
         """
         Initialize a new Model.
 
-        Your model implementations should accept optional inputs and hiddens SharedVariables (if applicable)
-        to set your inputs and hidden representation in a modular fashion, allowing models to link together.
-        inputs can have a tuple of (shape, variable) that should replace the default model inputs.
-        hiddens can have a tuple of (shape, variable) that should replace the default model hidden representation
-        (which means you need to adapt creating your computation graph to not care about the inputs and to instead
-        run outputs directly from the hidden variable provided).
+        Your model implementations should accept optional inputs and hiddens Theano symbolic expressions
+        or variables (if applicable) to set your inputs and hidden representation in a modular fashion,
+        allowing models to link together. `inputs` can have a tuple of (shape, variable) that should replace
+        the default model inputs. hiddens can have a tuple of (shape, variable) that should replace the
+        default model hidden representation (which means you need to adapt creating your computation graph
+        to not care about the inputs and to instead run outputs directly from the hidden variable provided).
         You can also accept a params to share model parameters rather than instantiate a new set of parameters.
 
         Parameters
         ----------
-        inputs : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None]
-            The dimensionality of the inputs for this model, and/or the routing information for the model
+        inputs : List of [tuple(shape, `Theano.TensorType`)] or None
+            The dimensionality of the inputs for this model, and the routing information for the model
             to accept inputs from elsewhere. This is used for linking
             different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
-            newly supervised classification model). For now, variable hook tuples need to
-            include the shape information (normally the dimensionality of the inputs i.e. n_in).
-        hiddens : List of [int or shape_tuple or Tuple of (shape, SharedVariable) or None], optional
+            newly supervised classification model). `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. The length of `shape` should be equal to number of
+            dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
+            dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
+            but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
+            [((None, 784), <TensorType(float32, matrix)>)].
+        hiddens : List of [tuple(shape, `Theano.TensorType`) or shape] or None, optional
             The dimensionality of the hidden representation for this model, and/or the routing information for
             the model to accept its hidden representation from elsewhere.
             This is used for linking different models together (e.g. setting the GSN model's hidden layers to the RNN's
             output layer gives the RNN-GSN model, a deep recurrent model.) For now, variable hook tuples need to
-            include the shape information (normally the dimensionality of the hiddens i.e. n_hidden).
+            include the shape information (normally the dimensionality of the hiddens i.e. n_hidden). This shape
+            information is the same format as the monad for `inputs`.
         outputs : List of [int or shape tuple], optional
-            The dimensionality of the output(s) for this model. This is required for stacking models
-            automatically - where the input to one layer is the output of the previous layer. Currently, we cannot
-            run the size from Theano's graph, so it needs to be explicit.
+            The dimensionality of the output(s) for this model. Shape here is the shape monad described in `inputs`.
         params : Dict(string_name: theano SharedVariable), optional
             A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
@@ -129,7 +132,7 @@ class Model(object):
         # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
         self.inputs = raise_to_list(inputs)
         self.hiddens = raise_to_list(hiddens)
-        self.output_size = raise_to_list(outputs)
+        self.output_size = raise_to_list(kwargs.get('output_size', outputs))
         self.params = params
         self.outdir = outdir
 
