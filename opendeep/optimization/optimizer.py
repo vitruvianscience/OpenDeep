@@ -38,7 +38,6 @@ from opendeep.monitor.monitor import collapse_channels
 from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import (raise_to_list, make_time_units_string,
-                                 get_shared_values, set_shared_values,
                                  add_kwargs_to_dict, trunc)
 from opendeep.utils.batch import minibatch
 from opendeep.utils.misc import min_normalized_izip
@@ -96,7 +95,7 @@ class Optimizer(object):
         hard_clip : bool
             Whether to use a hard cutoff or rescaling for clipping gradients.
         """
-        log.info("Initializing optimizer %s", str(type(self)))
+        log.info("Initializing optimizer %s", str(self.__class__.__name__))
 
         # Deal with early stopping None initializations (no early stopping).
         if not stop_threshold:
@@ -123,11 +122,11 @@ class Optimizer(object):
         # Otherwise, things are proceeding as normal. Carry on...
 
         assert isinstance(model, Model), "Optimizer input model needs to be a Model class! " \
-                                         "Found %s" % str(type(model))
+                                         "Found %s" % str(model.__class__.__name__)
         assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! " \
-                                             "Found %s" % str(type(dataset))
+                                             "Found %s" % str(dataset.__class__.__name__)
         assert isinstance(loss, Loss), "Optimizer input loss needs to be a Loss class! " \
-                                       "Found %s" % str(type(loss))
+                                       "Found %s" % str(loss.__class__.__name__)
 
         model_inputs = raise_to_list(model.get_inputs())
         n_model_inputs = len(model_inputs)
@@ -252,7 +251,7 @@ class Optimizer(object):
         gradients = grad(cost=self.loss.get_loss(), wrt=list(self.params.values()))
         # now create the dictionary mapping the parameter with its gradient
         gradients = OrderedDict(
-            [(param, g) for param, g in zip(list(self.params.keys()), gradients)]
+            [(param, g) for param, g in zip(list(self.params.values()), gradients)]
         )
         # clip gradients if we want.
         gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
@@ -269,7 +268,7 @@ class Optimizer(object):
         else:
             updates = gradient_updates
 
-        log.info("%s params: %s", str(type(self.model)), str(list(self.params.keys())))
+        log.info("%s params: %s", self.model._classname, str(list(self.params.keys())))
 
         ############
         # monitors #
@@ -309,7 +308,7 @@ class Optimizer(object):
         #######################################
         function_input = raise_to_list(self.model.get_inputs()) + self.loss.targets or []
         # Compile the training function!
-        log.info('Compiling f_learn function for model %s...', str(type(self.model)))
+        log.info('Compiling f_learn function for model %s...', self.model._classname)
         t = time.time()
 
         f_learn = function(inputs=function_input,
@@ -353,7 +352,7 @@ class Optimizer(object):
         # start training #
         ##################
         log.info("-----------TRAINING %s FOR %d EPOCHS-----------",
-                 str(type(self.model)), self.n_epoch)
+                 self.model._classname, self.n_epoch)
 
         self.STOP = False
         self.epoch_counter = 0
@@ -378,7 +377,8 @@ class Optimizer(object):
         # save params
         if self.best_params is not None:
             log.debug("Restoring best model parameters...")
-            set_shared_values(self.params, self.best_params)
+            for best_param, param_value in self.best_params.items():
+                self.params[best_param].set_value(param_value, borrow=False)
         log.debug("Saving model parameters...")
         self.model.save_params('trained_epoch_' + str(self.epoch_counter))
 
@@ -467,7 +467,7 @@ class Optimizer(object):
             self.patience = 0
             self.best_cost = cost
             # save the parameters that made it the best
-            self.best_params = get_shared_values(self.params)
+            self.best_params = {key: param.get_value(borrow=False) for key, param in self.params.items()}
         elif not numpy.isnan(cost):
             self.patience += 1
 

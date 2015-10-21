@@ -11,8 +11,9 @@ This module provides the base convolutional layers.
 import logging
 # third party libraries
 import numpy
-import theano
-import theano.tensor as T
+import theano.config as config
+from theano.tensor import concatenate
+from theano.tensor.nnet import conv2d
 from theano.tensor.signal import downsample
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
@@ -34,8 +35,8 @@ except ImportError as e:
                 "please install it like so: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html")
 
 # Some convolution operations only work on the GPU, so do a check here:
-if not theano.config.device.startswith('gpu'):
-    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. "
+if not config.device.startswith('gpu'):
+    log.warning("You should consider using a GPU, unless this is a small toy algorithm for fun. "
                 "Please enable the GPU in Theano via these instructions: "
                 "http://deeplearning.net/software/theano/tutorial/using_gpu.html")
 
@@ -43,11 +44,11 @@ if not theano.config.device.startswith('gpu'):
 # http://benanne.github.io/2014/12/09/theano-metaopt.html
 # make it THEANO_FLAGS=optimizer_including=conv_meta
 # OR you could set the .theanorc file with [global]optimizer_including=conv_meta
-if theano.config.optimizer_including != "conv_meta":
+if config.optimizer_including != "conv_meta":
     log.warning("Theano flag optimizer_including is not conv_meta (found %s)! "
                 "To have Theano cherry-pick the best convolution implementation, please set "
                 "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
-                % str(theano.config.optimizer_including))
+                % str(config.optimizer_including))
 
 
 @inherit_docs
@@ -58,8 +59,8 @@ class Conv1D(Model):
 
     This means the input is a 3-dimensional tensor of form (batch, channel, input)
     """
-    def __init__(self, inputs_hook=None, params_hook=None, outdir='outputs/conv1d',
-                 input_size=None, filter_shape=None, stride=None, border_mode='valid',
+    def __init__(self, inputs=None, params=None, outdir='outputs/conv1d',
+                 filter_shape=None, stride=None, border_mode='valid',
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
@@ -70,19 +71,21 @@ class Conv1D(Model):
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together. For now, it needs to include the shape information.
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
-            this model (instead of initializing your own shared variables).
+        inputs : tuple(shape, `Theano.TensorType`)
+            The dimensionality of the inputs for this model, and the routing information for the model
+            to accept inputs from elsewhere. `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. Shape of the incoming data:
+            (batch_size, num_channels, data_dimensionality). Most likely, your channels
+            will be 1. For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
+            D=dimensionality (chars, words, etc.)
+        params : Dict(string_name: theano SharedVariable), optional
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
+            this model (instead of initializing your own shared variables). This parameter is useful when you want to
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_size : tuple
-            Shape of the incoming data: (batch_size, num_channels, data_dimensionality). Most likely, your channels
-            will be 1. For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
-            D=dimensionality (chars, words, etc.)
         filter_shape : tuple
             (num_filters, num_channels, filter_length). This is also the shape of the weights matrix.
         stride : int
@@ -127,7 +130,9 @@ class Conv1D(Model):
         it by performing a 'full' convolution and then cropping the result, which
         may negatively affect performance.
         """
-        super(Conv1D, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
+        initial_parameters = locals().copy()
+        initial_parameters.pop('self')
+        super(Conv1D, self).__init__(**initial_parameters)
 
         ##################
         # specifications #
@@ -135,13 +140,9 @@ class Conv1D(Model):
         # grab info from the inputs_hook, or from parameters
         # expect input to be in the form (B, C, I) (batch, channel, input data)
         # inputs_hook is a tuple of (Shape, Input)
-        if self.inputs_hook is not None:
-            # make sure inputs_hook is a tuple
-            assert len(self.inputs_hook) == 2, "expecting inputs_hook to be tuple of (shape, input)"
-            self.input = inputs_hook[1]
-        else:
-            # make the input a symbolic matrix
-            self.input = T.ftensor3('X')
+        # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
+        input_shape, self.input = self.inputs[0]
+        assert self.input.ndim == 3, "Expected 3D input with form (batch, channel, input_data)"
 
         # activation function!
         activation_func = get_activation_function(activation)
@@ -582,7 +583,7 @@ class ConvPoolLayer(Model):
             )
             conv_out1 = conv_out1 + self.b1.dimshuffle('x', 0, 'x', 'x')
 
-            conv_out = T.concatenate([conv_out0, conv_out1], axis=1)
+            conv_out = concatenate([conv_out0, conv_out1], axis=1)
 
         # ReLu by default
         output = self.activation_func(conv_out)

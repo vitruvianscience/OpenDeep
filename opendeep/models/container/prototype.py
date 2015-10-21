@@ -6,7 +6,8 @@ for experimentation, and then later you should make your creation into a new :cl
 # standard libraries
 import logging
 # third party libraries
-import theano.tensor as T
+from theano.compat.python2x import OrderedDict
+from theano.tensor import TensorVariable
 # internal references
 from opendeep.models.model import Model
 from opendeep.utils.misc import raise_to_list
@@ -143,7 +144,7 @@ class Prototype(Model):
             # go through each and find the ones that are tensors in their basic input form (i.e. don't have an owner)
             for input in model_inputs:
                 # if it is a tensor
-                if isinstance(input, T.TensorVariable):
+                if isinstance(input, TensorVariable):
                     # if it doesn't have an owner
                     if hasattr(input, 'owner') and input.owner is None:
                         # add it to the running inputs list
@@ -268,7 +269,7 @@ class Prototype(Model):
             Dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
             These are the parameters to be trained.
         """
-        params = {}
+        params = OrderedDict()
         for model_index, model in enumerate(self.models):
             model_params = model.get_params()
             # append the parameters only if they aren't already in the list!

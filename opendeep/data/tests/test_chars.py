@@ -13,7 +13,7 @@ try:
 except ImportError:
     NLTK_AVAILABLE = False
 # internal references
-from opendeep.data.dataset_file import TextDataset
+from opendeep.data import TextDataset
 
 class TestCharsDataset(unittest.TestCase):
 

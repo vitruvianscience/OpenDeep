@@ -1,6 +1,7 @@
 from __future__ import print_function
 
-from theano.tensor import matrix
+from theano.tensor import matrix, vector
+from numpy import argmax
 
 from opendeep.models.single_layer.basic import Dense, Softmax
 from opendeep.models.container import Prototype
@@ -24,11 +25,11 @@ if __name__ == '__main__':
     # create the softmax classifier
     layer2 = Softmax(inputs=((None, 1000), layer1.get_outputs()),
                      outputs=10,
-                     out_as_probs=False)
+                     out_as_probs=True)
     # create the mlp from the two layers
     mlp = Prototype(layers=[layer1, layer2])
     # define the loss function
-    loss = Neg_LL(inputs=mlp.get_outputs(), targets=matrix("y", dtype="int32"), one_hot=False)
+    loss = Neg_LL(inputs=mlp.get_outputs(), targets=vector("y", dtype="int64"), one_hot=False)
 
     # make an optimizer to train it (AdaDelta is a good default)
     # optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
@@ -42,9 +43,9 @@ if __name__ == '__main__':
     test_data = test_data[:25]
     test_labels = test_labels[:25]
     # use the run function!
-    preds = mlp.run(test_data)
+    preds = mlp.run(test_data)[0]
     print('-------')
-    print(preds)
+    print(argmax(preds, axis=1))
     print(test_labels.astype('int32'))
     print()
     print()

@@ -7,7 +7,7 @@ Pre-processed from here: http://www-etud.iro.umontreal.ca/~boulanni/icml2012
 import logging
 # third party imports
 import numpy
-import theano
+import theano.config as config
 # internal imports
 from opendeep.data.dataset_file import FileDataset
 from opendeep.utils.file_ops import find_files
@@ -43,15 +43,15 @@ class JSBChorales(FileDataset):
 
         # grab the datasets from midireading the files
         train_datasets = [
-            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(theano.config.floatX)
+            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(config.floatX)
             for f in find_files(self.path, train_filter)
         ]
         valid_datasets = [
-            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(theano.config.floatX)
+            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(config.floatX)
             for f in find_files(self.path, valid_filter)
         ]
         test_datasets = [
-            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(theano.config.floatX)
+            midiread(f, r=(21, 109), dt=0.3).piano_roll.astype(config.floatX)
             for f in find_files(self.path, test_filter)
         ]
 

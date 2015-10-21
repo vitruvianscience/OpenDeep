@@ -6,7 +6,7 @@ for experimentation, and then later you should make your creation into a new :cl
 # standard libraries
 import logging
 # third party libraries
-import theano.tensor as T
+from theano.tensor import TensorType
 # internal references
 from opendeep.models.model import Model
 from opendeep.utils.misc import raise_to_list
@@ -26,4 +26,4 @@ class Repeating(Model):
         # make this input one dimension more than the provided Model's input (since we are repeating over the
         # first dimension)
         model_input = raise_to_list(self.model.get_inputs())[0]
-        self.input = T.TensorType(model_input.dtype, (False,)*(model_input.ndim + 1))
+        self.input = TensorType(model_input.dtype, (False,)*(model_input.ndim + 1))

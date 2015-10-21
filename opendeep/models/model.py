@@ -410,28 +410,31 @@ class Model(object):
         that the switch is currently set to).
         """
         switches = raise_to_list(self.get_switches())
-        log.debug("Flipping %d switches for %s!" % (len(switches), self._classname))
-        [switch.set_value(1. - switch.get_value()) for switch in switches]
-        if self.switches_on is not None:
-            self.switches_on = not self.switches_on
+        if len(switches) > 0:
+            log.debug("Flipping %d switches for %s!" % (len(switches), self._classname))
+            [switch.set_value(1. - switch.get_value()) for switch in switches]
+            if self.switches_on is not None:
+                self.switches_on = not self.switches_on
 
     def turn_off_switches(self):
         """
         This helper method turns all Theano switches by `get_switches()` to their off position of 0./False
         """
         switches = raise_to_list(self.get_switches())
-        log.debug("Turning off %d switches for %s!" % (len(switches), self._classname))
-        [switch.set_value(0.) for switch in switches]
-        self.switches_on = False
+        if len(switches) > 0:
+            log.debug("Turning off %d switches for %s!" % (len(switches), self._classname))
+            [switch.set_value(0.) for switch in switches]
+            self.switches_on = False
 
     def turn_on_switches(self):
         """
         This helper method turns all Theano switches by `get_switches()` to their on position of 1./True
         """
         switches = raise_to_list(self.get_switches())
-        log.debug("Turning on %d switches for %s!" % (len(switches), self._classname))
-        [switch.set_value(1.) for switch in switches]
-        self.switches_on = True
+        if len(switches) > 0:
+            log.debug("Turning on %d switches for %s!" % (len(switches), self._classname))
+            [switch.set_value(1.) for switch in switches]
+            self.switches_on = True
 
     def set_switches(self, values):
         """

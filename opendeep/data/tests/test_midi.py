@@ -1,7 +1,6 @@
 # standard libraries
 from __future__ import print_function
 import unittest
-import numpy
 # internal references
 from opendeep.data.standard_datasets.midi.musedata import MuseData
 from opendeep.data.standard_datasets.midi.jsb_chorales import JSBChorales
