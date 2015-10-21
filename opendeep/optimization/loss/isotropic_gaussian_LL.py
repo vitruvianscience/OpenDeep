@@ -35,8 +35,6 @@ class IsotropicGaussianLL(Loss):
         std_estimated : theano symbolic expression
             The estimated standard deviation (sigma).
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(IsotropicGaussianLL, self).__init__(inputs=inputs, targets=targets, std_estimated=std_estimated)
 
     def get_loss(self):

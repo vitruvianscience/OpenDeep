@@ -35,8 +35,6 @@ class Neg_LL(Loss):
             Whether the label targets Y are encoded as a one-hot vector or as the int class label.
             If it is not one-hot, needs to be 2-dimensional.
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(Neg_LL, self).__init__(inputs=inputs, targets=targets, one_hot=one_hot)
 
     def get_loss(self):
@@ -52,7 +50,8 @@ class Neg_LL(Loss):
         # T.arange(y.shape[0]) is a symbolic vector which will contain [0,1,2,... n-1]
         # T.log(self.p_y_given_x) is a matrix of Log-Probabilities (call it LP) with one row per example and
         # one column per class
-        # LP[T.arange(y.shape[0]),y] is a vector v containing [LP[0,y[0]], LP[1,y[1]], LP[2,y[2]], ..., LP[n-1,y[n-1]]] and
+        # LP[T.arange(y.shape[0]),y] is a vector v containing
+        # [LP[0,y[0]], LP[1,y[1]], LP[2,y[2]], ..., LP[n-1,y[n-1]]] and
         # T.mean(LP[T.arange(y.shape[0]),y]) is the mean (across minibatch examples) of the elements in v,
         # i.e. the mean log-likelihood across the minibatch.
         if self.args.get('one_hot'):

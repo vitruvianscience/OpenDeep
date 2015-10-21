@@ -66,7 +66,7 @@ class Model(object):
         representation for this Model.
     output_size : int or shape tuple
         Describes the shape of the output dimensionality for this Model.
-    params : dict
+    params : Dict or None
         A dict of string_name: SharedVariable representing the parameters to use for this Model.
     outdir : str
         The filepath to save outputs for this Model (such as pickled parameters created during training,
@@ -133,7 +133,7 @@ class Model(object):
         self.inputs = raise_to_list(inputs)
         self.hiddens = raise_to_list(hiddens)
         self.output_size = raise_to_list(kwargs.get('output_size', outputs))
-        self.params = params
+        self.params = params or {}
         self.outdir = outdir
 
         # make the directory to output configuration and parameters from the model
@@ -463,13 +463,13 @@ class Model(object):
     #######################################
     def get_params(self):
         """
-        This returns the dictionary of {string_name: theano shared variables} that will be trained by
+        This returns the ordered dictionary of {string_name: theano shared variables} that will be trained by
         the :class:`Optimizer`. These parameters are used in the gradient.
 
         Returns
         -------
-        dict(str: SharedVariable)
-            Dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
+        OrderedDict(str: SharedVariable)
+            Ordered dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
             These are the parameters for the model.
 
         Raises

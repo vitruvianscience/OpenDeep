@@ -31,8 +31,6 @@ class BinaryCrossentropy(Loss):
         targets : theano symbolic variable
             The target variables for the loss function.
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(BinaryCrossentropy, self).__init__(inputs=inputs, targets=targets)
 
     def get_loss(self):

@@ -4,6 +4,7 @@ This module provides the most basic neural net layers. This goes from an input t
 # standard libraries
 import logging
 # third party libraries
+from theano.compat.python2x import OrderedDict
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
@@ -123,7 +124,7 @@ class Dense(Model):
         )
 
         # Finally have the two parameters - weights matrix W and bias vector b. That is all!
-        self.params = {"W": W, "b": b}
+        self.params = OrderedDict([("W", W), ("b", b)])
 
         ###############
         # computation #

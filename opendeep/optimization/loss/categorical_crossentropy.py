@@ -35,8 +35,6 @@ class CategoricalCrossentropy(Loss):
             Symbolic 2D tensor *or* symbolic vector of ints. In the case of an integer vector argument,
             each element represents the position of the '1' in a 1-of-N encoding (aka 'one-hot' encoding)
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(CategoricalCrossentropy, self).__init__(inputs=inputs, targets=targets)
 
     def get_loss(self):

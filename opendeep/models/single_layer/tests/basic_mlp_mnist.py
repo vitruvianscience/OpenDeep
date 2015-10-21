@@ -5,8 +5,6 @@ from theano.tensor import matrix
 from opendeep.models.single_layer.basic import Dense, Softmax
 from opendeep.models.container import Prototype
 from opendeep.optimization.loss import Neg_LL
-
-# import the dataset and optimizer to use
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
 
@@ -34,7 +32,7 @@ if __name__ == '__main__':
 
     # make an optimizer to train it (AdaDelta is a good default)
     # optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
-    optimizer = AdaDelta(dataset=mnist, epochs=20)
+    optimizer = AdaDelta(dataset=mnist, loss=loss, epochs=20)
     # perform training!
     # optimizer.train()
     mlp.train(optimizer)

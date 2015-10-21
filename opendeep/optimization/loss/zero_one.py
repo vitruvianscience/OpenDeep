@@ -26,8 +26,6 @@ class ZeroOne(Loss):
         targets : theano symbolic variable
             The ground truth variable. (Type comes from data).
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(ZeroOne, self).__init__(inputs=inputs, targets=targets)
 
     def get_loss(self):

@@ -22,8 +22,6 @@ class SumLosses(Loss):
         inputs : list(Loss)
             The :class:`Loss` functions to add.
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(SumLosses, self).__init__(inputs=inputs)
 
     def get_loss(self):
@@ -47,8 +45,6 @@ class MeanLosses(Loss):
         inputs : list(Loss)
             The :class:`Loss` functions to average.
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(MeanLosses, self).__init__(inputs=inputs)
 
     def get_loss(self):

@@ -29,8 +29,6 @@ class MSE(Loss):
             Boolean whether or not to take the mean across all dimensions (True) or just the
             feature dimensions (False). Defaults to True.
         """
-        self._classname = self.__class__.__name__
-        log.debug("Creating a new instance of %s", self._classname)
         super(MSE, self).__init__(inputs=inputs, targets=targets, mean_over_second=mean_over_second)
 
     def get_loss(self):

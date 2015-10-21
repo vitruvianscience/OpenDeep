@@ -18,7 +18,7 @@ from theano.compat.python2x import OrderedDict
 from opendeep.utils.constructors import function
 from opendeep.models.model import Model
 from opendeep.models.single_layer.convolutional import ConvPoolLayer
-from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
+from opendeep.models.single_layer.basic import Dense, Softmax
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import mirror_images
 from opendeep.utils.misc import make_time_units_string, raise_to_list
@@ -227,7 +227,7 @@ class AlexNet(Model):
             'bias_init': 0.0
         }
         log.debug("softmax classification layer (model layer 8)...")
-        softmax_layer8 = SoftmaxLayer(inputs_hook=(4096, fc_layer7.get_outputs()),
+        softmax_layer8 = Softmax(inputs_hook=(4096, fc_layer7.get_outputs()),
                                       output_size=1000,
                                       **softmax_config)
 

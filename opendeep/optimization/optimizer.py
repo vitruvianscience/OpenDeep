@@ -24,14 +24,13 @@ TRAIN_COST_KEY : str
 import logging
 import time
 import os
-import warnings
 # third party
 import numpy
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict
 from theano.compat import six
 # internal references
-from opendeep.utils.constructors import sharedX, function
+from opendeep.utils.constructors import sharedX, function, grad
 from opendeep.data.dataset import Dataset
 from opendeep.models.model import Model
 from opendeep.optimization.loss import Loss
@@ -246,14 +245,17 @@ class Optimizer(object):
         #########################
         # gradients and updates #
         #########################
+        # grab the model parameters to use during training
+        self.params = self.model.get_params()
         # Now create the training cost function for the model to use while training - update parameters
         # gradient!
-        # Need to somehow make w.r.t. params appropriate for the individual training costs.
-        gradients, _ = self.model.get_gradient(cost=train_cost, additional_cost=additional_cost)
+        gradients = grad(cost=self.loss.get_loss(), wrt=list(self.params.values()))
+        # now create the dictionary mapping the parameter with its gradient
+        gradients = OrderedDict(
+            [(param, g) for param, g in zip(list(self.params.keys()), gradients)]
+        )
         # clip gradients if we want.
         gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
-        # append to list
-        self.gradients.append(gradients)
 
         # Calculate the optimizer updates each run
         # This is where the magic happens for a lot of sub-implementations of SGD!
@@ -266,11 +268,8 @@ class Optimizer(object):
             updates.update(gradient_updates)
         else:
             updates = gradient_updates
-        train_updates.append(updates)
 
-        # grab the model parameters to use during training
-        self.params = self.model.get_params()
-        log.info("%s params: %s", str(type(self.model)), str(self.params))
+        log.info("%s params: %s", str(type(self.model)), str(list(self.params.keys())))
 
         ############
         # monitors #
@@ -308,21 +307,17 @@ class Optimizer(object):
         #######################################
         # compile train and monitor functions #
         #######################################
-        function_input = raise_to_list(self.model.get_inputs()) + raise_to_list(self.model.get_targets())
-        train_functions = []
-        for i, (updates, train_cost) in enumerate(zip(train_updates, train_costs)):
-            # Compile the training function!
-            log.info('Compiling f_learn %d/%d function for model %s...', i + 1, len(train_updates),
-                     str(type(self.model)))
-            t = time.time()
+        function_input = raise_to_list(self.model.get_inputs()) + self.loss.targets or []
+        # Compile the training function!
+        log.info('Compiling f_learn function for model %s...', str(type(self.model)))
+        t = time.time()
 
-            f_learn = function(inputs=function_input,
-                               updates=updates,
-                               outputs=[train_cost] + list(self.train_monitors_dict.values()),
-                               name='f_learn_%d' % i)
+        f_learn = function(inputs=function_input,
+                           updates=updates,
+                           outputs=[self.loss.get_loss()] + list(self.train_monitors_dict.values()),
+                           name='f_learn')
 
-            log.info('f_learn %d compilation took %s', i + 1, make_time_units_string(time.time() - t))
-            train_functions.append(f_learn)
+        log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))
 
         # figure out if we want valid and test (monitors)
         self.valid_flag = (self.dataset.valid_inputs is not None) and (len(self.valid_monitors_dict) > 0)
@@ -357,44 +352,37 @@ class Optimizer(object):
         ##################
         # start training #
         ##################
-        # make sure to deal with a list of train_cost functions - for layer-wise pretraining!
-        # this list of training functions was created during __init__()
-        start_time = time.time()
-        for func_i, train_function in enumerate(train_functions):
-            log.info("-----------TRAINING %s function %d/%d FOR %d EPOCHS-----------",
-                     str(type(self.model)), func_i + 1, len(train_functions), self.n_epoch)
+        log.info("-----------TRAINING %s FOR %d EPOCHS-----------",
+                 str(type(self.model)), self.n_epoch)
 
-            self.STOP = False
-            self.epoch_counter = 0
-            # reset any decay params
-            for decay_param in self.get_decay_params():
-                decay_param.reset()
+        self.STOP = False
+        self.epoch_counter = 0
+        # reset any decay params
+        for decay_param in self.get_decay_params():
+            decay_param.reset()
 
-            self.times = []
-            self.best_cost = numpy.inf
-            self.best_params = None
-            self.patience = 0
+        self.times = []
+        self.best_cost = numpy.inf
+        self.best_params = None
+        self.patience = 0
 
-            t = time.time()
+        t = time.time()
 
-            while not self.STOP:
-                try:
-                    self.STOP = self._perform_one_epoch(train_function, plot)
-                except KeyboardInterrupt:
-                    log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
-                    self.STOP = True
+        while not self.STOP:
+            try:
+                self.STOP = self._perform_one_epoch(f_learn, plot)
+            except KeyboardInterrupt:
+                log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
+                self.STOP = True
 
-            # save params
-            if self.best_params is not None:
-                log.debug("Restoring best model parameters...")
-                set_shared_values(self.params, self.best_params)
-            log.debug("Saving model parameters...")
-            self.model.save_params('trained_epoch_' + str(self.epoch_counter))
+        # save params
+        if self.best_params is not None:
+            log.debug("Restoring best model parameters...")
+            set_shared_values(self.params, self.best_params)
+        log.debug("Saving model parameters...")
+        self.model.save_params('trained_epoch_' + str(self.epoch_counter))
 
-            log.info("------------TRAIN TIME TOOK %s---------", make_time_units_string(time.time() - t))
-
-        log.info("------------TOTAL %s TRAIN TIME TOOK %s---------",
-                 str(type(self.model)), make_time_units_string(time.time() - start_time))
+        log.info("------------TRAIN TIME TOOK %s---------", make_time_units_string(time.time() - t))
 
     def _perform_one_epoch(self, f_learn, plot=None):
         """
