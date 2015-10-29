@@ -402,8 +402,8 @@ class Optimizer(object):
         train_costs = []
         train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
         train_data = [
-            minibatch(input, self.batch_size, self.min_batch_size)
-            for input in raise_to_list(self.dataset.train_inputs)
+            minibatch(input_data, self.batch_size, self.min_batch_size)
+            for input_data in raise_to_list(self.dataset.train_inputs)
             ]
         if self.dataset.train_targets is not None and not self.unsupervised:
             train_data += [

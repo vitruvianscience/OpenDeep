@@ -183,6 +183,13 @@ class Softmax(Dense):
 
     It is a special subclass of the Dense (a fully-connected layer),
     with the activation function forced to be 'softmax'
+
+    Attributes
+    ----------
+    p_y_given_x : theano expression
+        Theano expression for the probabilities of the class labels
+    y_pred : theano expression
+        Theano expression for the predicted class number (argmax of p_y_given_x)
     """
     def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/softmax',
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',

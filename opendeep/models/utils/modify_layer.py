@@ -27,7 +27,7 @@ class ModifyLayer(object):
         If all the switches from `self.get_switches()` have been turned off (False) or on (True). It will be
         None if we don't know the state of the switches.
     """
-    def __init__(self, inputs=None, outputs=None, **kwargs):
+    def __init__(self, inputs=None, outputs=None, function=None, **kwargs):
         """
         Parameters
         ----------
@@ -41,15 +41,22 @@ class ModifyLayer(object):
             [((None, 784), <TensorType(float32, matrix)>)].
         outputs : List of [int or shape tuple]
             The dimensionality of the output(s) for this model. Shape here is the shape monad described in `inputs`.
+        function : theano expression, optional
+            If you want to pass a custom Theano expression to run on the inputs, you can do that here. This is
+            mostly to enable a wrapper for processing data when adding layers to a :class:`opendeep.models.container`
+            object, such as a :class:`opendeep.models.Prototype`.
         """
         self._classname = self.__class__.__name__
         self.inputs = raise_to_list(inputs)
         self.output_size = raise_to_list(kwargs.get('output_size', outputs))
+        self.function = function
         self.args = {}
         self.args = add_kwargs_to_dict(kwargs.copy(), self.args)
         self.args['inputs'] = self.inputs
         if self.output_size is not None:
             self.args['output_size'] = self.output_size
+        if self.function is not None:
+            self.args['function'] = self.function
         # Don't know the position of switches!
         self.switches_on = None
 
@@ -64,7 +71,7 @@ class ModifyLayer(object):
         Theano variable or List(theano variable)
             Theano variables representing the input(s) to the layer's computation.
         """
-        return self.inputs
+        return [input[1] for input in self.inputs]
 
     def get_outputs(self):
         """
@@ -83,8 +90,12 @@ class ModifyLayer(object):
         NotImplementedError
             If the function hasn't been implemented for the specific model.
         """
-        log.critical("%s get_outputs method not implemented!", self._classname)
-        raise NotImplementedError("Please implement a get_outputs method for %s" % self._classname)
+        if self.function is not None:
+            ins = [input[1] for input in self.inputs]
+            return raise_to_list(self.function(*ins))
+        else:
+            log.critical("%s get_outputs method not implemented!", self._classname)
+            raise NotImplementedError("Please implement a get_outputs method for %s" % self._classname)
 
     def get_updates(self):
         """

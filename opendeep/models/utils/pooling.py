@@ -70,7 +70,7 @@ class Pool2D(ModifyLayer):
         super(Pool2D, self).__init__(inputs=inputs, size=size, stride=stride, pad=pad)
         if self.inputs is None:
             return
-        input_shape, input = self.inputs[0]
+        input_shape, self.input = self.inputs[0]
         if isinstance(size, int):
             size = (size, ) * 2
         if stride is None:
@@ -89,14 +89,14 @@ class Pool2D(ModifyLayer):
                                                 padding=pad))
 
         cudnn_modes = ['max', 'average_inc_pad', 'average_exc_pad']
-        if has_cudnn and mode in cudnn_modes and ignore_border and input.ndim == 4 and dnn_available():
-            self.output = dnn_pool(img=input,
+        if has_cudnn and mode in cudnn_modes and ignore_border and self.input.ndim == 4 and dnn_available():
+            self.output = dnn_pool(img=self.input,
                                    ws=size,
                                    stride=stride,
                                    mode=mode,
                                    pad=pad)
         else:
-            self.output = max_pool_2d(input=input,
+            self.output = max_pool_2d(input=self.input,
                                       ds=size,
                                       st=stride,
                                       padding=pad,
@@ -112,7 +112,7 @@ class Pool2D(ModifyLayer):
         Theano variable
             Theano variables representing the input to the layer's computation.
         """
-        return self.inputs
+        return self.input
 
     def get_outputs(self):
         """
