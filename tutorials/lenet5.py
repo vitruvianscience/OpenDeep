@@ -2,11 +2,11 @@
 Tutorial: Classifying Handwritten MNIST Images using a simple convolutional net (LeNet5)
 """
 import numpy as np
-from theano.tensor import tensor4, lvector, mean, neq, matrix, reshape
+from theano.tensor import tensor4, lvector, mean, neq
 from opendeep import config_root_logger
 from opendeep.data import ModifyStream
 from opendeep.models import Prototype, Conv2D, Dense, Softmax
-from opendeep.models.utils import Pool2D, ModifyLayer
+from opendeep.models.utils import Pool2D
 from opendeep.monitor import Monitor
 from opendeep.optimization.loss import Neg_LL
 from opendeep.optimization import SGD
@@ -20,18 +20,11 @@ def build_lenet():
     lenet = Prototype()
 
     # our input is going to be 4D tensor of images with shape (batch_size, 1, 28, 28)
-    x = tensor4('x')
-    lenet.add(
-        ModifyLayer(
-            inputs=[((None, 784), matrix('x'))],
-            outputs=(None, 1, 28, 28),
-            function=lambda img: reshape(img, (img.shape[0], 1, 28, 28), ndim=4)
-        )
-    )
+    x = ((None, 1, 28, 28), tensor4('x'))
 
     # our first convolutional layer
     lenet.add(
-        Conv2D, n_filters=20, filter_size=(5, 5)
+        Conv2D(inputs=x, n_filters=20, filter_size=(5, 5))
     )
     # our first pooling layer, automatically hooking inputs to the previous convolutional outputs
     lenet.add(
@@ -58,8 +51,7 @@ def build_lenet():
             activation='tanh'
         )
     )
-    # automatically hook a softmax classification layer, outputting the probabilities so that we can
-    # use negative log-likelihood.
+    # automatically hook a softmax classification layer, outputting the probabilities.
     lenet.add(
         Softmax, outputs=10, out_as_probs=True
     )
@@ -71,13 +63,13 @@ if __name__ == '__main__':
     # Grab the MNIST dataset
     data = MNIST(concat_train_valid=False)
 
-    # # we need to convert the (784,) flat example from MNIST to (1, 28, 28) for a 2D greyscale image
-    # process_mnist = lambda img: np.reshape(img, (1, 28, 28))
-    #
-    # # we can do this by using ModifyStreams over the inputs!
-    # data.train_inputs = ModifyStream(data.train_inputs, process_mnist)
-    # data.valid_inputs = ModifyStream(data.valid_inputs, process_mnist)
-    # data.test_inputs = ModifyStream(data.test_inputs, process_mnist)
+    # we need to convert the (784,) flat example from MNIST to (1, 28, 28) for a 2D greyscale image
+    process_mnist = lambda img: np.reshape(img, (1, 28, 28))
+
+    # we can do this by using ModifyStreams over the inputs!
+    data.train_inputs = ModifyStream(data.train_inputs, process_mnist)
+    data.valid_inputs = ModifyStream(data.valid_inputs, process_mnist)
+    data.test_inputs = ModifyStream(data.test_inputs, process_mnist)
 
     # now build the actual model
     lenet = build_lenet()
