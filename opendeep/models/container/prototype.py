@@ -102,12 +102,13 @@ class Prototype(Model):
         """
         if isclass(layer):
             if len(self.models) > 0:
-                # get the previous layer output size and expression
-                previous_out_sizes = raise_to_list(self.models[-1].output_size)
-                previous_outs      = raise_to_list(self.models[-1].get_outputs())
-                # create the inputs from the previous outputs
-                current_inputs = zip(previous_out_sizes, previous_outs)
-                kwargs['inputs'] = current_inputs
+                if not kwargs.get('inputs', False) and not kwargs.get('hiddens', False):
+                    # get the previous layer output size and expression
+                    previous_out_sizes = raise_to_list(self.models[-1].output_size)
+                    previous_outs      = raise_to_list(self.models[-1].get_outputs())
+                    # create the inputs from the previous outputs
+                    current_inputs = zip(previous_out_sizes, previous_outs)
+                    kwargs['inputs'] = current_inputs
                 layer = layer(**kwargs)
 
         # we want to be able to add multiple layers at a time (in a list), so using extend.
