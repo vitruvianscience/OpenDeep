@@ -14,37 +14,37 @@ from opendeep.data import MNIST
 # grab a log to output useful info
 config_root_logger()
 
-def process_mnist(input_image):
-    return np.reshape(input_image, (1, 28, 28))
-
 def build_lenet():
+    # quick and dirty way to create a model from arbitrary layers
     lenet = Prototype()
 
+    # our input is going to be 4D tensor of images with shape (batch_size, 1, 28, 28)
     x = tensor4('x')
-    # Reshape matrix of rasterized images of shape (batch_size, 28 * 28)
-    # to a 4D tensor
-    # (28, 28) is the size of MNIST images.
-    # layer0_input = x.reshape((x.shape[0], 1, 28, 28))
-
+    # our first convolutional layer
     lenet.add(
         Conv2D(
             inputs=[((None, 1, 28, 28), x)],
             n_filters=20, filter_size=(5, 5)
         )
     )
+    # our first pooling layer, automatically hooking inputs to the previous convolutional outputs
     lenet.add(
         Pool2D, size=(2, 2)
     )
+    # our second convolutional layer
     lenet.add(
         Conv2D, n_filters=50, filter_size=(5, 5)
     )
+    # our second pooling layer
     lenet.add(
         Pool2D, size=(2, 2)
     )
 
+    # now we need to flatten the 4D convolution outputs into 2D matrix (just flatten the trailing dimensions)
     dense_input = lenet.models[-1].get_outputs().flatten(2)
+    # redefine the size appropriately for flattening (since we are doing a Theano modification)
     dense_input_shape = (None, np.prod(lenet.models[-1].output_size[1:]))
-
+    # pass this flattened matrix as the input to a Dense layer!
     lenet.add(
         Dense(
             inputs=[(dense_input_shape, dense_input)],
@@ -52,6 +52,8 @@ def build_lenet():
             activation='tanh'
         )
     )
+    # automatically hook a softmax classification layer, outputting the probabilities so that we can
+    # use negative log-likelihood.
     lenet.add(
         Softmax, outputs=10, out_as_probs=True
     )
@@ -60,13 +62,22 @@ def build_lenet():
 
 
 if __name__ == '__main__':
-    lenet = build_lenet()
+    # Grab the MNIST dataset
     data = MNIST(concat_train_valid=True)
+    # we need to convert the (1, 784) flat example from MNIST to (1, 28, 28) for a 2D image
+    def process_mnist(x):
+        np.reshape(x, (1, 28, 28))
+    # we can do this by using ModifyStreams over the inputs!
     data.train_inputs = ModifyStream(data.train_inputs, process_mnist)
     data.valid_inputs = ModifyStream(data.valid_inputs, process_mnist)
     data.test_inputs = ModifyStream(data.test_inputs, process_mnist)
+    # now build the actual model
+    lenet = build_lenet()
+    # define our loss to optimize for the model (and the target variable)
+    # targets from MNIST are int64 numbers 0-9
     y = lvector('y')
     loss = Neg_LL(inputs=lenet.get_outputs(), targets=y, one_hot=False)
+    # optimize our model to minimize loss given the dataset using SGD
     optimizer = SGD(model=lenet,
                     dataset=data,
                     loss=loss,

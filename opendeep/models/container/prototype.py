@@ -102,7 +102,7 @@ class Prototype(Model):
         """
         if isclass(layer):
             if len(self.models) > 0:
-                if not kwargs.get('inputs', False) and not kwargs.get('hiddens', False):
+                if not kwargs.get('inputs', False):
                     # get the previous layer output size and expression
                     previous_out_sizes = raise_to_list(self.models[-1].output_size)
                     previous_outs      = raise_to_list(self.models[-1].get_outputs())

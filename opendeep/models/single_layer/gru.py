@@ -29,15 +29,13 @@ class GRU(Model):
     Junyoung Chung, Caglar Gulcehre, Kyunghyun Cho, Yoshua Bengio
     http://arxiv.org/pdf/1502.02367v3.pdf
     """
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/gru/',
-                 input_size=None, hidden_size=None, output_size=None,
+    def __init__(self, inputs=None, hiddens=None, outputs=None, params=None, outdir='outputs/gru/',
                  activation='sigmoid', hidden_activation='relu', inner_hidden_activation='sigmoid',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0.0,
                  r_weights_init='identity', r_weights_interval='montreal', r_weights_mean=0, r_weights_std=5e-3,
                  r_bias_init=0.0,
-                 cost_function='mse', cost_args=None,
                  noise='dropout', noise_level=None, noise_decay=False, noise_decay_amount=.99,
                  forward=True,
                  clip_recurrent_grads=False):
@@ -46,26 +44,26 @@ class GRU(Model):
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
-            newly supervised classification model). For now, it needs to include the shape information (normally the
-            dimensionality of the input i.e. n_in).
-        hiddens_hook : Tuple of (shape, variable)
+        inputs : List of [tuple(shape, `Theano.TensorType`)]
+            The dimensionality of the inputs for this model, and the routing information for the model
+            to accept inputs from elsewhere. `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. The length of `shape` should be equal to number of
+            dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
+            dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
+            but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
+            [((None, 784), <TensorType(float32, matrix)>)].
+        hiddens : Tuple of (shape, variable)
             Routing information for the model to accept its hidden representation from elsewhere. For recurrent nets,
             this will be the initial starting value for hidden layers.
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
+        outputs : int
+            The dimensionality of the output for this model.
+        params : Dict(string_name: theano SharedVariable), optional
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
-            have two versions of the model that use the same parameters.
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The location to produce outputs from training or running the :class:`RNN`. If None, nothing will be saved.
-        input_size : int
-            The size (dimensionality) of the input. If shape is provided in `inputs_hook`, this is optional.
-        hidden_size : int
-            The size (dimensionality) of the hidden layers. If shape is provided in `hiddens_hook`, this is optional.
-        output_size : int
-            The size (dimensionality) of the output.
         activation : str or callable
             The nonlinear (or linear) activation to perform after the dot product from hiddens -> output layer.
             This activation function should be appropriate for the output unit types, i.e. 'sigmoid' for binary.
@@ -102,11 +100,6 @@ class GRU(Model):
             If Gaussian `r_weights_init`, the standard deviation to use.
         r_bias_init : float
             The initial value to use for the recurrent bias parameter. Most often, the default of 0.0 is preferred.
-        cost_function : str or callable
-            The function to use when calculating the output cost of the model.
-            See opendeep.utils.cost for options. You can also specify your own function, which needs to be callable.
-        cost_args : dict
-            Any additional named keyword arguments to pass to the specified `cost_function`.
         noise : str
             What type of noise to use for the hidden layers and outputs. See opendeep.utils.noise
             for options. This should be appropriate for the unit activation, i.e. Gaussian for tanh or other
@@ -137,7 +130,6 @@ class GRU(Model):
         ##################
         # specifications #
         ##################
-
         #########################################
         # activation, cost, and noise functions #
         #########################################
@@ -147,10 +139,6 @@ class GRU(Model):
 
         # output activation function!
         activation_func = get_activation_function(activation)
-
-        # Cost function
-        cost_function = get_cost_function(cost_function)
-        cost_args = cost_args or dict()
 
         # Now deal with noise if we added it:
         if noise:
@@ -197,11 +185,32 @@ class GRU(Model):
             else:
                 raise NotImplementedError("Recurrent input with %d dimensions not supported!" % self.input.ndim)
             xs = self.input
+
+        ##########
+        # inputs #
+        ##########
+        # inputs are expected to have the shape (n_timesteps, batch_size, data)
+        if len(self.inputs) > 1:
+            raise NotImplementedError("Expected 1 input, found %d. Please merge inputs before passing "
+                                      "to the model!" % len(self.inputs))
+        # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
+        input_shape, self.input = self.inputs[0]
+        if isinstance(input_shape, int):
+            self.input_size = ((None, ) * (self.input.ndim-1)) + (input_shape, )
         else:
-            # Assume input coming from optimizer is (batches, timesteps, data)
-            # so, we need to reshape to (timesteps, batches, data)
-            self.input = T.tensor3("Xs")
-            xs = self.input.dimshuffle(1, 0, 2)
+            self.input_size = input_shape
+        assert self.input_size is not None, "Need to specify the shape for the last dimension of the input!"
+
+        ###########
+        # hiddens #
+        ###########
+        # We also only have 1 output
+        assert self.output_size is not None, "Need to specify outputs size!"
+        out_size = self.output_size[0]
+        if isinstance(out_size, int):
+            self.output_size = self.input_size[:-1] + (out_size,)
+        else:
+            self.output_size = out_size
 
         # The target outputs for supervised training - in the form of (batches, timesteps, output) which is
         # the same dimension ordering as the expected input from optimizer.
@@ -325,9 +334,6 @@ class GRU(Model):
             T.dot(self.hiddens, W_h_y) + b_y
         )
 
-        # now to define the cost of the model - use the cost function to compare our output with the target value.
-        self.cost = cost_function(output=self.output, target=ys, **cost_args)
-
         log.info("Initialized a GRU!")
 
     def recurrent_step(self, x_z_t, x_r_t, x_h_t, h_tm1, U_h_z, U_h_r, U_h_h):
@@ -362,18 +368,8 @@ class GRU(Model):
     def get_outputs(self):
         return self.output
 
-    def get_targets(self):
-        return [self.target]
-
-    def get_train_cost(self):
-        return self.cost
-
     def get_updates(self):
         return self.updates
-
-    def get_monitors(self):
-        # TODO: calculate monitors we might care about.
-        return []
 
     def get_decay_params(self):
         if hasattr(self, 'noise_schedule'):
