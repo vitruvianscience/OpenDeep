@@ -6,5 +6,4 @@ from .optimizer import *
 from .rmsprop import RMSProp
 from .stochastic_gradient_descent import SGD
 
-from . import log_likelihood as ll
 from . import loss

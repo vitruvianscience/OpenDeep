@@ -5,11 +5,13 @@ for experimentation, and then later you should make your creation into a new :cl
 """
 # standard libraries
 import logging
+from inspect import isclass
 # third party libraries
 from theano.compat.python2x import OrderedDict
-from theano.tensor import TensorVariable
+from theano.tensor import TensorType
 # internal references
 from opendeep.models.model import Model
+from opendeep.models.utils import ModifyLayer
 from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
@@ -68,59 +70,53 @@ class Prototype(Model):
         for model in self.models:
             yield model
 
-    def add(self, model):
+    def add(self, layer, **kwargs):
         """
         This adds a :class:`Model` (or list of models) to the sequence that the :class:`Prototype` holds.
+        Also handles :class:`ModifyLayer`s.
 
         By default, we want single models added sequentially to use the outputs of the previous model as its
         `inputs` (if no `inputs` was defined by the user).
 
         Examples
         --------
-        Here is the sequential creation of an MLP (no `inputs_hook` have to be defined, `add()` takes care
+        Here is the sequential creation of an MLP (no `inputs` have to be defined, `add()` takes care
         of it automatically::
 
             from opendeep.models.container import Prototype
-            from opendeep.models.single_layer.basic import Dense, SoftmaxLayer
+            from opendeep.models.single_layer.basic import Dense, Softmax
             mlp = Prototype()
-            mlp.add(Dense(input_size=28*28, output_size=1000, activation='relu', noise='dropout', noise_level=0.5))
-            mlp.add(Dense(output_size=512, activation='relu', noise='dropout', noise_level=0.5))
-            mlp.add(SoftmaxLayer(output_size=10))
+            mlp.add(Dense(inputs=(28*28, theano.tensor.matrix('x')), outputs=1000, activation='relu', noise='dropout', noise_level=0.5))
+            mlp.add(Dense, outputs=512, activation='relu', noise='dropout', noise_level=0.5)
+            mlp.add(Softmax, outputs=10)
 
         Parameters
         ----------
-        model : :class:`Model` or list(:class:`Model`)
-            The model (or list of models) to add to the Prototype. In the case of a single model with no `inputs`,
-            the Prototype will configure the `inputs` to take the previous model's output from `get_outputs()`.
+        layer : :class:`Model` or list(:class:`Model`) or :class:`ModifyLayer` or list(:class:`ModifyLayer`) or
+        type(:class:`Model`) or type(:class:`ModifyLayer`)
+            The model (or list of models) to add to the Prototype as the next layer(s). If you want the inputs to
+            be automatically updated with the outputs of the previous layer, specify the uninstantiated class type
+            as the `layer` argument, and then the respective parameters as `kwargs` to instantiate the
+            class (except for the `inputs` parameter). It will automatically route the `inputs` parameter when
+            initializing the class to the `get_outputs()` method from the previous layer.
         """
-        # check if model is a single model (not a list of models)
-        if isinstance(model, Model):
-            # if there is a previous layer added (more than one model in the Prototype)
+        if isclass(layer):
             if len(self.models) > 0:
-                # check if inputs (and hiddens) wasn't already defined by the user - basically a blank slate
-                if model.inputs is None and model.hiddens is None:
-                    log.info('Overriding model %s with new inputs from previous layer!', model._classname)
-                    # get the previous layer output size and expression
-                    previous_out_sizes = raise_to_list(self.models[-1].output_size)
-                    previous_outs      = raise_to_list(self.models[-1].get_outputs())
-                    # create the inputs from the previous outputs
-                    current_inputs = zip(previous_out_sizes, previous_outs)
-                    # grab the current model class
-                    model_class = type(model)
-                    # make the model a new instance of the current model (same arguments) except new inputs_hook
-                    model_args = model.args.copy()
-                    model_args['inputs'] = current_inputs
-                    new_model = model_class(**model_args)
-                    # clean up allocated variables from old model
-                    for param in model.get_params().values():
-                        del param
-                    del model
-                    model = new_model
+                # get the previous layer output size and expression
+                previous_out_sizes = raise_to_list(self.models[-1].output_size)
+                previous_outs      = raise_to_list(self.models[-1].get_outputs())
+                # create the inputs from the previous outputs
+                current_inputs = zip(previous_out_sizes, previous_outs)
+                kwargs['inputs'] = current_inputs
+                layer = layer(**kwargs)
 
         # we want to be able to add multiple layers at a time (in a list), so using extend.
-        # make sure the model is a list
-        model = raise_to_list(model)
-        self.models.extend(model)
+        # make sure the model or modifylayer is in a list
+        layers = raise_to_list(layer)
+        for l in layers:
+            assert isinstance(l, Model) or isinstance(l, ModifyLayer), \
+                "Expected layer input to be Model or ModifyLayer, found %s" % str(type(l))
+        self.models.extend(layers)
 
     def get_inputs(self):
         """
@@ -135,21 +131,23 @@ class Prototype(Model):
         Returns
         -------
         List(tensor)
-            Theano variables representing the input(s) to the computation graph.
+            Theano variables representing the input(s) to the computation graph. They will be a list in the
+            order of inputs presented per model, for each model in the layers. e.g.
         """
         inputs = []
         for model in self.models:
             # grab the inputs list from the model
             model_inputs = raise_to_list(model.get_inputs())
             # go through each and find the ones that are tensors in their basic input form (i.e. don't have an owner)
-            for input in model_inputs:
-                # if it is a tensor
-                if isinstance(input, TensorVariable):
-                    # if it doesn't have an owner
-                    if hasattr(input, 'owner') and input.owner is None:
-                        # add it to the running inputs list
-                        input = raise_to_list(input)
-                        inputs.extend(input)
+            for model_input in model_inputs:
+                # find the base input tensors (from people initializing matrix(), tensor3(), etc.) given to the model
+                owner = getattr(model_input, 'owner', False)
+                has_data = hasattr(model_input, 'data')
+                is_tensor = isinstance(getattr(model_input, 'type', None), TensorType)
+                if owner is None and not has_data and is_tensor:
+                    # add it to the running list of inputs if it doesn't already exist
+                    if model_input not in inputs:
+                        inputs.append(model_input)
         return inputs
 
     def get_outputs(self):
@@ -191,8 +189,8 @@ class Prototype(Model):
         """
         # Return the updates going through each model in the list:
         updates = None
-        for model in self.models:
-            current_updates = model.get_updates()
+        for layer in self.models:
+            current_updates = layer.get_updates()
             # if updates exist already and the current model in the list has updates, update accordingly!
             if updates and current_updates:
                 updates.update(current_updates)
@@ -215,8 +213,8 @@ class Prototype(Model):
         """
         # Return the decay params going through each model in the list:
         decay_params = []
-        for model in self.models:
-            decay_params.extend(model.get_decay_params())
+        for layer in self.models:
+            decay_params.extend(layer.get_decay_params())
         return decay_params
 
     def get_lr_scalers(self):
@@ -236,7 +234,8 @@ class Prototype(Model):
         # Return the lr scalers going through each model in the list
         lr_scalers = {}
         for model in self.models:
-            lr_scalers.update(model.get_lr_scalers())
+            if isinstance(model, Model):
+                lr_scalers.update(model.get_lr_scalers())
         return lr_scalers
 
     def get_switches(self):
@@ -252,8 +251,8 @@ class Prototype(Model):
         """
         # Return the noise switches going through each model in the list
         noise_switches = []
-        for model in self.models:
-            noise_switches.extend(raise_to_list(model.get_switches()))
+        for layer in self.models:
+            noise_switches.extend(raise_to_list(layer.get_switches()))
         return noise_switches
 
     def get_params(self):
@@ -270,11 +269,14 @@ class Prototype(Model):
             These are the parameters to be trained.
         """
         params = OrderedDict()
-        for model_index, model in enumerate(self.models):
-            model_params = model.get_params()
-            # append the parameters only if they aren't already in the list!
-            for name, param in model_params.items():
-                if param not in list(params.values()):
-                    name = model._classname + '_%d_' % model_index + name
-                    params[name] = param
+        model_index = 0
+        for model in self.models:
+            if isinstance(model, Model):
+                model_params = model.get_params()
+                # append the parameters only if they aren't already in the list!
+                for name, param in model_params.items():
+                    if param not in list(params.values()):
+                        name = model._classname + '_%d_' % model_index + name
+                        params[name] = param
+                model_index += 1
         return params

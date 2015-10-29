@@ -81,6 +81,8 @@ class Dense(Model):
         initial_parameters = locals().copy()
         initial_parameters.pop('self')
         super(Dense, self).__init__(**initial_parameters)
+        if self.inputs is None:
+            return
 
         ##################
         # specifications #
@@ -91,13 +93,18 @@ class Dense(Model):
         # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
         input_shape, self.input = self.inputs[0]
         if isinstance(input_shape, int):
-            self.input_size = input_shape
+            self.input_size = ((None, ) * (self.input.ndim-1)) + (input_shape, )
         else:
-            self.input_size = input_shape[-1]
+            self.input_size = input_shape
         assert self.input_size is not None, "Need to specify the shape for the last dimension of the input!"
 
         # We also only have 1 output
-        self.output_size = self.output_size[0]
+        assert self.output_size is not None, "Need to specify outputs size!"
+        out_size = self.output_size[0]
+        if isinstance(out_size, int):
+            self.output_size = self.input_size[:-1] + (out_size,)
+        else:
+            self.output_size = out_size
 
         # activation function!
         activation_func = get_activation_function(activation)
@@ -108,7 +115,7 @@ class Dense(Model):
         W = self.params.get(
             "W",
             get_weights(weights_init=weights_init,
-                        shape=(self.input_size, self.output_size),
+                        shape=(self.input_size[-1], self.output_size[-1]),
                         name="W",
                         rng=mrg,
                         # if gaussian
@@ -120,7 +127,7 @@ class Dense(Model):
 
         b = self.params.get(
             "b",
-            get_bias(shape=self.output_size, name="b", init_values=bias_init)
+            get_bias(shape=self.output_size[-1], name="b", init_values=bias_init)
         )
 
         # Finally have the two parameters - weights matrix W and bias vector b. That is all!
@@ -150,7 +157,7 @@ class Dense(Model):
                                    self.output)
 
         log.debug("Initialized a basic fully-connected layer with shape %s and activation: %s",
-                  str((self.input_size, self.output_size)), str(activation))
+                  str((self.input_size[-1], self.output_size[-1])), str(activation))
 
     def get_inputs(self):
         return self.input
@@ -180,7 +187,8 @@ class Softmax(Dense):
     def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/softmax',
                  weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
                  bias_init=0.0,
-                 out_as_probs=False):
+                 out_as_probs=True,
+                 **kwargs):
         """
         Initialize a Softmax layer.
 
@@ -231,7 +239,10 @@ class Softmax(Dense):
                                       weights_interval=weights_interval,
                                       bias_init=bias_init,
                                       out_as_probs=out_as_probs,
-                                      noise=False)
+                                      noise=False,
+                                      **kwargs)
+        if self.inputs is None:
+            return
         # the outputs of the layer are the probabilities of being in a given class
         self.p_y_given_x = super(Softmax, self).get_outputs()
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)

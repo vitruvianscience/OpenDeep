@@ -147,7 +147,8 @@ class Model(object):
 
         self.args['inputs'] = self.inputs
         self.args['hiddens'] = self.hiddens
-        self.args['output_size'] = self.output_size
+        if self.output_size is not None:
+            self.args['output_size'] = self.output_size
         self.args['params'] = self.params
         self.args['outdir'] = self.outdir
 

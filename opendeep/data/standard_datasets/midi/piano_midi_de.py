@@ -7,7 +7,7 @@ Pre-processed from here: http://www-etud.iro.umontreal.ca/~boulanni/icml2012
 import logging
 # third party
 import numpy
-import theano.config as config
+from theano import config
 # internal imports
 from opendeep.utils.file_ops import find_files
 from opendeep.data.dataset_file import FileDataset

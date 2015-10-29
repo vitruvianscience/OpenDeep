@@ -56,9 +56,10 @@ class Neg_LL(Loss):
         # i.e. the mean log-likelihood across the minibatch.
         if self.args.get('one_hot'):
             # if one_hot, labels y act as a mask over p_y_given_x
-            assert y.ndim == p_y_given_x.ndim
+            assert y.ndim == p_y_given_x.ndim, "Need to have target same dimensions as model output, found %d and %d" \
+                % (y.ndim, p_y_given_x.ndim)
             return -mean(Tlog(p_y_given_x) * y)
         else:
-            assert p_y_given_x.ndim == 2
+            assert p_y_given_x.ndim == 2, "Need to have 2D model output, found %d" % p_y_given_x.ndim
             assert y.ndim == 1
             return -mean(Tlog(p_y_given_x)[arange(y.shape[0]), y])

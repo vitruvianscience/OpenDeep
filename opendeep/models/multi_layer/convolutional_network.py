@@ -17,7 +17,7 @@ from theano.compat.python2x import OrderedDict
 # internal references
 from opendeep.utils.constructors import function
 from opendeep.models.model import Model
-from opendeep.models.single_layer.convolutional import ConvPoolLayer
+from opendeep.models.single_layer.convolutional import Conv2D
 from opendeep.models.single_layer.basic import Dense, Softmax
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import mirror_images
@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 # Some convolution operations only work on the GPU, so do a check here:
 if not theano.config.device.startswith('gpu'):
-    log.warning("You should reeeeeaaaally consider using a GPU, unless this is a small toy algorithm for fun. "
+    log.warning("You should consider using a GPU, unless this is a small toy algorithm for fun. "
                 "Please enable the GPU in Theano via these instructions: "
                 "http://deeplearning.net/software/theano/tutorial/using_gpu.html")
 
@@ -122,7 +122,7 @@ class AlexNet(Model):
 
         # Start with 5 convolutional pooling layers
         log.debug("convpool layer 1...")
-        convpool_layer1 = ConvPoolLayer(inputs_hook=((self.batch_size, 3, 227, 227), layer_1_input),
+        convpool_layer1 = ConvPool(inputs_hook=((self.batch_size, 3, 227, 227), layer_1_input),
                                         filter_shape=(96, 3, 11, 11),
                                         convstride=4,
                                         padsize=0,
@@ -135,7 +135,7 @@ class AlexNet(Model):
         self.params += convpool_layer1.get_params()
 
         log.debug("convpool layer 2...")
-        convpool_layer2 = ConvPoolLayer(inputs_hook=((self.batch_size, 96, 27, 27, ), convpool_layer1.get_outputs()),
+        convpool_layer2 = ConvPool(inputs_hook=((self.batch_size, 96, 27, 27, ), convpool_layer1.get_outputs()),
                                         filter_shape=(256, 96, 5, 5),
                                         convstride=1,
                                         padsize=2,
@@ -148,7 +148,7 @@ class AlexNet(Model):
         self.params += convpool_layer2.get_params()
 
         log.debug("convpool layer 3...")
-        convpool_layer3 = ConvPoolLayer(inputs_hook=((self.batch_size, 256, 13, 13), convpool_layer2.get_outputs()),
+        convpool_layer3 = ConvPool(inputs_hook=((self.batch_size, 256, 13, 13), convpool_layer2.get_outputs()),
                                         filter_shape=(384, 256, 3, 3),
                                         convstride=1,
                                         padsize=1,
@@ -161,7 +161,7 @@ class AlexNet(Model):
         self.params += convpool_layer3.get_params()
 
         log.debug("convpool layer 4...")
-        convpool_layer4 = ConvPoolLayer(inputs_hook=((self.batch_size, 384, 13, 13), convpool_layer3.get_outputs()),
+        convpool_layer4 = ConvPool(inputs_hook=((self.batch_size, 384, 13, 13), convpool_layer3.get_outputs()),
                                         filter_shape=(384, 384, 3, 3),
                                         convstride=1,
                                         padsize=1,
@@ -174,7 +174,7 @@ class AlexNet(Model):
         self.params += convpool_layer4.get_params()
 
         log.debug("convpool layer 5...")
-        convpool_layer5 = ConvPoolLayer(inputs_hook=((self.batch_size, 384, 13, 13), convpool_layer4.get_outputs()),
+        convpool_layer5 = ConvPool(inputs_hook=((self.batch_size, 384, 13, 13), convpool_layer4.get_outputs()),
                                         filter_shape=(256, 384, 3, 3),
                                         convstride=1,
                                         padsize=1,
