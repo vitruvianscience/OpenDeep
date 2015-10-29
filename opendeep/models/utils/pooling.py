@@ -11,6 +11,7 @@ from opendeep.models.utils import ModifyLayer
 has_cudnn = True
 try:
     from theano.sandbox.cuda.dnn import dnn_pool, dnn_available
+    has_cudnn = dnn_available()
 except ImportError as e:
     has_cudnn = False
 
@@ -89,7 +90,7 @@ class Pool2D(ModifyLayer):
                                                 padding=pad))
 
         cudnn_modes = ['max', 'average_inc_pad', 'average_exc_pad']
-        if has_cudnn and mode in cudnn_modes and ignore_border and self.input.ndim == 4 and dnn_available():
+        if has_cudnn and mode in cudnn_modes and ignore_border and self.input.ndim == 4:
             self.output = dnn_pool(img=self.input,
                                    ws=size,
                                    stride=stride,
