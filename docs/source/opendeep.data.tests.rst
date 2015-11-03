@@ -20,6 +20,14 @@ opendeep.data.tests.test_cifar10 module
     :undoc-members:
     :show-inheritance:
 
+opendeep.data.tests.test_dataset module
+---------------------------------------
+
+.. automodule:: opendeep.data.tests.test_dataset
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.data.tests.test_memory module
 --------------------------------------
 

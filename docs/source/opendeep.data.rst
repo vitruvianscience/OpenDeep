@@ -29,10 +29,26 @@ opendeep.data.dataset_file module
     :undoc-members:
     :show-inheritance:
 
+opendeep.data.dataset_image module
+----------------------------------
+
+.. automodule:: opendeep.data.dataset_image
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.data.dataset_memory module
 -----------------------------------
 
 .. automodule:: opendeep.data.dataset_memory
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.data.text module
+-------------------------
+
+.. automodule:: opendeep.data.text
     :members:
     :undoc-members:
     :show-inheritance:

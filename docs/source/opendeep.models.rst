@@ -6,20 +6,14 @@ Subpackages
 
 .. toctree::
 
+    opendeep.models.container
     opendeep.models.multi_layer
     opendeep.models.single_layer
     opendeep.models.tests
+    opendeep.models.utils
 
 Submodules
 ----------
-
-opendeep.models.container module
---------------------------------
-
-.. automodule:: opendeep.models.container
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 opendeep.models.model module
 ----------------------------

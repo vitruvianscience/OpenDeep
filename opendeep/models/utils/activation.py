@@ -28,8 +28,6 @@ class Activation(ModifyLayer):
             representing an option from `opendeep.utils.activation`, or your own function as long as it is callable.
         """
         super(Activation, self).__init__(inputs=inputs, outputs=inputs[0], activation=activation)
-        if self.inputs is None:
-            return
         # self.inputs is a list from superclass initialization, grab the first element
         self.inputs = self.inputs[0][1]
         # activation function!

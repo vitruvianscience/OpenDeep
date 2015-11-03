@@ -6,7 +6,7 @@ Subpackages
 
 .. toctree::
 
-    opendeep.optimization.log_likelihood
+    opendeep.optimization.loss
 
 Submodules
 ----------

@@ -51,6 +51,14 @@ opendeep.models.single_layer.lstm module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.single_layer.recurrent_hidden module
+----------------------------------------------------
+
+.. automodule:: opendeep.models.single_layer.recurrent_hidden
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.single_layer.restricted_boltzmann_machine module
 ----------------------------------------------------------------
 

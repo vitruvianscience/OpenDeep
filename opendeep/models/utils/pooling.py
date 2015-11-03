@@ -69,8 +69,6 @@ class Pool2D(ModifyLayer):
             will generate a (2,2) output. (3,3) otherwise.
         """
         super(Pool2D, self).__init__(inputs=inputs, size=size, stride=stride, pad=pad)
-        if self.inputs is None:
-            return
         input_shape, self.input = self.inputs[0]
         if isinstance(size, int):
             size = (size, ) * 2

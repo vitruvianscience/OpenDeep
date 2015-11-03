@@ -52,14 +52,6 @@ opendeep.utils.conv1d_implementations module
     :undoc-members:
     :show-inheritance:
 
-opendeep.utils.cost module
---------------------------
-
-.. automodule:: opendeep.utils.cost
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 opendeep.utils.decay module
 ---------------------------
 
