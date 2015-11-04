@@ -32,7 +32,8 @@ class TextDataset(FileDataset):
                  vocab=None, label_vocab=None, unk_token="<UNK>", level="char", target_n_future=None,
                  sequence_length=False):
         """
-        Initialize a text-based dataset.
+        Initialize a text-based dataset. It will output one-hot vector encodings for the appropriate level (word,
+        char, line).
 
         Parameters
         ----------
@@ -100,7 +101,8 @@ class TextDataset(FileDataset):
         self.sequence_len = sequence_length
 
         # modify our file stream's processors to work with the appropriate level!
-        # if target_n_future is not none, we are assuming that this is a language model and that we should tokenize the target
+        # if target_n_future is not none, we are assuming that this is a language model and that we
+        # should tokenize the target
         if target_n_future is not None:
             targets_preprocess = compose(tokenize, inputs_preprocess)
         inputs_preprocess = compose(tokenize, inputs_preprocess)
@@ -143,7 +145,8 @@ class TextDataset(FileDataset):
                 self.valid_inputs = self._subsequence(self.valid_inputs)
 
         # Now deal with possible output streams (either tokenizing it using the supplied label dictionary,
-        # creating the label dictionary, or using the vocab dictionary if it is a language model (target_n_future is not none)
+        # creating the label dictionary, or using the vocab dictionary if it is a language model
+        # (target_n_future is not none)
         if self.train_targets is not None and target_n_future is None:
             vocab_inputs = [self.train_targets] + (self.valid_targets or [])
             self.label_vocab = label_vocab or \

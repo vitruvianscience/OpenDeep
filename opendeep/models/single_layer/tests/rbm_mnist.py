@@ -27,22 +27,21 @@ if __name__ == '__main__':
     rng = numpy.random.RandomState(1234)
     mrg = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(2**30))
     config_args = {
-        'input_size': 28*28,
-        'hidden_size': 500,
+        'inputs': (28*28, theano.tensor.matrix('x')),
+        'hiddens': 500,
         'k': 15,
         'weights_init': 'uniform',
         'weights_interval': 4*numpy.sqrt(6./28*28+500),
         'mrg': mrg
     }
     rbm = RBM(**config_args)
-    # rbm.load_params('rbm_trained.pkl')
+    # rbm.load_params('outputs/rbm/trained_epoch_15.pkl')
 
     optimizer = Optimizer(learning_rate=0.1, model=rbm, dataset=mnist, batch_size=20, epochs=15)
 
-    ll = Monitor('pseudo-log', rbm.get_monitors()['pseudo-log'])
 
     # perform training!
-    optimizer.train(monitor_channels=ll)
+    optimizer.train()
     # test it on some images!
     test_data = mnist.test_inputs[:25]
     # use the run function!
@@ -75,7 +74,7 @@ if __name__ == '__main__':
         tile_raster_images(
             X=rbm.W.get_value(borrow=True).T,
             img_shape=(28, 28),
-            tile_shape=closest_to_square_factors(config_args['hidden_size']),
+            tile_shape=closest_to_square_factors(config_args['hiddens']),
             tile_spacing=(1, 1)
         )
     )

@@ -142,12 +142,12 @@ def get_weights_uniform(shape, interval='montreal', name="W", rng=None, gain=1.)
             raise NotImplementedError('Could not find uniform interval formula %s, try one of %s instead.' %
                                       (str(interval), str(_uniform_interval.keys())))
         else:
-            log.debug("Creating weights with shape %s from Uniform distribution with formula name: %s",
-                      str(shape), str(interval))
+            log.debug("Creating weights %s with shape %s from Uniform distribution with formula name: %s",
+                      name, str(shape), str(interval))
             interval = interval_func(shape)
     else:
-        log.debug("Creating weights with shape %s from Uniform distribution with given interval +- %s",
-                  str(shape), str(interval))
+        log.debug("Creating weights %s with shape %s from Uniform distribution with given interval +- %s",
+                  name, str(shape), str(interval))
     # build the uniform weights tensor
     val = as_floatX(rng.uniform(low=-interval, high=interval, size=shape))
     # check if a theano rng was used
@@ -189,7 +189,7 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None, gain=1.
     mean = mean or default_mean
     std = std or default_std
 
-    log.debug("Creating weights with shape %s from Gaussian mean=%s, std=%s", str(shape), str(mean), str(std))
+    log.debug("Creating weights %s with shape %s from Gaussian mean=%s, std=%s", name, str(shape), str(mean), str(std))
     if rng is None:
         rng = numpy.random
 
@@ -233,6 +233,7 @@ def get_weights_identity(shape, name="W", add_noise=None, gain=1.):
     shared variable
         The theano shared variable identity matrix with given shape.
     """
+    log.debug("Creating Identity matrix weights %s with shape %s", name, str(shape))
     weights = numpy.eye(N=shape[0], M=int(numpy.prod(shape[1:])), k=0, dtype=theano.config.floatX)
 
     if add_noise:
@@ -272,6 +273,7 @@ def get_weights_orthogonal(shape, name="W", rng=None, gain=1.):
     shared variable
         The theano shared variable orthogonal matrix with given shape.
     """
+    log.debug("Creating Orthogonal matrix weights %s with shape %s", name, str(shape))
     if rng is None:
         rng = numpy.random
 
@@ -318,7 +320,7 @@ def get_bias(shape, name="b", init_values=None):
 
     init_values = init_values or default_init
 
-    log.debug("Initializing bias variable with shape %s" % str(shape))
+    log.debug("Initializing bias %s variable with shape %s", name, str(shape))
     # init to zeros plus the offset
     val = as_floatX(numpy.ones(shape=shape, dtype=theano.config.floatX) * init_values)
     return sharedX(value=val, name=name)

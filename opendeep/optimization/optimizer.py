@@ -53,7 +53,7 @@ class Optimizer(object):
     training a model on a dataset using an online stochastic process. The base framework for performing
     stochastic gradient descent.
     """
-    def __init__(self, dataset, loss, model=None,
+    def __init__(self, dataset, loss=None, model=None,
                  epochs=1000, batch_size=100, min_batch_size=1,
                  save_freq=10, stop_threshold=None, stop_patience=50,
                  learning_rate=1e-3, lr_decay=None, lr_decay_factor=None,
@@ -125,13 +125,26 @@ class Optimizer(object):
                                          "Found %s" % str(model.__class__.__name__)
         assert isinstance(dataset, Dataset), "Optimizer input dataset needs to be a Dataset class! " \
                                              "Found %s" % str(dataset.__class__.__name__)
-        assert isinstance(loss, Loss), "Optimizer input loss needs to be a Loss class! " \
-                                       "Found %s" % str(loss.__class__.__name__)
+        # deal with loss expression/targets
+        if loss is not None:
+            assert isinstance(loss, Loss), "Optimizer input loss needs to be a Loss class! " \
+                                           "Found %s" % str(loss.__class__.__name__)
+        if isinstance(loss, Loss):
+            self.loss_targets = loss.get_targets()
+            self.loss_expression = loss.get_loss()
+        else:
+            assert model.get_loss() is not None, "No Loss specified, and the model does not have one implemented."
+            if isinstance(model.get_loss(), tuple):
+                self.loss_targets = raise_to_list(model.get_loss()[0])
+                self.loss_expression = model.get_loss()[1]
+            else:
+                self.loss_targets = None
+                self.loss_expression = model.get_loss()
 
         model_inputs = raise_to_list(model.get_inputs())
         n_model_inputs = len(model_inputs)
 
-        model_targets = loss.targets or []
+        model_targets = self.loss_targets or []
         for input in model_inputs:
             if input in model_targets:
                 model_targets.remove(input)
@@ -248,7 +261,7 @@ class Optimizer(object):
         self.params = self.model.get_params()
         # Now create the training cost function for the model to use while training - update parameters
         # gradient!
-        gradients = grad(cost=self.loss.get_loss(), wrt=list(self.params.values()))
+        gradients = grad(cost=self.loss_expression, wrt=list(self.params.values()))
         # now create the dictionary mapping the parameter with its gradient
         gradients = OrderedDict(
             [(param, g) for param, g in zip(list(self.params.values()), gradients)]
@@ -306,14 +319,16 @@ class Optimizer(object):
         #######################################
         # compile train and monitor functions #
         #######################################
-        function_input = raise_to_list(self.model.get_inputs()) + self.loss.targets or []
+        function_input = raise_to_list(self.model.get_inputs())
+        if self.loss_targets is not None:
+            function_input += self.loss_targets
         # Compile the training function!
         log.info('Compiling f_learn function for model %s...', self.model._classname)
         t = time.time()
 
         f_learn = function(inputs=function_input,
                            updates=updates,
-                           outputs=[self.loss.get_loss()] + list(self.train_monitors_dict.values()),
+                           outputs=[self.loss_expression] + list(self.train_monitors_dict.values()),
                            name='f_learn')
 
         log.info('f_learn compilation took %s', make_time_units_string(time.time() - t))

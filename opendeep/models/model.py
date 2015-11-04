@@ -224,11 +224,11 @@ class Model(object):
         Examples
         --------
         Here is an example showing the `get_outputs()` method in the GSN model used in an `inputs` hook
-        to a SoftmaxLayer model::
+        to a Softmax model::
 
-            from opendeep.models import GSN, SoftmaxLayer
+            from opendeep.models import GSN, Softmax
             gsn = GSN(inputs=28*28, hiddens=1000, layers=2, walkbacks=4)
-            softmax = SoftmaxLayer(inputs=zip(gsn.output_size, gsn.get_outputs()), output_size=10)
+            softmax = Softmax(inputs=zip(gsn.output_size, gsn.get_outputs()), outputs=10)
 
         Raises
         ------
@@ -454,6 +454,21 @@ class Model(object):
         [switch.set_value(val) for switch, val in zip(switches, values)]
         self.switches_on = None
 
+    def get_loss(self):
+        """
+        Helper function for defining model-specific loss functions. Normally, you would pass an instance of
+        :class:`opendeep.optimization.loss.Loss` to the optimizer. However, sometimes models or layers have
+        specific, fixed loss functions that need to be implemented internally. If that is the case, implement
+        this function.
+
+        Returns
+        -------
+        theano_expression or tuple(list(theano_variable), theano_expression) or None
+            The loss expression, or a tuple containing the theano variables (i.e. matrix, tensor3, etc.)
+            used as targets when calculating loss and the theano expression representing the loss function.
+        """
+        return None
+
     @init_optimizer
     def train(self, optimizer, **kwargs):
         """
@@ -484,7 +499,7 @@ class Model(object):
         log.critical("%s does not have a get_params function!", self._classname)
         raise NotImplementedError("Please implement a get_params method for %s" % self._classname)
 
-    def get_param_values(self, borrow=True):
+    def get_param_values(self, borrow=False):
         """
         This returns a dictionary of the parameter values for the model.
         This method is useful when you want to save the model parameters, or are doing distributed programming
@@ -493,7 +508,7 @@ class Model(object):
         Parameters
         ----------
         borrow : bool, optional
-            Theano 'borrow' parameter for get_value() method on shared variables. Defaults to True.
+            Theano 'borrow' parameter for get_value() method on shared variables.
 
         Returns
         -------
@@ -521,7 +536,7 @@ class Model(object):
 
         return params
 
-    def set_param_values(self, param_values, borrow=True):
+    def set_param_values(self, param_values, borrow=False):
         """
         This sets the model parameters from the dictionary of values given.
         This method is useful when you are loading model parameters, or are doing distributed programming and
@@ -587,7 +602,7 @@ class Model(object):
 
             ftype = file_ops.get_extension_type(param_file)
 
-            params_dict = self.get_params()
+            params_dict = self.get_param_values(borrow=False)
 
             if HAS_H5PY and use_hdf5:
                 # force extension to be .hdf5
@@ -666,7 +681,7 @@ class Model(object):
             # try to grab the pickled params from the specified param_file path
             with open(param_file, 'rb') as f:
                 loaded_params = pickle.load(f)
-            self.set_param_values(loaded_params)
+            self.set_param_values(loaded_params, borrow=False)
             return True
 
         elif ftype == file_ops.HDF5:

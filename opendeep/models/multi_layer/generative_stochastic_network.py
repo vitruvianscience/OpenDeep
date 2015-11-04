@@ -1,4 +1,4 @@
-'''
+"""
 .. module:: generative_stochastic_network
 
 This module gives an implementation of the Generative Stochastic Network model.
@@ -21,7 +21,7 @@ Multimodal transition operator (using NADE) discussed in:
 'Multimodal Transitions for Generative Stochastic Networks'
 Sherjil Ozair, Li Yao, Yoshua Bengio
 http://arxiv.org/abs/1312.5578
-'''
+"""
 from __future__ import division
 # standard libraries
 import os
@@ -40,7 +40,6 @@ from opendeep.utils.decay import get_decay_function
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils.constructors import as_floatX, sharedX, function
-from opendeep.utils.cost import get_cost_function
 from opendeep.utils.misc import closest_to_square_factors, make_time_units_string, raise_to_list
 from opendeep.utils.nnet import get_weights, get_bias
 from opendeep.utils.noise import get_noise
@@ -51,18 +50,16 @@ log = logging.getLogger(__name__)
 
 @inherit_docs
 class GSN(Model):
-    '''
+    """
     Class for creating a new Generative Stochastic Network (GSN)
-    '''
-    def __init__(self, inputs_hook=None, hiddens_hook=None, params_hook=None, outdir='outputs/gsn/',
-                 input_size=None, hidden_size=1000,
+    """
+    def __init__(self, inputs=None, hiddens=None, params=None, outdir='outputs/gsn/',
                  layers=2, walkbacks=4,
                  visible_activation='sigmoid', hidden_activation='tanh',
                  input_sampling=True, mrg=RNG_MRG.MRG_RandomStreams(1),
                  tied_weights=True,
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0.0,
-                 cost_function='binary_crossentropy', cost_args=None,
                  add_noise=True, noiseless_h1=True,
                  hidden_noise='gaussian', hidden_noise_level=2, input_noise='salt_and_pepper', input_noise_level=0.4,
                  noise_decay='exponential', noise_annealing=1,
@@ -73,31 +70,33 @@ class GSN(Model):
 
         Parameters
         ----------
-        inputs_hook : Tuple of (shape, variable)
-            Routing information for the model to accept inputs from elsewhere. This is used for linking
-            different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
-            newly supervised classification model). For now, it needs to include the shape information (normally the
-            dimensionality of the input i.e. n_in).
-        hiddens_hook : Tuple of (shape, variable)
-            Routing information for the model to accept its hidden representation from elsewhere.
-            This is used for linking different models together (e.g. setting the DAE model's hidden layers to the RNN's
-            output layer gives a generative recurrent model.) For now, it needs to include the shape
-            information (normally the dimensionality of the hiddens i.e. n_hidden).
-        params_hook : List(theano shared variable)
-            A list of model parameters (shared theano variables) that you should use when constructing
+        inputs : List of [tuple(shape, `Theano.TensorType`)]
+            The dimensionality of the inputs for this model, and the routing information for the model
+            to accept inputs from elsewhere. `inputs` variable are expected to be of the form (timesteps, batch, data).
+            `shape` will be a monad tuple representing known
+            sizes for each dimension in the `Theano.TensorType`. The length of `shape` should be equal to number of
+            dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
+            dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
+            but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
+            [((None, 784), <TensorType(float32, matrix)>)].
+        hiddens : int or list(int) or Tuple of (shape, `Theano.TensorType`)
+            Int for the number of hidden units to use, a list of ints for the size of each hidden layer in `layers`,
+            or a tuple of shape, expression to route the starting hidden values from elsewhere.
+        params : Dict(string_name: theano SharedVariable), optional
+            A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
-            have two versions of the model that use the same parameters - such as a training model with dropout applied
-            to layers and one without for testing, where the parameters are shared between the two.
+            have two versions of the model that use the same parameters - such as siamese networks or pretraining some
+            weights.
         outdir : str
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
-        input_size : int
-            The size (dimensionality) of the input to the DAE. If shape is provided in `inputs_hook`, this is optional.
-            The :class:`Model` requires an `output_size`, which gets set to this value because the DAE is an
-            unsupervised model. The output is a reconstruction of the input.
-        hidden_size : int
-            The size (dimensionality) of the hidden layer for the DAE. Generally, you want it to be larger than
-            `input_size`, which is known as *overcomplete*.
+        layers : int
+            The number of hidden layers to use.
+        walkbacks : int
+            The number of walkbacks to perform (the variable K in Bengio's paper above). A walkback is a Gibbs sample
+            from the DAE, which means the model generates inputs in sequence, where each generated input is compared
+            to the original input to create the reconstruction cost for training. For running the model, the very last
+            generated input in the Gibbs chain is used as the output.
         visible_activation : str or callable
             The nonlinear (or linear) visible activation to perform after the dot product from hiddens -> visible layer.
             This activation function should be appropriate for the input unit types, i.e. 'sigmoid' for binary inputs.
@@ -107,13 +106,6 @@ class GSN(Model):
             The nonlinear (or linear) hidden activation to perform after the dot product from visible -> hiddens layer.
             See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
             your own function to be used as long as it is callable.
-        layers : int
-            The number of hidden layers to use.
-        walkbacks : int
-            The number of walkbacks to perform (the variable K in Bengio's paper above). A walkback is a Gibbs sample
-            from the DAE, which means the model generates inputs in sequence, where each generated input is compared
-            to the original input to create the reconstruction cost for training. For running the model, the very last
-            generated input in the Gibbs chain is used as the output.
         input_sampling : bool
             During walkbacks, whether to sample from the generated input to create a new starting point for the next
             walkback (next step in the Gibbs chain). This generally makes walkbacks more effective by making the
@@ -134,12 +126,6 @@ class GSN(Model):
             If Gaussian `weights_init`, the standard deviation to use.
         bias_init : float
             The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
-        cost_function : str or callable
-            The function to use when calculating the reconstruction cost of the model. This should be appropriate
-            for the type of input, i.e. use 'binary_crossentropy' for binary inputs, or 'mse' for real-valued inputs.
-            See opendeep.utils.cost for options. You can also specify your own function, which needs to be callable.
-        cost_args : dict
-            Any additional named keyword arguments to pass to the specified `cost_function`.
         add_noise : bool
             Whether to add noise (corrupt) the input before passing it through the computation graph during training.
             This should most likely be set to the default of True, because this is a *denoising* autoencoder after all.
@@ -192,11 +178,14 @@ class GSN(Model):
         ############################
         # Theano variables and RNG #
         ############################
-        if self.inputs_hook is None:
-            self.X = T.matrix('X')
-        else:
-            # inputs_hook is a (shape, input) tuple
-            self.X = self.inputs_hook[1]
+        if len(self.inputs) > 1:
+            raise NotImplementedError("Expected 1 input, found %d. Please merge inputs before passing "
+                                      "to the model!" % len(self.inputs))
+        # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
+        self.input_shape, self.input = self.inputs[0]
+        if isinstance(self.input_shape, int):
+            self.input_shape = ((None,) * (self.input.ndim - 1)) + (self.input_shape,)
+        assert self.input_shape is not None, "Need to specify the shape for at least the last dimension of the input!"
         
         ##########################
         # Network specifications #
@@ -236,7 +225,7 @@ class GSN(Model):
 
         # determine the sizes of each layer in a list.
         #  layer sizes, from h0 to hK (h0 is the visible layer)
-        hidden_size = list(raise_to_list(hidden_size))
+        hidden_size = list(raise_to_list(hiddens))
         if len(hidden_size) == 1:
             self.layer_sizes = [self.input_size] + hidden_size * self.layers
         else:

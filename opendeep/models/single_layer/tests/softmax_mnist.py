@@ -1,7 +1,9 @@
 from __future__ import print_function
-from opendeep.models.single_layer.basic import SoftmaxLayer
+from theano.tensor import matrix, lvector
+from opendeep.models.single_layer.basic import Softmax
 # import the dataset and optimizer to use
 from opendeep.data.standard_datasets.image.mnist import MNIST
+from opendeep.optimization.loss import Neg_LL
 from opendeep.optimization.adadelta import AdaDelta
 
 
@@ -16,10 +18,13 @@ if __name__ == '__main__':
 
     # grab the MNIST dataset
     mnist = MNIST()
+    x = ((None, 28*28), matrix('x'))
     # create the softmax classifier
-    s = SoftmaxLayer(input_size=28 * 28, output_size=10, out_as_probs=False)
+    s = Softmax(inputs=x, outputs=10, out_as_probs=False)
+    # loss function
+    loss = Neg_LL(inputs=s.p_y_given_x, targets=lvector('y'), one_hot=False)
     # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, epochs=20)
+    optimizer = AdaDelta(model=s, loss=loss, dataset=mnist, epochs=20)
     # perform training!
     optimizer.train()
     # test it on some images!
@@ -31,26 +36,6 @@ if __name__ == '__main__':
     print(test_labels.astype('int32'))
     print()
     print()
-    del mnist
-    del s
-    del optimizer
-
-    log.info("Creating softmax with categorical cross-entropy!")
-    # grab the MNIST dataset
-    mnist = MNIST(one_hot=True)
-    # create the softmax classifier
-    s = SoftmaxLayer(input_size=28*28, output_size=10, cost='categorical_crossentropy', out_as_probs=True)
-    # make an optimizer to train it (AdaDelta is a good default)
-    optimizer = AdaDelta(model=s, dataset=mnist, epochs=20)
-    # perform training!
-    optimizer.train()
-    # test it on some images!
-    test_data, test_labels = mnist.test_inputs[:5], mnist.test_targets[:5]
-    # use the run function!
-    preds = s.run(test_data)
-    print('-------')
-    print(preds)
-    print(test_labels.astype('int32'))
     del mnist
     del s
     del optimizer

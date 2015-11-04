@@ -5,42 +5,39 @@ Simple single-hidden-layer GRU
 import logging
 # third party libraries
 from numpy import prod
-import theano
-import theano.tensor as T
+from theano import scan
+from theano.gradient import grad_clip
+from theano.tensor import (dot, zeros_like, unbroadcast)
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
-from opendeep.utils.constructors import sharedX
 from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
-from opendeep.utils.decay import get_decay_function
 from opendeep.utils.decorators import inherit_docs
-from opendeep.utils.nnet import get_weights, get_bias
-from opendeep.utils.noise import get_noise
+from opendeep.utils.nnet import (get_weights, get_bias)
 
 log = logging.getLogger(__name__)
 
 @inherit_docs
 class GRU(Model):
     """
-    Your normal GRU.
+    Single GRU layer (gives hiddens, no output on top).
 
     Implemented from:
     "Gated Feedback Recurrent Neural Networks"
     Junyoung Chung, Caglar Gulcehre, Kyunghyun Cho, Yoshua Bengio
     http://arxiv.org/pdf/1502.02367v3.pdf
     """
-    def __init__(self, inputs=None, hiddens=None, outputs=None, params=None, outdir='outputs/gru/',
-                 activation='sigmoid', hidden_activation='relu', gate_activation='sigmoid',
+    def __init__(self, inputs=None, hiddens=None, params=None, outdir='outputs/gru/',
+                 activation='relu', gate_activation='sigmoid',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
                  bias_init=0.0,
                  r_weights_init='identity', r_weights_interval='montreal', r_weights_mean=0, r_weights_std=5e-3,
                  r_bias_init=0.0,
-                 noise='dropout', noise_level=None, noise_decay=False, noise_decay_amount=.99,
-                 forward=True,
+                 direction='forward',
                  clip_recurrent_grads=False):
         """
-        Initialize a simple recurrent network.
+        Initialize a GRU layer.
 
         Parameters
         ----------
@@ -54,11 +51,8 @@ class GRU(Model):
             but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
             [((None, 784), <TensorType(float32, matrix)>)].
         hiddens : int or Tuple of (shape, `Theano.TensorType`)
-            Routing information for the model to accept its hidden representation from elsewhere.
-            This will be the initial starting value for hidden layers. If an int, this will be the number of
-            hidden units.
-        outputs : int
-            The dimensionality of the output for this model.
+            Int for the number of hidden units to use, or a tuple of shape, expression to route the starting
+            hidden values from elsewhere.
         params : Dict(string_name: theano SharedVariable), optional
             A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
@@ -67,23 +61,19 @@ class GRU(Model):
         outdir : str
             The location to produce outputs from training or running the :class:`GRU`. If None, nothing will be saved.
         activation : str or callable
-            The nonlinear (or linear) activation to perform after the dot product from hiddens -> output layer.
+            The nonlinear (or linear) activation to perform for the hidden units.
             This activation function should be appropriate for the output unit types, i.e. 'sigmoid' for binary.
             See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
             your own function to be used as long as it is callable.
-        hidden_activation : str or callable
-            The activation to perform for the hidden units.
-            See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
-            your own function to be used as long as it is callable.
         gate_activation : str or callable
-            The activation to perform for the hidden gates.
+            The activation to perform for the hidden gates (default sigmoid).
             See opendeep.utils.activation for a list of available activation functions. Alternatively, you can pass
             your own function to be used as long as it is callable.
         mrg : random
             A random number generator that is used when adding noise.
             I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
         weights_init : str
-            Determines the method for initializing model weights. See opendeep.utils.nnet for options.
+            Determines the method for initializing input-hidden model weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
             If Uniform `weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
         weights_mean : float
@@ -93,7 +83,8 @@ class GRU(Model):
         bias_init : float
             The initial value to use for the bias parameter. Most often, the default of 0.0 is preferred.
         r_weights_init : str
-            Determines the method for initializing recurrent model weights. See opendeep.utils.nnet for options.
+            Determines the method for initializing recurrent hidden-hidden model weights.
+            See opendeep.utils.nnet for options.
         r_weights_interval : str or float
             If Uniform `r_weights_init`, the +- interval to use. See opendeep.utils.nnet for options.
         r_weights_mean : float
@@ -102,23 +93,10 @@ class GRU(Model):
             If Gaussian `r_weights_init`, the standard deviation to use.
         r_bias_init : float
             The initial value to use for the recurrent bias parameter. Most often, the default of 0.0 is preferred.
-        noise : str
-            What type of noise to use for the hidden layers. See opendeep.utils.noise
-            for options. This should be appropriate for the unit activation, i.e. Gaussian for tanh or other
-            real-valued activations, etc.
-        noise_level : float
-            The amount of noise to use for the noise function specified by `noise`. This could be the
-            standard deviation for gaussian noise, the interval for uniform noise, the dropout amount, etc.
-        noise_decay : str or False
-            Whether to use `noise` scheduling (decay `noise_level` during the course of training),
-            and if so, the string input specifies what type of decay to use. See opendeep.utils.decay for options.
-            Noise decay (known as noise scheduling) effectively helps the model learn larger variance features first,
-            and then smaller ones later (almost as a kind of curriculum learning). May help it converge faster.
-        noise_decay_amount : float
-            The amount to reduce the `noise_level` after each training epoch based on the decay function specified
-            in `noise_decay`.
-        forward : bool
-            The direction this recurrent model should go over its inputs. True means forward, False mean backward.
+        direction : str
+            The direction this recurrent model should go over its inputs. Can be 'forward', 'backward', or
+            'bidirectional'. In the case of 'bidirectional', it will make two passes over the sequence,
+            computing two sets of hiddens and adding them together.
         clip_recurrent_grads : False or float, optional
             Whether to clip the gradients for the parameters that unroll over timesteps (such as the weights
             connecting previous hidden states to the current hidden state, and not the weights from current
@@ -132,34 +110,15 @@ class GRU(Model):
         ##################
         # specifications #
         ##################
-        ##################################
-        # activation and noise functions #
-        ##################################
+        backward = direction.lower() == 'backward'
+        bidirectional = direction.lower() == 'bidirectional'
+
+        ########################
+        # activation functions #
+        ########################
         # recurrent hidden activation functions!
-        self.hidden_activation_func = get_activation_function(hidden_activation)
+        self.hidden_activation_func = get_activation_function(activation)
         self.gate_activation_func = get_activation_function(gate_activation)
-        # output activation function!
-        output_activation_func = get_activation_function(activation)
-
-        # noise if we added it (for hiddens):
-        if noise:
-            log.debug('Adding %s noise switch.' % str(noise))
-            if noise_level is not None:
-                noise_level = sharedX(value=noise_level)
-                noise_func = get_noise(noise, noise_level=noise_level, mrg=mrg)
-            else:
-                noise_func = get_noise(noise, mrg=mrg)
-            # apply the noise as a switch!
-            # default to apply noise. this is for the cost and gradient functions to be computed later
-            # (not sure if the above statement is accurate such that gradient depends on initial value of switch)
-            self.noise_switch = sharedX(value=1, name="gru_noise_switch")
-
-            # noise scheduling
-            if noise_decay and noise_level is not None:
-                self.noise_schedule = get_decay_function(noise_decay,
-                                                         noise_level,
-                                                         noise_level.get_value(),
-                                                         noise_decay_amount)
 
         ##########
         # inputs #
@@ -169,24 +128,22 @@ class GRU(Model):
             raise NotImplementedError("Expected 1 input, found %d. Please merge inputs before passing "
                                       "to the model!" % len(self.inputs))
         # self.inputs is a list of all the input expressions (we enforce only 1, so self.inputs[0] is the input)
-        input_shape, self.input = self.inputs[0]
-        if isinstance(input_shape, int):
-            self.input_size = ((None, ) * (self.input.ndim-1)) + (input_shape, )
-        else:
-            self.input_size = input_shape
-        assert self.input_size is not None, "Need to specify the shape for at least the last dimension of the input!"
+        self.input_shape, self.input = self.inputs[0]
+        if isinstance(self.input_shape, int):
+            self.input_shape = ((None, ) * (self.input.ndim-1)) + (self.input_shape, )
+        assert self.input_shape is not None, "Need to specify the shape for at least the last dimension of the input!"
         # input is 3D tensor of (timesteps, batch_size, data_dim)
         # if input is 2D tensor, assume it is of the form (timesteps, data_dim) i.e. batch_size is 1. Convert to 3D.
         # if input is > 3D tensor, assume it is of form (timesteps, batch_size, data...) and flatten to 3D.
         if self.input.ndim == 1:
-            self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
+            self.input = unbroadcast(self.input.dimshuffle(0, 'x', 'x'), [1, 2])
 
         elif self.input.ndim == 2:
-            self.input = T.unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
+            self.input = unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
         elif self.input.ndim > 3:
             self.input = self.input.flatten(3)
-            self.input_size = self.input_size[:2] + (prod(self.input_size[2:]))
+            self.input_shape = self.input_shape[:2] + (prod(self.input_shape[2:]))
 
         ###########
         # hiddens #
@@ -208,33 +165,19 @@ class GRU(Model):
             raise AssertionError("Hiddens need to be an int or tuple of (shape, theano_expression), found %s" %
                                  type(self.hiddens))
 
-        ###########
-        # outputs #
-        ###########
-        # We also only have 1 output
-        assert self.output_size is not None, "Need to specify outputs size!"
-        out_size = self.output_size[0]
-        if isinstance(out_size, int):
-            self.output_size = self.input_size[:-1] + (out_size,)
-        else:
-            self.output_size = out_size
+        # output shape is going to be 3D with (timesteps, batch_size, hidden_size)
+        self.output_size = (None, None, self.hidden_size)
 
-        ##################
-        # for generating #
-        ##################
-        # symbolic scalar for how many recurrent steps to use during generation from the model
-        self.n_steps = T.iscalar("generate_n_steps")
-
-        ####################################################
-        # parameters - make sure to deal with params_hook! #
-        ####################################################
+        ##########################################################
+        # parameters - make sure to deal with params dict input! #
+        ##########################################################
         # all input-to-hidden weights
-        W_x_z, W_x_r, W_x_h = [
+        W_z, W_r, W_h = [
             self.params.get(
-                "W_x_%s" % sub,
+                "W_%s" % sub,
                 get_weights(weights_init=weights_init,
-                            shape=(self.input_size, self.hidden_size),
-                            name="W_x_%s" % sub,
+                            shape=(self.input_shape[-1], self.hidden_size),
+                            name="W_%s" % sub,
                             # if gaussian
                             mean=weights_mean,
                             std=weights_std,
@@ -243,13 +186,13 @@ class GRU(Model):
             )
             for sub in ['z', 'r', 'h']
         ]
-        # all hidden-to-hidden weights
-        U_h_z, U_h_r, U_h_h = [
+        # all hidden-to-hidden (one direction) weights
+        U_z, U_r, U_h = [
             self.params.get(
-                "U_h_%s" % sub,
+                "U_%s" % sub,
                 get_weights(weights_init=r_weights_init,
                             shape=(self.hidden_size, self.hidden_size),
-                            name="U_h_%s" % sub,
+                            name="U_%s" % sub,
                             # if gaussian
                             mean=r_weights_mean,
                             std=r_weights_std,
@@ -258,18 +201,23 @@ class GRU(Model):
             )
             for sub in ['z', 'r', 'h']
         ]
-        # hidden-to-output weights
-        W_h_y = self.params.get(
-            "W_h_y",
-            get_weights(weights_init=weights_init,
-                        shape=(self.hidden_size, self.output_size),
-                        name="W_h_y",
-                        # if gaussian
-                        mean=weights_mean,
-                        std=weights_std,
-                        # if uniform
-                        interval=weights_interval)
-        )
+        # if bidirectional, make hidden-to-hidden weights again to go the opposite direction
+        U_z_b, U_r_b, U_h_b = None, None, None
+        if bidirectional:
+            U_z_b, U_r_b, U_h_b = [
+                self.params.get(
+                    "U_%s_b" % sub,
+                    get_weights(weights_init=r_weights_init,
+                                shape=(self.hidden_size, self.hidden_size),
+                                name="U_%s_b" % sub,
+                                # if gaussian
+                                mean=r_weights_mean,
+                                std=r_weights_std,
+                                # if uniform
+                                interval=r_weights_interval)
+                )
+                for sub in ['z', 'r', 'h']
+            ]
         # biases
         b_z, b_r, b_h = [
             self.params.get(
@@ -280,86 +228,96 @@ class GRU(Model):
             )
             for sub in ['z', 'r', 'h']
         ]
-        # output bias
-        b_y = self.params.get(
-            "b_y",
-            get_bias(shape=(self.output_size,),
-                     name="b_y",
-                     init_values=bias_init)
-        )
         # clip gradients if we are doing that
-        r_params = [U_h_z, U_h_r, U_h_h]
+        r_params = [U_z, U_r, U_h, U_z_b, U_r_b, U_h_b]
         if clip_recurrent_grads:
             clip = abs(clip_recurrent_grads)
-            U_h_z, U_h_r, U_h_h = [theano.gradient.grad_clip(p, -clip, clip) for p in r_params]
+            U_z, U_r, U_h, U_z_b, U_r_b, U_h_b = [
+                grad_clip(param, -clip, clip) if param is not None
+                else None
+                for param in r_params
+            ]
 
         # put all the parameters into our dictionary
-        self.params["W_x_z"] = W_x_z
-        self.params["W_x_r"] = W_x_r
-        self.params["W_x_h"] = W_x_h
+        self.params = {
+            "W_z": W_z,
+            "W_r": W_r,
+            "W_h": W_h,
 
-        self.params["U_h_z"] = U_h_z
-        self.params["U_h_r"] = U_h_r
-        self.params["U_h_h"] = U_h_h
+            "U_z": U_z,
+            "U_r": U_r,
+            "U_h": U_h,
 
-        self.params["W_h_y"] = W_h_y
-
-        self.params["b_z"] = b_z
-        self.params["b_r"] = b_r
-        self.params["b_h"] = b_h
-        self.params["b_y"] = b_y
+            "b_z": b_z,
+            "b_r": b_r,
+            "b_h": b_h,
+        }
+        if bidirectional:
+            self.params.update(
+                {
+                    "U_z_b": U_z_b,
+                    "U_r_b": U_r_b,
+                    "U_h_b": U_h_b,
+                }
+            )
 
         # make h_init the right sized tensor
         if h_init is None:
-            h_init = T.zeros_like(T.dot(xs[0], W_x_h))
+            h_init = zeros_like(dot(self.input[0], W_h))
 
         ###############
         # computation #
         ###############
         # move some computation outside of scan to speed it up!
-        x_z = T.dot(xs, W_x_z) + b_z
-        x_r = T.dot(xs, W_x_r) + b_r
-        x_h = T.dot(xs, W_x_h) + b_h
+        x_z = dot(self.input, W_z) + b_z
+        x_r = dot(self.input, W_r) + b_r
+        x_h = dot(self.input, W_h) + b_h
 
         # now do the recurrent stuff
-        self.hiddens, self.updates = theano.scan(
+        self.hiddens, self.updates = scan(
             fn=self.recurrent_step,
             sequences=[x_z, x_r, x_h],
             outputs_info=[h_init],
-            non_sequences=[U_h_z, U_h_r, U_h_h],
-            go_backwards=not forward,
+            non_sequences=[U_z, U_r, U_h],
+            go_backwards=backward,
             name="gru_scan",
             strict=True
         )
 
-        # add noise (like dropout) if we wanted it!
-        if noise:
-            self.hiddens = T.switch(self.noise_switch,
-                                    noise_func(input=self.hiddens),
-                                    self.hiddens)
-
-        # now compute the outputs from the leftover (top level) hiddens
-        self.output = output_activation_func(
-            T.dot(self.hiddens, W_h_y) + b_y
-        )
+        # if bidirectional, do the same in reverse!
+        if bidirectional:
+            hiddens_b, updates_b = scan(
+                fn=self.recurrent_step,
+                sequences=[x_z, x_r, x_h],
+                outputs_info=[h_init],
+                non_sequences=[U_z_b, U_r_b, U_h_b],
+                go_backwards=not backward,
+                name="gru_scan_back",
+                strict=True
+            )
+            # flip the hiddens to be the right direction
+            hiddens_b = hiddens_b[::-1]
+            # update stuff
+            self.updates.update(updates_b)
+            self.hiddens += hiddens_b
 
         log.info("Initialized a GRU!")
 
-    def recurrent_step(self, x_z_t, x_r_t, x_h_t, h_tm1, U_h_z, U_h_r, U_h_h):
+    def recurrent_step(self, x_z_t, x_r_t, x_h_t, h_tm1, U_z, U_r, U_h):
         """
         Performs one computation step over time.
         """
         # update gate
         z_t = self.gate_activation_func(
-            x_z_t + T.dot(h_tm1, U_h_z)
+            x_z_t + dot(h_tm1, U_z)
         )
         # reset gate
         r_t = self.gate_activation_func(
-            x_r_t + T.dot(h_tm1, U_h_r)
+            x_r_t + dot(h_tm1, U_r)
         )
         # new memory content
         h_tilde = self.hidden_activation_func(
-            x_h_t + r_t*T.dot(h_tm1, U_h_h)
+            x_h_t + r_t*dot(h_tm1, U_h)
         )
         h_t = (1 - z_t)*h_tm1 + z_t*h_tilde
         # return the hiddens
@@ -371,27 +329,11 @@ class GRU(Model):
     def get_inputs(self):
         return [self.input]
 
-    def get_hiddens(self):
-        return self.hiddens
-
     def get_outputs(self):
-        return self.output
+        return self.hiddens
 
     def get_updates(self):
         return self.updates
-
-    def get_decay_params(self):
-        if hasattr(self, 'noise_schedule'):
-            # noise scheduling
-            return [self.noise_schedule]
-        else:
-            return super(GRU, self).get_decay_params()
-
-    def get_switches(self):
-        if hasattr(self, 'noise_switch'):
-            return [self.noise_switch]
-        else:
-            return super(GRU, self).get_switches()
 
     def get_params(self):
         return self.params

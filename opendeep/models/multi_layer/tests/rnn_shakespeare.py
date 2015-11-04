@@ -3,9 +3,7 @@ import theano.sandbox.rng_mrg as RNG_MRG
 # internal imports
 from opendeep.log.logger import config_root_logger
 from opendeep.data import TextDataset
-from opendeep.models.multi_layer.recurrent import RNN
-from opendeep.optimization.stochastic_gradient_descent import SGD
-from opendeep.optimization.adadelta import AdaDelta
+from opendeep.models.single_layer.recurrent import RNN
 from opendeep.optimization.rmsprop import RMSProp
 from opendeep.monitor.monitor import Monitor
 
