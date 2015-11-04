@@ -28,6 +28,14 @@ opendeep.models.single_layer.tests.rbm_mnist module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.single_layer.tests.recurrent module
+---------------------------------------------------
+
+.. automodule:: opendeep.models.single_layer.tests.recurrent
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.single_layer.tests.softmax_mnist module
 -------------------------------------------------------
 

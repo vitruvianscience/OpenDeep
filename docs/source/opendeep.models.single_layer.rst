@@ -11,14 +11,6 @@ Subpackages
 Submodules
 ----------
 
-opendeep.models.single_layer.autoencoder module
------------------------------------------------
-
-.. automodule:: opendeep.models.single_layer.autoencoder
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 opendeep.models.single_layer.basic module
 -----------------------------------------
 
@@ -51,10 +43,10 @@ opendeep.models.single_layer.lstm module
     :undoc-members:
     :show-inheritance:
 
-opendeep.models.single_layer.recurrent_hidden module
-----------------------------------------------------
+opendeep.models.single_layer.recurrent module
+---------------------------------------------
 
-.. automodule:: opendeep.models.single_layer.recurrent_hidden
+.. automodule:: opendeep.models.single_layer.recurrent
     :members:
     :undoc-members:
     :show-inheritance:

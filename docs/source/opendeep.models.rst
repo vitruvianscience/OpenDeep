@@ -7,7 +7,6 @@ Subpackages
 .. toctree::
 
     opendeep.models.container
-    opendeep.models.multi_layer
     opendeep.models.single_layer
     opendeep.models.tests
     opendeep.models.utils

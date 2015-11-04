@@ -20,6 +20,14 @@ opendeep.models.utils.modify_layer module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.utils.noise module
+----------------------------------
+
+.. automodule:: opendeep.models.utils.noise
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.utils.pooling module
 ------------------------------------
 
