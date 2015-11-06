@@ -199,3 +199,22 @@ class ModifyLayer(object):
         log.debug("Setting specified values for %d switches!" % len(switches))
         [switch.set_value(val) for switch, val in zip(switches, values)]
         self.switches_on = None
+
+    def copy(self, **kwargs):
+        """
+        Returns a new copy of this ModifyLayer - same class as self initialized with the args from self.args updated
+        with the keyword arguments kwargs supplied.
+
+        Parameters
+        ----------
+        kwargs : keyword arguments
+            Any arguments you want to override during the initialization of the :class:`ModifyLayer`.
+
+        Returns
+        -------
+        :class:`ModifyLayer`
+            A copy of the current modifylayer (same configurations except those overridden by kwargs).
+        """
+        args = self.args.copy()
+        args.update(kwargs)
+        return type(self)(**args)

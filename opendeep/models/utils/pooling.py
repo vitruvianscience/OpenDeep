@@ -82,7 +82,8 @@ class Pool2D(ModifyLayer):
             partial downsampling (False) or ignore it (True). When True, (5,5) input with size=(2,2)
             will generate a (2,2) output. (3,3) otherwise.
         """
-        super(Pool2D, self).__init__(inputs=inputs, size=size, stride=stride, pad=pad)
+        super(Pool2D, self).__init__(inputs=inputs, size=size, stride=stride, pad=pad,
+                                     mode=mode, ignore_border=ignore_border)
         input_shape, self.input = self.inputs[0]
         if isinstance(size, int):
             size = (size, ) * 2
