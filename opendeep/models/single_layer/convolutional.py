@@ -301,8 +301,6 @@ class Conv2D(Model):
         may negatively affect performance.
         """
         super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
-        if self.inputs is None:
-            return
 
         ##################
         # specifications #

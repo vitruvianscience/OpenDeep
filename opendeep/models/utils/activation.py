@@ -27,9 +27,9 @@ class Activation(ModifyLayer):
             The activation function to use going from input -> output. This can be a string
             representing an option from `opendeep.utils.activation`, or your own function as long as it is callable.
         """
-        super(Activation, self).__init__(inputs=inputs, outputs=inputs[0], activation=activation)
+        super(Activation, self).__init__(inputs=inputs, activation=activation)
         # self.inputs is a list from superclass initialization, grab the first element
-        self.inputs = self.inputs[0][1]
+        self.output_size, self.inputs = self.inputs[0]
         # activation function!
         activation_func = get_activation_function(activation)
         self.outputs = activation_func(self.inputs)

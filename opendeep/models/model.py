@@ -95,7 +95,7 @@ class Model(object):
 
         Parameters
         ----------
-        inputs : List of [tuple(shape, `Theano.TensorType`)] or None
+        inputs : List of [tuple(shape, `Theano.TensorType`) or Model] or None
             The dimensionality of the inputs for this model, and the routing information for the model
             to accept inputs from elsewhere. This is used for linking
             different models together (e.g. setting the Softmax model's input layer to the DAE's hidden layer gives a
@@ -104,7 +104,8 @@ class Model(object):
             dimensions in `Theano.TensorType`, where the shape element is an integer representing the size for its
             dimension, or None if the shape isn't known. For example, if you have a matrix with unknown batch size
             but fixed feature size of 784, `shape` would be: (None, 784). The full form of `inputs` would be:
-            [((None, 784), <TensorType(float32, matrix)>)].
+            [((None, 784), <TensorType(float32, matrix)>)]. If a :class:`Model` is given as the input, it replaces
+            the tuple with zip(Model.output_size, Model.get_outputs()).
         hiddens : List of [tuple(shape, `Theano.TensorType`) or shape] or None, optional
             The dimensionality of the hidden representation for this model, and/or the routing information for
             the model to accept its hidden representation from elsewhere.
@@ -131,6 +132,22 @@ class Model(object):
 
         # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
         self.inputs = raise_to_list(inputs)
+        ins = []
+        # deal with Models or ModifyLayers being passed as an input.
+        for input in self.inputs:
+            if hasattr(input, 'output_size') and hasattr(input, 'get_outputs'):
+                sizes = raise_to_list(input.output_size)
+                outs = raise_to_list(input.get_outputs())
+                if len(sizes) == 1 and len(sizes) < len(outs):
+                    sizes = sizes * len(outs)
+                input = raise_to_list(zip(sizes, outs))
+                for i in input:
+                    ins.append(i)
+            else:
+                ins.append(input)
+        # replace self.inputs
+        self.inputs = ins
+
         self.hiddens = raise_to_list(hiddens)
         self.output_size = raise_to_list(kwargs.get('output_size', outputs))
         self.params = params or {}
