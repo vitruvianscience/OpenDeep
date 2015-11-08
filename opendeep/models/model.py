@@ -132,21 +132,22 @@ class Model(object):
 
         # Necessary inputs to a Model - these are the minimum requirements for modularity to work.
         self.inputs = raise_to_list(inputs)
-        ins = []
-        # deal with Models or ModifyLayers being passed as an input.
-        for input in self.inputs:
-            if hasattr(input, 'output_size') and hasattr(input, 'get_outputs'):
-                sizes = raise_to_list(input.output_size)
-                outs = raise_to_list(input.get_outputs())
-                if len(sizes) == 1 and len(sizes) < len(outs):
-                    sizes = sizes * len(outs)
-                input = raise_to_list(zip(sizes, outs))
-                for i in input:
-                    ins.append(i)
-            else:
-                ins.append(input)
-        # replace self.inputs
-        self.inputs = ins
+        if self.inputs is not None:
+            ins = []
+            # deal with Models or ModifyLayers being passed as an input.
+            for input in self.inputs:
+                if hasattr(input, 'output_size') and hasattr(input, 'get_outputs'):
+                    sizes = raise_to_list(input.output_size)
+                    outs = raise_to_list(input.get_outputs())
+                    if len(sizes) == 1 and len(sizes) < len(outs):
+                        sizes = sizes * len(outs)
+                    input = raise_to_list(zip(sizes, outs))
+                    for i in input:
+                        ins.append(i)
+                else:
+                    ins.append(input)
+            # replace self.inputs
+            self.inputs = ins
 
         self.hiddens = raise_to_list(hiddens)
         self.output_size = raise_to_list(kwargs.get('output_size', outputs))
