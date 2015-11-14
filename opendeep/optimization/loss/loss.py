@@ -40,7 +40,22 @@ class Loss(object):
         self._classname = self.__class__.__name__
         log.debug("Creating a new instance of %s", self._classname)
         self.inputs = raise_to_list(inputs)
-        self.targets = raise_to_list(targets) or []
+        if self.inputs is not None:
+            ins = []
+            # deal with Models or ModifyLayers being passed as an input.
+            for input in self.inputs:
+                if hasattr(input, 'get_outputs'):
+                    inputs = raise_to_list(input.get_outputs())
+                    for i in inputs:
+                        ins.append(i)
+                else:
+                    ins.append(input)
+            # replace self.inputs
+            self.inputs = ins
+
+        self.targets = raise_to_list(targets)
+        if self.targets is None:
+            self.targets = []
         self.func = func
         self.args = kwargs.copy()
         self.args['inputs'] = self.inputs

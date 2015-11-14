@@ -83,11 +83,12 @@ class Prototype(Model):
         Here is the sequential creation of an MLP (no `inputs` have to be defined, `add()` takes care
         of it automatically::
 
+            from theano.tensor import matrix
             from opendeep.models.container import Prototype
             from opendeep.models.single_layer.basic import Dense, Softmax
             mlp = Prototype()
-            mlp.add(Dense(inputs=(28*28, theano.tensor.matrix('x')), outputs=1000, activation='relu', noise='dropout', noise_level=0.5))
-            mlp.add(Dense, outputs=512, activation='relu', noise='dropout', noise_level=0.5)
+            mlp.add(Dense(inputs=(28*28, matrix('x')), outputs=1000, activation='relu'))
+            mlp.add(Dense, outputs=512, activation='relu')
             mlp.add(Softmax, outputs=10)
 
         Parameters
@@ -165,7 +166,7 @@ class Prototype(Model):
         """
         # if this container has models, return the outputs to the very last model.
         if len(self.models) > 0:
-            return raise_to_list(self.models[-1].get_outputs())
+            return self.models[-1].get_outputs()
         # otherwise, warn the user and return None
         else:
             log.warning("This container doesn't have any models! So no outputs to get...")

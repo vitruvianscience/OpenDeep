@@ -55,12 +55,12 @@ class Noise(ModifyLayer):
             Whether to create a switch to turn noise on during training and off during testing (True). If False,
             noise will be applied at both training and testing times.
         """
-        super(Noise, self).__init__(inputs=inputs, outputs=inputs[0],
+        super(Noise, self).__init__(inputs=inputs,
                                     noise=noise, noise_level=noise_level,
                                     noise_decay=noise_decay, noise_decay_amount=noise_decay_amount,
                                     mrg=mrg, switch=switch)
         # self.inputs is a list from superclass initialization, grab the first element
-        self.inputs = self.inputs[0][1]
+        self.output_size, self.inputs = self.inputs[0]
         log.debug('Adding %s noise switch.' % str(noise))
         if noise_level is not None:
             noise_level = sharedX(value=noise_level)
