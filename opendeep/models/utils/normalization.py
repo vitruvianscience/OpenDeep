@@ -49,7 +49,7 @@ class LRN(ModifyLayer):
         half_n = n // 2
         input_sqr = sqr(self.input)
 
-        if any(s is None for s in input_shape):
+        if any([s is None for s in input_shape]):
             input_shape = self.input.shape
         b, ch, r, c = input_shape
         extra_channels = alloc(0., b, ch + 2 * half_n, r, c)
