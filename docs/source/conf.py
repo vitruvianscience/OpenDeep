@@ -24,10 +24,13 @@ except:
     except:
         mock = False
 
+opendeep_path = os.path.abspath('../../opendeep/')
+print("Our path to the opendeep directory is:", opendeep_path)
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../../opendeep/'))
+sys.path.insert(0, opendeep_path)
 
 # -- General configuration ------------------------------------------------
 
@@ -98,7 +101,8 @@ except ImportError:
         version = '.'.join(release.split('.')[:2])
     except pkg_resources.DistributionNotFound:
         try:
-            exec (compile(open('../opendeep/version.py').read(), '../opendeep/version.py', 'exec'))
+            exec (compile(open(os.path.join(opendeep_path, 'version.py')).read(),
+                          os.path.join(opendeep_path, 'version.py'), 'exec'))
             # The full version, including alpha/beta/rc tags.
             release = __version__
             # The short X.Y version.
