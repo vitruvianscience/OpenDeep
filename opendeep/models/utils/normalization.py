@@ -18,8 +18,10 @@ class LRN(ModifyLayer):
     and performed "pixelwise".
     Input order is assumed to be `BC01`.
     If the value of the ith channel is :math:`x_i`, the output is
+
     .. math::
         x_i = \frac{x_i}{ (k + ( \alpha \sum_j x_j^2 ))^\beta }
+
     where the summation is performed over this position on :math:`n`
     neighboring channels.
     """

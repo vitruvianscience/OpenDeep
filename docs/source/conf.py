@@ -27,7 +27,7 @@ except:
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../opendeep/'))
+sys.path.insert(0, os.path.abspath('../../opendeep/'))
 
 # -- General configuration ------------------------------------------------
 
@@ -112,7 +112,7 @@ except ImportError:
             ##########################################################################
             # Worst case set the release and version here for ReadTheDocs's building #
             ##########################################################################
-            release = '0.0.8a'
+            release = '0.0.9a'
             version = '0.0'
 
 
@@ -323,7 +323,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'OpenDeep', u'OpenDeep Documentation',
-   u'Vitruvian Science', 'OpenDeep', 'One line description of project.',
+   u'Vitruvian Science', 'OpenDeep', 'Modular Deep Learning',
    'Miscellaneous'),
 ]
 
