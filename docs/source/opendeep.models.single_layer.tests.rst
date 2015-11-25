@@ -4,18 +4,18 @@ opendeep.models.single_layer.tests package
 Submodules
 ----------
 
-opendeep.models.single_layer.tests.autoencoder_mnist module
------------------------------------------------------------
-
-.. automodule:: opendeep.models.single_layer.tests.autoencoder_mnist
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 opendeep.models.single_layer.tests.basic_mlp_mnist module
 ---------------------------------------------------------
 
 .. automodule:: opendeep.models.single_layer.tests.basic_mlp_mnist
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.models.single_layer.tests.lenet module
+-----------------------------------------------
+
+.. automodule:: opendeep.models.single_layer.tests.lenet
     :members:
     :undoc-members:
     :show-inheritance:

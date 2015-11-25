@@ -77,10 +77,6 @@ Congrats, you just:
 
 - and predicted some outputs given inputs!
 
-.. image:: readme_images/gatsby.gif
-   :scale: 100 %
-   :alt: Working example!
-   :align: center
 
 Installation
 ============

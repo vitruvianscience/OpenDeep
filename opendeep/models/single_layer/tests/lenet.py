@@ -6,7 +6,7 @@ from theano.tensor import tensor4, lvector, mean, neq
 from opendeep import config_root_logger
 from opendeep.data import ModifyStream
 from opendeep.models import Prototype, Conv2D, Dense, Softmax
-from opendeep.models.utils import Pool2D
+from opendeep.models.utils import Pool2D, Flatten
 from opendeep.monitor import Monitor
 from opendeep.optimization.loss import Neg_LL
 from opendeep.optimization import SGD
@@ -38,20 +38,15 @@ def build_lenet():
     lenet.add(
         Pool2D, size=(2, 2)
     )
-
     # now we need to flatten the 4D convolution outputs into 2D matrix (just flatten the trailing dimensions)
-    dense_input = lenet.models[-1].get_outputs().flatten(2)
-    # redefine the size appropriately for flattening (since we are doing a Theano modification)
-    dense_input_shape = (None, np.prod(lenet.models[-1].output_size[1:]))
-    # pass this flattened matrix as the input to a Dense layer!
     lenet.add(
-        Dense(
-            inputs=[(dense_input_shape, dense_input)],
-            outputs=500,
-            activation='tanh'
-        )
+        Flatten, ndim=2
     )
-    # automatically hook a softmax classification layer, outputting the probabilities.
+    # one dense hidden layer
+    lenet.add(
+        Dense, outputs=500, activation='tanh'
+    )
+    # hook a softmax classification layer, outputting the probabilities.
     lenet.add(
         Softmax, outputs=10, out_as_probs=True
     )

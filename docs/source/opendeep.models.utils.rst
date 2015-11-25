@@ -12,6 +12,14 @@ opendeep.models.utils.activation module
     :undoc-members:
     :show-inheritance:
 
+opendeep.models.utils.flatten module
+------------------------------------
+
+.. automodule:: opendeep.models.utils.flatten
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 opendeep.models.utils.modify_layer module
 -----------------------------------------
 
@@ -24,6 +32,14 @@ opendeep.models.utils.noise module
 ----------------------------------
 
 .. automodule:: opendeep.models.utils.noise
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+opendeep.models.utils.normalization module
+------------------------------------------
+
+.. automodule:: opendeep.models.utils.normalization
     :members:
     :undoc-members:
     :show-inheritance:
