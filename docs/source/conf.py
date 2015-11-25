@@ -24,7 +24,7 @@ except:
     except:
         mock = False
 
-opendeep_path = os.path.abspath('../opendeep/')
+opendeep_path = os.path.abspath('../../')
 print("Our path to the opendeep directory is:", opendeep_path)
 
 # If extensions (or modules to document with autodoc) are in another directory,
