@@ -7,7 +7,7 @@ from opendeep import config_root_logger
 from opendeep.data import ModifyStream
 from opendeep.models import Prototype, Conv2D, Dense, Softmax
 from opendeep.models.utils import Pool2D, Flatten
-from opendeep.monitor import Monitor
+from opendeep.monitor import Monitor, FileService
 from opendeep.optimization.loss import Neg_LL
 from opendeep.optimization import SGD
 from opendeep.data import MNIST
@@ -72,13 +72,13 @@ if __name__ == '__main__':
     # targets from MNIST are int64 numbers 0-9
     y = lvector('y')
     loss = Neg_LL(inputs=lenet.get_outputs(), targets=y, one_hot=False)
-    error_monitor = Monitor(name='error', expression=mean(neq(lenet.models[-1].y_pred, y)), valid=True, test=True)
+    error_monitor = Monitor(name='error', expression=mean(neq(lenet.models[-1].y_pred, y)), valid=True, test=True, out_service=FileService('outputs/lenet_error.txt'))
     # optimize our model to minimize loss given the dataset using SGD
     optimizer = SGD(model=lenet,
                     dataset=data,
                     loss=loss,
                     epochs=200,
-                    batch_size=500,
+                    batch_size=128,
                     learning_rate=.1,
                     momentum=False)
     optimizer.train(monitor_channels=error_monitor)

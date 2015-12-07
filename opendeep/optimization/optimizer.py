@@ -541,7 +541,7 @@ class Optimizer(object):
             # send the values to their outservices
             for name, service in monitors_outservice_dict.items():
                 if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], "test")
+                    service.write(current_mean_monitors[name], subset)
             # if there is a plot, also send them over!
             if plot:
                 plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
