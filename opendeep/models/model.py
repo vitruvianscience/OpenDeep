@@ -726,14 +726,14 @@ class Model(object):
             log.error("Param file %s couldn't be found!", str(param_file))
             return False
 
-    def save_args(self, args_file="config"):
+    def save_args(self, args_file="config.pkl"):
         """
         This saves the model's initial configuration parameters (`self.args`) in a pickle file.
 
         Parameters
         ----------
         args_file : str, optional
-            Filename of pickled configuration parameters. Defaults to 'config'.
+            Filename of pickled configuration parameters. Defaults to 'config.pkl'.
 
         Returns
         -------

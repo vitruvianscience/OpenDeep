@@ -11,8 +11,8 @@ import logging
 from functools import partial
 # third party libraries
 import numpy
-import theano
-import theano.tensor as T
+from theano import config
+from theano.tensor import (TensorVariable, concatenate, cast, sqr, alloc, set_subtensor)
 import theano.compat.six as six
 # internal imports
 from opendeep.utils.constructors import as_floatX, sharedX
@@ -33,7 +33,8 @@ _uniform_interval = {
     # this is the default provided in other codebases
     'default': lambda shape: 1 / numpy.sqrt(shape[0]),
     # this is the default for the GSN code from Li Yao
-    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))
+    'glorot': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:]))),
+    'montreal': lambda shape: numpy.sqrt(6. / ((shape[0] + shape[1]) * numpy.prod(shape[2:])))  # compatibility syntax
 }
 
 def get_weights(weights_init, shape,
@@ -84,7 +85,9 @@ def get_weights(weights_init, shape,
         if weights_init == 'gaussian':
             return get_weights_gaussian(shape=shape, mean=mean, std=std, name=name, rng=rng, gain=gain)
         # if we are initializing weights from a uniform distribution
-        elif weights_init == 'uniform':
+        elif weights_init == 'uniform' or weights_init in _uniform_interval:
+            if weights_init in _uniform_interval:
+                interval = weights_init
             return get_weights_uniform(shape=shape, interval=interval, name=name, rng=rng, gain=gain)
         # if we are initializing an identity matrix
         elif weights_init == 'identity':
@@ -99,7 +102,7 @@ def get_weights(weights_init, shape,
     raise NotImplementedError("Did not recognize weights_init %s! Pleas try gaussian, uniform, identity, or orthogonal"
                               % str(weights_init))
 
-def get_weights_uniform(shape, interval='montreal', name="W", rng=None, gain=1.):
+def get_weights_uniform(shape, interval='glorot', name="W", rng=None, gain=1.):
     """
     This initializes a shared variable with a given shape for weights drawn from a Uniform distribution with
     low = -interval and high = interval.
@@ -151,7 +154,7 @@ def get_weights_uniform(shape, interval='montreal', name="W", rng=None, gain=1.)
     # build the uniform weights tensor
     val = as_floatX(rng.uniform(low=-interval, high=interval, size=shape))
     # check if a theano rng was used
-    if isinstance(val, T.TensorVariable):
+    if isinstance(val, TensorVariable):
         val = val.eval()
 
     val = val * gain
@@ -195,14 +198,14 @@ def get_weights_gaussian(shape, mean=None, std=None, name="W", rng=None, gain=1.
 
     if std != 0:
         if isinstance(rng, type(numpy.random)):
-            val = numpy.asarray(rng.normal(loc=mean, scale=std, size=shape), dtype=theano.config.floatX)
+            val = numpy.asarray(rng.normal(loc=mean, scale=std, size=shape), dtype=config.floatX)
         else:
-            val = numpy.asarray(rng.normal(avg=mean, std=std, size=shape).eval(), dtype=theano.config.floatX)
+            val = numpy.asarray(rng.normal(avg=mean, std=std, size=shape).eval(), dtype=config.floatX)
     else:
-        val = as_floatX(mean * numpy.ones(shape, dtype=theano.config.floatX))
+        val = as_floatX(mean * numpy.ones(shape, dtype=config.floatX))
 
     # check if a theano rng was used
-    if isinstance(val, T.TensorVariable):
+    if isinstance(val, TensorVariable):
         val = val.eval()
 
     val = val * gain
@@ -234,7 +237,7 @@ def get_weights_identity(shape, name="W", add_noise=None, gain=1.):
         The theano shared variable identity matrix with given shape.
     """
     log.debug("Creating Identity matrix weights %s with shape %s", name, str(shape))
-    weights = numpy.eye(N=shape[0], M=int(numpy.prod(shape[1:])), k=0, dtype=theano.config.floatX)
+    weights = numpy.eye(N=shape[0], M=int(numpy.prod(shape[1:])), k=0, dtype=config.floatX)
 
     if add_noise:
         if isinstance(add_noise, partial):
@@ -288,9 +291,9 @@ def get_weights_orthogonal(shape, name="W", rng=None, gain=1.):
 
     # Sample from the standard normal distribution
     if isinstance(rng, type(numpy.random)):
-        a = numpy.asarray(rng.normal(loc=0., scale=1., size=shape), dtype=theano.config.floatX)
+        a = numpy.asarray(rng.normal(loc=0., scale=1., size=shape), dtype=config.floatX)
     else:
-        a = numpy.asarray(rng.normal(avg=0., std=1., size=shape).eval(), dtype=theano.config.floatX)
+        a = numpy.asarray(rng.normal(avg=0., std=1., size=shape).eval(), dtype=config.floatX)
 
     u, _, _ = numpy.linalg.svd(a, full_matrices=False)
 
@@ -322,7 +325,7 @@ def get_bias(shape, name="b", init_values=None):
 
     log.debug("Initializing bias %s variable with shape %s", name, str(shape))
     # init to zeros plus the offset
-    val = as_floatX(numpy.ones(shape=shape, dtype=theano.config.floatX) * init_values)
+    val = as_floatX(numpy.ones(shape=shape, dtype=config.floatX) * init_values)
     return sharedX(value=val, name=name)
 
 def mirror_images(input, image_shape, cropsize, rand, flag_rand):
@@ -353,15 +356,15 @@ def mirror_images(input, image_shape, cropsize, rand, flag_rand):
 
     # trick for random mirroring
     mirror = input[:, :, ::-1, :]
-    input = T.concatenate([input, mirror], axis=0)
+    input = concatenate([input, mirror], axis=0)
 
     # crop images
     center_margin = (image_shape[2] - cropsize) / 2
 
     if flag_rand:
-        mirror_rand = T.cast(rand[2], 'int32')
-        crop_xs = T.cast(rand[0] * center_margin * 2, 'int32')
-        crop_ys = T.cast(rand[1] * center_margin * 2, 'int32')
+        mirror_rand = cast(rand[2], 'int32')
+        crop_xs = cast(rand[0] * center_margin * 2, 'int32')
+        crop_ys = cast(rand[1] * center_margin * 2, 'int32')
     else:
         mirror_rand = 0
         crop_xs = center_margin
@@ -435,10 +438,10 @@ def cross_channel_normalization_bc01(bc01, alpha=1e-4, k=2, beta=0.75, n=5):
         raise NotImplementedError("Cross channel normalization only works for odd n now. N was %s" % str(n))
 
     half = n // 2
-    sq = T.sqr(bc01)
+    sq = sqr(bc01)
     b, ch, r, c = bc01.shape
-    extra_channels = T.alloc(0., b, ch + 2 * half, r, c)
-    sq = T.set_subtensor(extra_channels[:, half:half + ch, :, :], sq)
+    extra_channels = alloc(0., b, ch + 2 * half, r, c)
+    sq = set_subtensor(extra_channels[:, half:half + ch, :, :], sq)
     scale = k
     for i in iter(range(n)):
         scale += alpha * sq[:, i:i + ch, :, :]
@@ -467,10 +470,10 @@ def cross_channel_normalization_c01b(c01b, alpha=1e-4, k=2, beta=0.75, n=5):
         raise NotImplementedError("Cross channel normalization only works for odd n now. N was %s" % str(n))
 
     half = n // 2
-    sq = T.sqr(c01b)
+    sq = sqr(c01b)
     ch, r, c, b = c01b.shape
-    extra_channels = T.alloc(0., ch + 2 * half, r, c, b)
-    sq = T.set_subtensor(extra_channels[half:half + ch, :, :, :], sq)
+    extra_channels = alloc(0., ch + 2 * half, r, c, b)
+    sq = set_subtensor(extra_channels[half:half + ch, :, :, :], sq)
     scale = k
     for i in iter(range(n)):
         scale += alpha * sq[i:i + ch, :, :, :]

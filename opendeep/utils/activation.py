@@ -4,12 +4,11 @@ or output units in a deep net.
 """
 # standard libraries
 import logging
+from functools import partial
 # third party libraries
 import theano
 import theano.tensor as T
 import theano.compat.six as six
-# internal references
-from opendeep.utils.constructors import as_floatX
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +83,7 @@ def softplus(x):
     """
     return T.nnet.softplus(x)
 
-def rectifier(x):
+def rectifier(x, leaky=0):
     """
     Returns the element-wise rectifier (ReLU) applied to x.
 
@@ -92,17 +91,15 @@ def rectifier(x):
     ----------
     x : tensor
         Symbolic Tensor (or compatible).
+    leaky: scalar or tensor
+        Slope for negative input, usually between 0 and 1. The default value of 0 will lead to the standard rectifier,
+        1 will lead to a linear activation function, and any value in between will give a leaky rectifier.
+        A shared variable (broadcastable against x) will result in a parameterized rectifier with learnable slope(s).
 
     Returns
     -------
     tensor
         Element-wise rectifier: rectifier(x) = max(0,x) applied to `x`.
-
-    .. note::
-
-        This implementation uses rectifier(x) = (x + abs(x)) / 2
-        which is faster than max(0,x)
-        See https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
 
     """
     # return T.maximum(as_floatX(0), x)
@@ -111,7 +108,8 @@ def rectifier(x):
     # The following is faster than lambda x: T.maximum(0, x)
     # Thanks to @SnippyHolloW for pointing this out.
     # See: https://github.com/SnippyHolloW/abnet/blob/807aeb9/layers.py#L15
-    return (x + abs(x)) / as_floatX(2.0)
+    # return (x + abs(x)) / as_floatX(2.0)
+    return T.nnet.relu(x, alpha=leaky)
 
 def tanh(x):
     """
@@ -155,7 +153,8 @@ _activations = {'sigmoid': sigmoid,
                 'rectifier': rectifier,
                 'relu': rectifier,  # shorter alternative name for rectifier
                 'tanh': tanh,
-                'linear': linear}
+                'linear': linear,
+                'identity': linear}
 
 def is_binary(activation):
     """
@@ -177,7 +176,7 @@ def is_binary(activation):
 
     return binary
 
-def get_activation_function(name):
+def get_activation_function(name, *args, **kwargs):
     """
     This helper method returns the appropriate activation function given a string name. It looks up the appropriate
     function from the internal _activations dictionary.
@@ -209,9 +208,10 @@ def get_activation_function(name):
         # standardize the input to be lowercase
         name = name.lower()
         # grab the appropriate activation function from the dictionary of activations
-        func = _activations.get(name)
-        # if it couldn't find the function (key didn't exist), raise a NotImplementedError
-        if func is None:
+        if name in _activations:
+            func = partial(_activations[name], *args, **kwargs)
+        else:
+            # if it couldn't find the function (key didn't exist), raise a NotImplementedError
             log.critical("Did not recognize activation %s! Please use one of: ", str(name), str(_activations.keys()))
             raise NotImplementedError(
                 "Did not recognize activation {0!s}! Please use one of: {1!s}".format(name, _activations.keys())

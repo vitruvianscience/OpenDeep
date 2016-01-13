@@ -5,47 +5,61 @@ import logging
 import numpy
 # internal references
 from opendeep.data.dataset import Dataset
-from opendeep.utils.misc import raise_to_list
 
 
-class TestMemoryDataset(unittest.TestCase):
+class TestDataset(unittest.TestCase):
 
     def setUp(self):
         # get a logger for this session
         self.log = logging.getLogger(__name__)
         # create dataset
-        train = [[1, 2], [4, 5]]
-        trainl = [[2, 3]]
+        self.train = [[1, 2], [4, 5]]
+        self.trainl = [2, 3]
 
-        valid = [numpy.array([[2, 3], [5, 6], [8, 9]])]
-        validl = [numpy.array([[3, 4], [6, 7], [9, 0]])]
+        self.valid = numpy.array([[2, 3], [5, 6], [8, 9]])
+        self.validl = numpy.array([3, 6, 9])
 
-        test = numpy.array([[3, 4], [6, 7], [1, 2], [9, 0]])
-        testl = numpy.array([[4, 5], [7, 8], [2, 3], [0, 1]])
+        self.test = numpy.array([[3, 4], [6, 7], [1, 2], [9, 0]])
+        self.testl = numpy.array([4, 7, 2, 0])
 
-        self.dataset = Dataset(train_inputs=train, train_targets=trainl,
-                               valid_inputs=valid, valid_targets=validl,
-                               test_inputs=test, test_targets=testl)
+        self.dataset = Dataset(train_inputs=self.train, train_targets=self.trainl,
+                               valid_inputs=self.valid, valid_targets=self.validl,
+                               test_inputs=self.test, test_targets=self.testl)
 
     def testTrain(self):
-        inputs = zip(*raise_to_list(self.dataset.train_inputs))
-        assert numpy.array_equal(inputs, [(1, 4), (2, 5)])
-        targets = zip(*raise_to_list(self.dataset.train_targets))
-        assert numpy.array_equal(targets, [(2,), (3,)])
+        assert numpy.array_equal(self.dataset.train_inputs, self.train)
+        assert numpy.array_equal(self.dataset.train_targets, self.trainl)
 
     def testValid(self):
-        inputs = zip(*raise_to_list(self.dataset.valid_inputs))
-        assert numpy.array_equal(inputs, [([2, 3],), ([5, 6],), ([8, 9],)])
-        targets = zip(*raise_to_list(self.dataset.valid_targets))
-        assert numpy.array_equal(targets, [([3, 4],), ([6, 7],), ([9, 0],)])
+        assert numpy.array_equal(self.dataset.valid_inputs, self.valid)
+        assert numpy.array_equal(self.dataset.valid_targets, self.validl)
 
     def testTest(self):
-        inputs = zip(*raise_to_list(self.dataset.test_inputs))
-        assert numpy.array_equal(inputs, [([3, 4],), ([6, 7],), ([1, 2],), ([9, 0],)])
-        targets = zip(*raise_to_list(self.dataset.test_targets))
-        assert numpy.array_equal(targets, [([4, 5],), ([7, 8],), ([2, 3],), ([0, 1],)])
+        assert numpy.array_equal(self.dataset.test_inputs, self.test)
+        assert numpy.array_equal(self.dataset.test_targets, self.testl)
 
+    def testGeneratorInput(self):
+        gen = (x for x in [1, 2, 3, 4])
+        ran = True
+        try:
+            _ = Dataset(train_inputs=gen)
+        except AssertionError:
+            ran = False
+        except Exception as e:
+            raise e
 
+        assert ran is False, "The bad dataset (with a generator as input) succesfully initialized."
+
+    def testNonIterableInput(self):
+        ran = True
+        try:
+            _ = Dataset(train_inputs=100)
+        except AssertionError:
+            ran = False
+        except Exception as e:
+            raise e
+
+        assert ran is False, "The bad dataset (with a non-iterable [int] as input) succesfully initialized."
 
     def tearDown(self):
         del self.dataset

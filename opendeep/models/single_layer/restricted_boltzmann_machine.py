@@ -39,7 +39,7 @@ class RBM(Model):
     """
     def __init__(self, inputs=None, hiddens=None, params=None, outdir='outputs/rbm/',
                  visible_activation='sigmoid', hidden_activation='sigmoid',
-                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='glorot',
                  bias_init=0.0,
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  k=15):

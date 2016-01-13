@@ -15,10 +15,8 @@ with any given subsets of the dataset.
 import logging
 from collections import Iterable
 from types import GeneratorType as Generator
-# internal imports
-from opendeep.utils.misc import raise_to_list
 
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
 class Dataset(object):
     """
@@ -26,18 +24,18 @@ class Dataset(object):
 
     Attributes
     ----------
-    train_inputs : iterable or list(iterable)
-        The list of input iterables to use as data to the model for training.
-    train_targets : iterable or list(iterable) or None
-        The list of target iterables (labels) to use as labels to the model for training.
-    valid_inputs : iterable or list(iterable) or None
-        The list of input iterables to use as data to the model for validation.
-    valid_targets : iterable or list(iterable) or None
-        The list of target iterables (labels) to use as labels to the model for validation.
-    test_inputs : iterable or list(iterable) or None
-        The list of input iterables to use as data to the model for testing.
-    test_targets : iterable or list(iterable) or None
-        The list of target iterables (labels) to use as labels to the model for testing.
+    train_inputs : iterable
+        The input iterable to use as data to the model for training.
+    train_targets : iterable or None
+        The target iterable (labels) to use as labels to the model for training.
+    valid_inputs : iterable or None
+        The input iterable to use as data to the model for validation.
+    valid_targets : iterable or None
+        The target iterable (labels) to use as labels to the model for validation.
+    test_inputs : iterable or None
+        The input iterable to use as data to the model for testing.
+    test_targets : iterable or None
+        The target iterable (labels) to use as labels to the model for testing.
     """
     def __init__(self, train_inputs, train_targets=None,
                  valid_inputs=None, valid_targets=None,
@@ -48,53 +46,42 @@ class Dataset(object):
 
         Parameters
         ----------
-        train_inputs : iterable or list(iterable)
-            The list of input iterables to use as data to the model for training.
-        train_targets : iterable or list(iterable), optional
-            The list of target iterables (labels) to use as labels to the model for training.
-        valid_inputs : iterable or list(iterable), optional
-            The list of input iterables to use as data to the model for validation.
-        valid_targets : iterable or list(iterable), optional
-            The list of target iterables (labels) to use as labels to the model for validation.
-        test_inputs : iterable or list(iterable), optional
-            The list of input iterables to use as data to the model for testing.
-        test_targets : iterable or list(iterable), optional
-            The list of target iterables (labels) to use as labels to the model for testing.
+        train_inputs : iterable
+            The iterable to use as data to the model for training.
+        train_targets : iterable, optional
+            The target iterable (labels) to use as labels to the model for training.
+        valid_inputs : iterable, optional
+            The input iterable to use as data to the model for validation.
+        valid_targets : iterable, optional
+            The target iterable (labels) to use as labels to the model for validation.
+        test_inputs : iterable, optional
+            The input iterable to use as data to the model for testing.
+        test_targets : iterable, optional
+            The target iterable (labels) to use as labels to the model for testing.
         """
-        self.train_inputs = _check_type_and_return_as_list(train_inputs, "train_inputs")
-        self.train_targets = _check_type_and_return_as_list(train_targets, "train_targets")
+        self.train_inputs = _check_type(train_inputs, "train_inputs")
+        self.train_targets = _check_type(train_targets, "train_targets")
 
-        self.valid_inputs = _check_type_and_return_as_list(valid_inputs, "valid_inputs")
-        self.valid_targets = _check_type_and_return_as_list(valid_targets, "valid_targets")
+        self.valid_inputs = _check_type(valid_inputs, "valid_inputs")
+        self.valid_targets = _check_type(valid_targets, "valid_targets")
 
-        self.test_inputs = _check_type_and_return_as_list(test_inputs, "test_inputs")
-        self.test_targets = _check_type_and_return_as_list(test_targets, "test_targets")
+        self.test_inputs = _check_type(test_inputs, "test_inputs")
+        self.test_targets = _check_type(test_targets, "test_targets")
 
-def _check_type_and_return_as_list(iterables, name="Unknown"):
+def _check_type(iterable, name="Unknown"):
     """
     Helper method that checks the input to see if it is iterable as well as not a generator.
-    (inputs the list of iterables as well as the name you want to use for this grouping of iterables,
+    (inputs the iterable as well as the name you want to use for this iterable,
     such as train_inputs, etc.)
     """
-    already_list = isinstance(iterables, list)
-    iterables = raise_to_list(iterables)
-    if iterables is not None:
+    if iterable is not None:
         # type checking to make sure everything is iterable (and warn against generators).
-        for idx, elem in enumerate(iterables):
-            assert isinstance(elem, Iterable), "%s (raised to a list) parameter index %d is not iterable! Found %s" % \
-                                               (name, idx, str(type(elem)))
-            assert not isinstance(elem, Generator), "%s (raised to a list) parameter index %d is a generator! " \
+        assert isinstance(iterable, Iterable), "%s is not iterable! Found %s" % \
+                                               (name, str(type(iterable)))
+        assert not isinstance(iterable, Generator), "%s is a generator! " \
                                                     "Because we loop through the data multiple times, the generator " \
                                                     "will run out after the first iteration. Please consider using " \
                                                     "one of the stream types in opendeep.data.stream instead, " \
                                                     "or define your own class that performs the generator function " \
-                                                    "in an __iter__(self) method!" % (name, idx)
-            if isinstance(elem, list):
-                log.warning("%s (raised to a list) parameter index %d has type: list. Because we raise iterables to "
-                            "a list internally, this is generally bad practice. Please use something else like "
-                            "Tuples, Iterators, Numpy Arrays, etc. instead of Lists for the data source." %
-                            (name, idx))
-        # if we only have one stream, just return it not in a list wrapper (if we indeed raised it to a list)
-        if len(iterables) == 1 and not already_list:
-            iterables = iterables[0]
-    return iterables
+                                                    "in an __iter__(self) method!" % name
+    return iterable

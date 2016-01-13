@@ -108,7 +108,7 @@ class Prototype(Model):
                     previous_out_sizes = raise_to_list(self.models[-1].output_size)
                     previous_outs      = raise_to_list(self.models[-1].get_outputs())
                     # create the inputs from the previous outputs
-                    current_inputs = zip(previous_out_sizes, previous_outs)
+                    current_inputs = list(zip(previous_out_sizes, previous_outs))
                     kwargs['inputs'] = current_inputs
                 layer = layer(**kwargs)
 

@@ -75,7 +75,7 @@ class Conv1D(Model):
     """
     def __init__(self, inputs=None, params=None, outdir='outputs/conv1d',
                  n_filters=None, filter_size=None, stride=None, border_mode='valid',
-                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
                  convolution='mc0',
@@ -234,7 +234,7 @@ class Conv2D(Model):
     """
     def __init__(self, inputs=None, params=None, outdir='outputs/conv2d',
                  n_filters=None, filter_size=None, stride=(1, 1), border_mode='valid',
-                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='rectifier',
                  convolution='conv2d',

@@ -24,7 +24,7 @@ class Dense(Model):
     """
     def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/basic',
                  activation='rectifier',
-                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='glorot',
                  bias_init=0.0,
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  **kwargs):
@@ -162,9 +162,10 @@ class Softmax(Dense):
         Theano expression for the predicted class number (argmax of p_y_given_x)
     """
     def __init__(self, inputs=None, outputs=None, params=None, outdir='outputs/softmax',
-                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='montreal',
+                 weights_init='uniform', weights_mean=0, weights_std=5e-3, weights_interval='glorot',
                  bias_init=0.0,
                  out_as_probs=True,
+                 mrg=RNG_MRG.MRG_RandomStreams(1),
                  **kwargs):
         """
         Initialize a Softmax layer.
@@ -203,6 +204,9 @@ class Softmax(Dense):
             Whether to output the argmax prediction (the predicted class of the model), or the probability distribution
             over all classes. True means output the distribution of size `output_size` and False means output a single
             number index for the class that had the highest probability.
+        mrg : random
+            A random number generator that is used when adding noise.
+            I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
         """
         # init the fully connected generic layer with a softmax activation function
         super(Softmax, self).__init__(inputs=inputs,
@@ -216,6 +220,7 @@ class Softmax(Dense):
                                       weights_interval=weights_interval,
                                       bias_init=bias_init,
                                       out_as_probs=out_as_probs,
+                                      mrg=mrg,
                                       **kwargs)
         if self.inputs is None:
             return

@@ -11,8 +11,8 @@ def run_mlp():
     # test the new way to automatically fill in inputs for models
     mlp = Prototype()
     x = ((None, 784), matrix("x"))
-    mlp.add(Dense(inputs=x, outputs=1000, activation='rectifier', noise='dropout'))
-    mlp.add(Dense, outputs=1500, activation='tanh', noise='dropout')
+    mlp.add(Dense(inputs=x, outputs=1000, activation='rectifier'))
+    mlp.add(Dense, outputs=1500, activation='tanh')
     mlp.add(Softmax, outputs=10, out_as_probs=False)
 
     # define our loss to optimize for the model (and the target variable)

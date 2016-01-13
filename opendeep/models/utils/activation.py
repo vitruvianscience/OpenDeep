@@ -11,7 +11,7 @@ class Activation(ModifyLayer):
     to set the activation parameter for the model beforehand to 'linear', so that you aren't applying an
     activation twice (unless you mean to).
     """
-    def __init__(self, inputs=None, activation=None):
+    def __init__(self, inputs=None, activation=None, *args, **kwargs):
         """
         Parameters
         ----------
@@ -26,12 +26,14 @@ class Activation(ModifyLayer):
         activation : str or callable
             The activation function to use going from input -> output. This can be a string
             representing an option from `opendeep.utils.activation`, or your own function as long as it is callable.
+        **kwargs : keyword args
+            Any keyword arguments for the activation function (see `opendeep.utils.activation`).
         """
         super(Activation, self).__init__(inputs=inputs, activation=activation)
         # self.inputs is a list from superclass initialization, grab the first element
         self.output_size, self.inputs = self.inputs[0]
         # activation function!
-        activation_func = get_activation_function(activation)
+        activation_func = get_activation_function(activation, *args, **kwargs)
         self.outputs = activation_func(self.inputs)
 
     def get_inputs(self):

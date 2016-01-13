@@ -5,13 +5,13 @@ state that keeps memory over time.
 # standard libraries
 import logging
 # third party libraries
-from numpy import prod
 from theano import scan
 from theano.tensor import (unbroadcast, dot, zeros_like)
 from theano.gradient import grad_clip
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep.models.model import Model
+from opendeep.models.utils import Flatten
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.nnet import (get_weights, get_bias)
@@ -44,9 +44,9 @@ class RNN(Model):
     def __init__(self, inputs=None, hiddens=None, params=None, outdir='outputs/rnn/',
                  activation='relu',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
-                 weights_init='uniform', weights_interval='montreal', weights_mean=0, weights_std=5e-3,
+                 weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0.0,
-                 r_weights_init='identity', r_weights_interval='montreal', r_weights_mean=0, r_weights_std=5e-3,
+                 r_weights_init='identity', r_weights_interval='glorot', r_weights_mean=0, r_weights_std=5e-3,
                  r_bias_init=0.0,
                  direction='forward',
                  clip_recurrent_grads=False):
@@ -156,8 +156,9 @@ class RNN(Model):
             self.input = unbroadcast(self.input.dimshuffle(0, 'x', 1), 1)
 
         elif self.input.ndim > 3:
-            self.input = self.input.flatten(3)
-            self.input_size = self.input_size[:2] + (prod(self.input_size[2:]))
+            flat_in = Flatten((self.input_size, self.input), ndim=3)
+            self.input = flat_in.get_outputs()
+            self.input_size = flat_in.output_size
 
         ###########
         # hiddens #

@@ -1,7 +1,6 @@
 """
 This module defines a container for quickly assembling layers/models repeating over time
-together without needing to define a new :class:`Model` class. This should mainly be used
-for experimentation, and then later you should make your creation into a new :class:`Model` class.
+together without needing to define a new :class:`Model` class.
 """
 # standard libraries
 import logging

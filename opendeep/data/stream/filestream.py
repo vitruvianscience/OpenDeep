@@ -2,12 +2,16 @@
 A wrapper object for generators of data from files.
 """
 import logging
-from PIL import Image
+try:
+    from PIL import Image
+    has_pil = True
+except ImportError:
+    has_pil = False
 import numpy
-import opendeep.utils.file_ops as files
+from opendeep.utils.file_ops import find_files
 from opendeep.utils.misc import raise_to_list
 
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
 class FileStream:
     """
@@ -35,7 +39,7 @@ class FileStream:
 
     def __iter__(self):
         idx = 0
-        for fname in files.find_files(self.path, self.filter):
+        for fname in find_files(self.path, self.filter):
             try:
                 with open(fname, 'r') as f:
                     for line in f:
@@ -48,7 +52,7 @@ class FileStream:
                             else:
                                 idx += 1
             except Exception as err:
-                log.exception(err.__str__())
+                _log.exception(err.__str__())
 
 class ImageStream:
     """
@@ -65,12 +69,15 @@ class ImageStream:
         the preprocess function, each element will be yielded separately during iteration.
     """
     def __init__(self, path, filter=None, preprocess=None):
+        if not has_pil:
+            raise NotImplementedError("You need the PIL (pillow) Python package to use ImageStream.")
+
         self.path = path
         self.filter = filter
         self.preprocess = preprocess
 
     def __iter__(self):
-        for fname in files.find_files(self.path, self.filter):
+        for fname in find_files(self.path, self.filter):
             try:
                 with Image.open(fname) as im:
                     data = numpy.array(im)
@@ -80,11 +87,12 @@ class ImageStream:
                     for d in data:
                         yield d
             except Exception as err:
-                log.exception(err.__str__())
+                _log.exception(err.__str__())
 
 class FilepathStream:
     """
-    Creates an iterable stream from filepath names in a path.
+    Creates an iterable stream from filepath names in a path. This is just for the file names themselves, not the
+    contents of the files. If you want the contents, use the :class:`FileStream` object.
 
     Parameters
     ----------
@@ -102,7 +110,7 @@ class FilepathStream:
         self.preprocess = preprocess
 
     def __iter__(self):
-        for fname in files.find_files(self.path, self.filter):
+        for fname in find_files(self.path, self.filter):
             if self.preprocess is not None and callable(self.preprocess):
                 fname = self.preprocess(fname)
             fnames = raise_to_list(fname)
