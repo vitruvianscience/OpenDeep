@@ -3,7 +3,10 @@ This module defines pooling layers (like MaxPooling used in convolutional nets).
 """
 from __future__ import division
 # theano imports
-from theano.tensor.signal.downsample import max_pool_2d
+try:
+    from theano.tensor.signal.pool import pool_2d
+except ImportError:
+    from theano.tensor.signal.downsample import max_pool_2d as pool_2d
 # internal references
 from opendeep.models.utils import ModifyLayer
 
@@ -110,12 +113,12 @@ class Pool2D(ModifyLayer):
                                    mode=mode,
                                    pad=pad)
         else:
-            self.output = max_pool_2d(input=self.input,
-                                      ds=size,
-                                      st=stride,
-                                      padding=pad,
-                                      mode=mode,
-                                      ignore_border=ignore_border)
+            self.output = pool_2d(input=self.input,
+                                  ds=size,
+                                  st=stride,
+                                  padding=pad,
+                                  mode=mode,
+                                  ignore_border=ignore_border)
 
     def get_inputs(self):
         """
