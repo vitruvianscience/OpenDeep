@@ -45,7 +45,7 @@ if __name__ == '__main__':
     test_data = test_data[:25]
     test_labels = test_labels[:25]
     # use the run function!
-    preds = mlp.run(test_data)[0]
+    preds = mlp.run(test_data)
     print('-------')
     print(argmax(preds, axis=1))
     print(test_labels.astype('int32'))
