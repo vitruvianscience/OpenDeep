@@ -54,6 +54,34 @@ class FileStream:
             except Exception as err:
                 _log.exception(err.__str__())
 
+class FilepathStream:
+    """
+    Creates an iterable stream from filepath names in a path. This is just for the file names themselves, not the
+    contents of the files. If you want the contents, use the :class:`FileStream` object.
+
+    Parameters
+    ----------
+    path : str or iterable(str)
+        The filesystem path to stream, or an iterable of filenames.
+    filter : str or compiled regex, optional
+        The regex filter to apply to the `path` when finding files.
+    preprocess : function, optional
+        A function to apply to the names of files found in the `path`. If a list is returned from
+        the preprocess function, each element will be yielded separately during iteration.
+    """
+    def __init__(self, path, filter=None, preprocess=None):
+        self.path = path
+        self.filter = filter
+        self.preprocess = preprocess
+
+    def __iter__(self):
+        for fname in find_files(self.path, self.filter):
+            if self.preprocess is not None and callable(self.preprocess):
+                fname = self.preprocess(fname)
+            fnames = raise_to_list(fname)
+            for name in fnames:
+                yield name
+
 class ImageStream:
     """
     Creates an iterable stream of data from a filepath of image files.
@@ -88,31 +116,3 @@ class ImageStream:
                         yield d
             except Exception as err:
                 _log.exception(err.__str__())
-
-class FilepathStream:
-    """
-    Creates an iterable stream from filepath names in a path. This is just for the file names themselves, not the
-    contents of the files. If you want the contents, use the :class:`FileStream` object.
-
-    Parameters
-    ----------
-    path : str or iterable(str)
-        The filesystem path to stream, or an iterable of filenames.
-    filter : str or compiled regex, optional
-        The regex filter to apply to the `path` when finding files.
-    preprocess : function, optional
-        A function to apply to the names of files found in the `path`. If a list is returned from
-        the preprocess function, each element will be yielded separately during iteration.
-    """
-    def __init__(self, path, filter=None, preprocess=None):
-        self.path = path
-        self.filter = filter
-        self.preprocess = preprocess
-
-    def __iter__(self):
-        for fname in find_files(self.path, self.filter):
-            if self.preprocess is not None and callable(self.preprocess):
-                fname = self.preprocess(fname)
-            fnames = raise_to_list(fname)
-            for name in fnames:
-                yield name
