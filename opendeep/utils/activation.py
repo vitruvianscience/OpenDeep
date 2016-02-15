@@ -111,6 +111,35 @@ def rectifier(x, leaky=0):
     # return (x + abs(x)) / as_floatX(2.0)
     return T.nnet.relu(x, alpha=leaky)
 
+def elu(x, alpha=1):
+    """
+    (from Lasagne https://github.com/Lasagne/Lasagne/blob/master/lasagne/nonlinearities.py)
+
+    Exponential Linear Unit :math:`\\varphi(x) = (x > 0) ? x : e^x - 1`
+    The Exponential Linear Unit (EUL) was introduced in [1]_. Compared to the
+    linear rectifier :func:`rectify`, it has a mean activation closer to zero
+    and nonzero gradient for negative input, which can help convergence.
+    Compared to the leaky rectifier, it saturates for
+    highly negative inputs.
+
+    Parameters
+    ----------
+    x : float32
+        The activation (the summed, weighed input of a neuron).
+    Returns
+    -------
+    float32
+        The output of the exponential linear unit for the activation.
+
+    References
+    ----------
+    .. [1] Djork-Arne Clevert, Thomas Unterthiner, Sepp Hochreiter (2015):
+       Fast and Accurate Deep Network Learning by Exponential Linear Units
+       (ELUs), http://arxiv.org/abs/1511.07289
+    """
+    assert(alpha > 0, "alpha parameter to ELU has to be > 0.")
+    return T.switch(x > 0, x, alpha*(T.exp(x) - 1))
+
 def tanh(x):
     """
     Returns the element-wise hyperbolic tangent (tanh) applied to x.
@@ -154,7 +183,8 @@ _activations = {'sigmoid': sigmoid,
                 'relu': rectifier,  # shorter alternative name for rectifier
                 'tanh': tanh,
                 'linear': linear,
-                'identity': linear}
+                'identity': linear,
+                'elu': elu}
 
 def is_binary(activation):
     """
