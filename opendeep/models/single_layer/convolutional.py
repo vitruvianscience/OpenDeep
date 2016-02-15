@@ -77,7 +77,7 @@ class Conv1D(Model):
                  n_filters=None, filter_size=None, stride=None, border_mode='valid',
                  weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
-                 activation='rectifier',
+                 activation='elu',
                  convolution='mc0',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  **kwargs):
@@ -236,7 +236,7 @@ class Conv2D(Model):
                  n_filters=None, filter_size=None, stride=(1, 1), border_mode='valid',
                  weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
-                 activation='rectifier',
+                 activation='elu',
                  convolution='conv2d',
                  mrg=RNG_MRG.MRG_RandomStreams(1),
                  **kwargs):
