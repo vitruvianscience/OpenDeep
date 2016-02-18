@@ -137,7 +137,7 @@ def elu(x, alpha=1):
        Fast and Accurate Deep Network Learning by Exponential Linear Units
        (ELUs), http://arxiv.org/abs/1511.07289
     """
-    assert(alpha > 0, "alpha parameter to ELU has to be > 0.")
+    assert alpha > 0, "alpha parameter to ELU has to be > 0."
     return T.switch(x > 0, x, alpha*(T.exp(x) - 1))
 
 def tanh(x):
