@@ -7,7 +7,7 @@ import logging
 import numpy
 import theano
 import theano.tensor as T
-from theano.compat.six import integer_types
+from six import integer_types
 # internal imports
 from opendeep.utils.config import create_dictionary_like
 

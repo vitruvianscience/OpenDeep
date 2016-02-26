@@ -12,7 +12,7 @@ from functools import partial
 import theano
 import theano.tensor as T
 import theano.sandbox.rng_mrg as RNG_MRG
-import theano.compat.six as six
+from six import string_types
 
 theano_random = RNG_MRG.MRG_RandomStreams(seed=23455)
 # set a fixed number initializing RandomSate for 2 purpose:
@@ -40,7 +40,7 @@ def get_noise(name, *args, **kwargs):
         'uniform': add_uniform,
         'salt_and_pepper': salt_and_pepper
     }
-    if isinstance(name, six.string_types):
+    if isinstance(name, string_types):
         if name in noise_lookup:
             return partial(noise_lookup[name], *args, **kwargs)
         else:

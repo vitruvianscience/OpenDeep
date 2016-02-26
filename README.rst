@@ -102,6 +102,8 @@ Dependencies
 
 * `Pillow (PIL)`_: image manipulation functionality.
 
+* `Six`_: Python 2/3 compatibility library.
+
 * PyYAML_ (optional): used for YAML parsing of config files.
 
 * Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
@@ -117,6 +119,7 @@ All of these Python dependencies (not the system-specific ones like CUDA or HDF5
 .. _CuDNN: https://developer.nvidia.com/cuDNN
 .. _Theano cuDNN integration: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
 .. _Pillow (PIL): https://pillow.readthedocs.org/installation.html
+.. _Six: https://pythonhosted.org/six/
 .. _PyYAML: http://pyyaml.org/
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
 .. _NLTK: http://www.nltk.org/

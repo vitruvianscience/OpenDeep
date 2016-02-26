@@ -8,7 +8,7 @@ from functools import partial
 # third party libraries
 import theano
 import theano.tensor as T
-import theano.compat.six as six
+from six import string_types
 
 log = logging.getLogger(__name__)
 
@@ -234,7 +234,7 @@ def get_activation_function(name, *args, **kwargs):
     elif callable(name):
         return name
     # otherwise if it is a string
-    elif isinstance(name, six.string_types):
+    elif isinstance(name, string_types):
         # standardize the input to be lowercase
         name = name.lower()
         # grab the appropriate activation function from the dictionary of activations

@@ -5,7 +5,7 @@ This module is used for computing statistics such as mean, variance, mode, regul
 import logging
 # third party libraries
 import theano.tensor as T
-import theano.compat.six as six
+from six import string_types
 # internal imports
 from opendeep.utils.misc import raise_to_list
 
@@ -42,6 +42,6 @@ def get_stats(input, stat=None):
         return stats
 
     for stat in stat_list:
-        if isinstance(stat, six.string_types) and stat in stats:
+        if isinstance(stat, string_types) and stat in stats:
             compiled_stats.update({stat: stats[stat]})
     return compiled_stats

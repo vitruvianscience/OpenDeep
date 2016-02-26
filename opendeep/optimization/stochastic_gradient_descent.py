@@ -5,7 +5,7 @@ Generic stochastic gradient descent optimization with momentum (Nesterov acceler
 import logging
 # third party libraries
 from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
-import theano.compat.six as six
+from six import iteritems
 # internal references
 from opendeep.utils.constructors import sharedX
 from opendeep.optimization.optimizer import Optimizer
@@ -122,7 +122,7 @@ class SGD(Optimizer):
         """
         log.debug('Setting up Stochastic Gradient Descent with momentum for optimizer...')
         updates = OrderedDict()
-        for (param, gradient) in six.iteritems(gradients):
+        for (param, gradient) in iteritems(gradients):
             velocity = sharedX(param.get_value() * 0.)
 
             assert param.dtype == velocity.dtype

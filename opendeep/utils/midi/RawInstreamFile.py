@@ -2,7 +2,7 @@
 
 # standard library imports
 from __future__ import absolute_import
-from theano.compat.six import string_types as StringType
+from six import string_types
 
 # custom import
 from .DataTypeConverters import readBew, readVar, varLen
@@ -25,7 +25,7 @@ class RawInstreamFile:
         copy them into memory.
         """
         if infile:
-            if isinstance(infile, StringType):
+            if isinstance(infile, string_types):
                 infile = open(infile, 'rb')
                 self.data = infile.read()
                 infile.close()

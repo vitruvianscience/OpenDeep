@@ -38,7 +38,7 @@ import logging
 import re
 import gzip
 # third party
-from theano.compat.six import string_types
+from six import string_types
 # internal
 from opendeep.utils.misc import raise_to_list
 

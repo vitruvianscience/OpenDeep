@@ -3,8 +3,7 @@
 # standard library imports
 from __future__ import absolute_import
 import sys
-from theano.compat.six import string_types as StringType
-from struct import unpack
+from six import string_types
 try:
     from StringIO import StringIO
 except ImportError:
@@ -47,7 +46,7 @@ class RawOutstreamFile:
     def write(self):
         "Writes to disc"
         if self.outfile:
-            if isinstance(self.outfile, StringType):
+            if isinstance(self.outfile, string_types):
                 outfile = open(self.outfile, 'wb')
                 outfile.write(self.getvalue())
                 outfile.close()

@@ -5,7 +5,7 @@ Functions used for decaying Theano parameters as shared variables.
 import logging
 # third party libraries
 import numpy
-import theano.compat.six as six
+from six import string_types
 # internal references
 from opendeep.utils.constructors import as_floatX
 from opendeep.utils.decorators import inherit_docs
@@ -177,7 +177,7 @@ def get_decay_function(name, parameter, initial, reduction_factor):
         If the name can't be found in the _functions dictionary.
     """
     # make sure name is a string
-    if isinstance(name, six.string_types):
+    if isinstance(name, string_types):
         # standardize the input to be lowercase
         name = name.lower()
         # grab the appropriate activation function from the dictionary of decay functions

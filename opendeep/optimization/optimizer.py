@@ -28,7 +28,7 @@ import os
 import numpy
 import theano.tensor as T
 from theano.compat.python2x import OrderedDict
-from theano.compat import six
+from six import iteritems
 # internal references
 from opendeep.utils.constructors import sharedX, function, grad
 from opendeep.data.dataset import Dataset
@@ -224,7 +224,7 @@ class Optimizer(object):
         """
         log.debug('Setting up Stochastic Gradient Descent for optimizer...')
         updates = OrderedDict()
-        for (param, gradient) in six.iteritems(gradients):
+        for (param, gradient) in iteritems(gradients):
             scaled_lr = self.learning_rate * self.lr_scalers.get(param, 1.)
             updates[param] = param - scaled_lr * gradient
         return updates

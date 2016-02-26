@@ -13,6 +13,9 @@ git+https://github.com/Theano/Theano.git#egg=theano
 # Pillow is the successor to PIL for image processing
 Pillow>=2.8.1
 
+# Six for python2/3 compatibility
+six>=1.10.0
+
 #########################
 # Optional requirements #
 #########################

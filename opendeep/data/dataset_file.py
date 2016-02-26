@@ -5,7 +5,7 @@ Generic structure for a dataset reading from a file or directory.
 import logging
 import os
 # theano imports
-from theano.compat.six import string_types
+from six import string_types
 # internal imports
 from opendeep.data.dataset import Dataset
 from opendeep.data.stream.filestream import FileStream

@@ -93,6 +93,8 @@ Dependencies
 
 * `Pillow (PIL)`_: image manipulation functionality.
 
+* `Six`_: Python 2/3 compatibility library.
+
 * PyYAML_ (optional): used for YAML parsing of config files.
 
 * Bokeh_ (optional): if you want live charting/plotting of values during training or testing.
@@ -107,6 +109,8 @@ Dependencies
 .. _Theano cuDNN integration: http://deeplearning.net/software/theano/library/sandbox/cuda/dnn.html
 
 .. _Pillow (PIL): https://pillow.readthedocs.org/installation.html
+
+.. _Six: https://pythonhosted.org/six/
 
 .. _PyYAML: http://pyyaml.org/
 

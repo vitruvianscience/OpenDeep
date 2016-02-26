@@ -5,7 +5,7 @@ This module is for interacting with outputs for :class:`Monitor` objects (i.e. s
 import logging
 import os
 # third party
-from theano.compat.six import string_types  # for basestring compatability
+from six import string_types  # for basestring compatability
 # internal
 from opendeep.utils.file_ops import mkdir_p
 
