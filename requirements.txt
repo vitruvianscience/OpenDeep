@@ -22,6 +22,6 @@ six>=1.10.0
 # PyYAML for YAML parsing capability
 PyYAML>=3.11
 # Bokeh for plotting (with bokeh-server)
-bokeh>=0.9.3
+bokeh==0.11.1
 # NLTK for nlp tasks (like word tokenization)
 nltk>=3.0.1

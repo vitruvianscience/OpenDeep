@@ -310,11 +310,6 @@ class Optimizer(object):
             self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in test_collapsed])
         # finally deal with an outservice provided to monitor training cost
         self.train_outservice = train_outservice
-        # remove redundant files made by the fileservice for the train monitor.
-        # TODO: THIS FEELS LIKE A HACK. I don't like it.
-        if isinstance(self.train_outservice, FileService):
-            os.remove(self.train_outservice.valid_filename)
-            os.remove(self.train_outservice.test_filename)
 
         #######################################
         # compile train and monitor functions #

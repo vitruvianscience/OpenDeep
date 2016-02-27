@@ -34,7 +34,8 @@ TEST_MARKER = 'test'
 class MonitorsChannel(object):
     """
     A :class:`MonitorsChannel` is a list of monitors that logically belong together. For example, the means of model
-    weight matrices.
+    weight matrices. Think of the monitor channel as the group of monitors you would want to track on the same
+    graph.
 
     Attributes
     ----------
@@ -242,10 +243,10 @@ class MonitorsChannel(object):
 
 class Monitor(object):
     """
-    A :class:`Monitor` is a way to make managing values to output during training/testing easy.
+    A :class:`Monitor` is a way to make managing values to output during training/validation/testing easy.
 
-    It associates a friendly name with a variable or expression, what dataset(s) to evaluate the variable or expression,
-    and where to output the result.
+    It associates a friendly name with a variable or expression, what data subset(s) to evaluate the variable or
+    expression, and where to output the result.
 
     Attributes
     ----------
@@ -260,7 +261,8 @@ class Monitor(object):
     test_flag : bool
         Whether to run this monitor on testing data.
     out_service : OutService
-        The :class:`OutService` to for this monitor - where its output goes.
+        The :class:`OutService` to for this monitor - where to route its output
+        (i.e. the log, local file, websockets, etc.)
     """
     def __init__(self, name, expression, out_service=None, train=True, valid=False, test=False):
         """
@@ -275,11 +277,11 @@ class Monitor(object):
         out_service : OutService
             The :class:`OutService` to for this monitor - where its output goes.
         train_flag : bool
-            Whether to run this monitor on training data.
+            Whether to run this monitor on training data. Default True.
         valid_flag : bool
-            Whether to run this monitor on validation data.
+            Whether to run this monitor on validation data. Default False.
         test_flag : bool
-            Whether to run this monitor on testing data.
+            Whether to run this monitor on testing data. Default False.
         """
         # make sure the monitor name is a string
         assert isinstance(name, string_types), "name needs to be a string. found %s" % str(type(name))
@@ -289,15 +291,10 @@ class Monitor(object):
         self.valid_flag = valid
         self.test_flag  = test
         self.out_service = out_service
-        # remove redundant files made by the fileservice
-        if isinstance(self.out_service, FileService):
-            if not self.train_flag:
-                os.remove(self.out_service.train_filename)
-            if not self.valid_flag:
-                os.remove(self.out_service.valid_filename)
-            if not self.test_flag:
-                os.remove(self.out_service.test_filename)
 
+####################
+# Helper functions #
+####################
 def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     """
     This function takes a list of :class:`MonitorsChannel` and flattens them into a

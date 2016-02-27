@@ -51,7 +51,8 @@ class FileService(OutService):
     """
     def __init__(self, filename):
         """
-        Initialize a FileService and create empty train, valid, and test files from the given base filename.
+        Initialize a FileService and create train, valid, and test filenames from the given base filename.
+        If a file exists with the same name, delete it.
 
         Parameters
         ----------
@@ -69,13 +70,13 @@ class FileService(OutService):
         self.train_filename = os.path.join(basedir, name+'_train'+ext)
         self.valid_filename = os.path.join(basedir, name+'_valid'+ext)
         self.test_filename  = os.path.join(basedir, name+'_test'+ext)
-        # init the files to be empty
-        with open(self.train_filename, 'wb') as f:
-            f.write('')
-        with open(self.valid_filename, 'wb') as f:
-            f.write('')
-        with open(self.test_filename, 'wb') as f:
-            f.write('')
+        # delete the files if they already exist
+        if os.path.exists(self.train_filename):
+            os.remove(self.train_filename)
+        if os.path.exists(self.value_separator):
+            os.remove(self.valid_filename)
+        if os.path.exists(self.test_filename):
+            os.remove(self.test_filename)
 
     def write(self, value, subset):
         """
@@ -99,3 +100,32 @@ class FileService(OutService):
         elif subset == "test":
             with open(self.test_filename, 'ab') as f:
                 f.write(val_to_write)
+
+class PrintService(object):
+    """
+    Defines an OutService to print the outputs to standard output.
+    """
+    def __init__(self, monitor_name):
+        """
+        Initialize a PrintService
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name to prepend to standard output when printing the values (should be the same as the monitor that this
+            service will output to avoid any confusion).
+        """
+        self.monitor_name = monitor_name
+
+    def write(self, value, subset):
+        """
+        Given a value and the train/valid/test subset, print the value to standard output.
+
+        Parameters
+        ----------
+        value : object
+            The value to write in the service.
+        subset : str
+            The subset that the value was created from (i.e. "train", "valid", or "test").
+        """
+        print("%s_%s: %f" % (self.monitor_name, subset, value))
