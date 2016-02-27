@@ -20,7 +20,7 @@ from opendeep.models.model import Model
 from opendeep.utils.activation import get_activation_function
 from opendeep.utils.conv1d_implementations import get_conv1d_function
 from opendeep.utils.decorators import inherit_docs
-from opendeep.utils.nnet import (get_weights, get_bias)
+from opendeep.utils.weights import (get_weights, get_bias)
 
 log = logging.getLogger(__name__)
 

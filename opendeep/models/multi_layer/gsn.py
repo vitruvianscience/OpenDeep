@@ -39,7 +39,7 @@ from opendeep.utils.decorators import inherit_docs
 from opendeep.utils.activation import get_activation_function, is_binary
 from opendeep.utils.constructors import as_floatX, sharedX, function
 from opendeep.utils.misc import make_time_units_string, raise_to_list
-from opendeep.utils.nnet import get_weights, get_bias
+from opendeep.utils.weights import get_weights, get_bias
 from opendeep.utils.noise import get_noise
 
 log = logging.getLogger(__name__)
