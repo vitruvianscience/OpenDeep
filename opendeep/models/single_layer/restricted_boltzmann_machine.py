@@ -18,7 +18,7 @@ import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep.utils.decorators import inherit_docs
 from opendeep.models.model import Model
-from opendeep.utils.nnet import get_weights, get_bias
+from opendeep.utils.weights import get_weights, get_bias
 from opendeep.utils.activation import get_activation_function, is_binary
 
 log = logging.getLogger(__name__)
