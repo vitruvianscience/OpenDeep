@@ -1,15 +1,19 @@
 import numpy
 import theano
 from opendeep.models import RBM
-from opendeep.monitor import Monitor
 from opendeep.data import MNIST
 from opendeep.optimization import Optimizer
 from opendeep.utils.image import tile_raster_images
 from opendeep.utils.misc import closest_to_square_factors
 try:
-    import PIL.Image as Image
+    from PIL import Image
+    has_pil = True
 except ImportError:
-    import Image
+    try:
+        import Image
+        has_pil = True
+    except ImportError:
+        has_pil = False
 
 
 if __name__ == '__main__':
@@ -47,38 +51,39 @@ if __name__ == '__main__':
     # use the run function!
     preds = rbm.run(test_data)
 
-    # Construct image from the test matrix
-    image = Image.fromarray(
-        tile_raster_images(
-            X=test_data,
-            img_shape=(28, 28),
-            tile_shape=(5, 5),
-            tile_spacing=(1, 1)
+    if has_pil:
+        # Construct image from the test matrix
+        image = Image.fromarray(
+            tile_raster_images(
+                X=test_data,
+                img_shape=(28, 28),
+                tile_shape=(5, 5),
+                tile_spacing=(1, 1)
+            )
         )
-    )
-    image.save('rbm_test.png')
+        image.save('rbm_test.png')
 
-    # Construct image from the preds matrix
-    image = Image.fromarray(
-        tile_raster_images(
-            X=preds,
-            img_shape=(28, 28),
-            tile_shape=(5, 5),
-            tile_spacing=(1, 1)
+        # Construct image from the preds matrix
+        image = Image.fromarray(
+            tile_raster_images(
+                X=preds,
+                img_shape=(28, 28),
+                tile_shape=(5, 5),
+                tile_spacing=(1, 1)
+            )
         )
-    )
-    image.save('rbm_preds.png')
+        image.save('rbm_preds.png')
 
-    # Construct image from the weight matrix
-    image = Image.fromarray(
-        tile_raster_images(
-            X=rbm.W.get_value(borrow=True).T,
-            img_shape=(28, 28),
-            tile_shape=closest_to_square_factors(config_args['hiddens']),
-            tile_spacing=(1, 1)
+        # Construct image from the weight matrix
+        image = Image.fromarray(
+            tile_raster_images(
+                X=rbm.W.get_value(borrow=True).T,
+                img_shape=(28, 28),
+                tile_shape=closest_to_square_factors(config_args['hiddens']),
+                tile_spacing=(1, 1)
+            )
         )
-    )
-    image.save('rbm_weights.png')
+        image.save('rbm_weights.png')
 
     del mnist
     del rbm

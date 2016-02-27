@@ -10,15 +10,14 @@ git+https://github.com/Theano/Theano.git#egg=theano
 # Normal Theano
 # theano>=0.7.0
 
-# Pillow is the successor to PIL for image processing
-Pillow>=2.8.1
-
 # Six for python2/3 compatibility
 six>=1.10.0
 
 #########################
 # Optional requirements #
 #########################
+# Pillow is the successor to PIL for image processing
+Pillow>=2.8.1
 # PyYAML for YAML parsing capability
 PyYAML>=3.11
 # Bokeh for plotting (with bokeh-server)

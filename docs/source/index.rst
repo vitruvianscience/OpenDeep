@@ -91,9 +91,9 @@ Dependencies
 
   * CuDNN_ (optional but recommended for CNN's): for a fast convolution support from Nvidia. You will want to move the files to Theano's directory like the instructions say here: `Theano cuDNN integration`_.
 
-* `Pillow (PIL)`_: image manipulation functionality.
-
 * `Six`_: Python 2/3 compatibility library.
+
+* `Pillow (PIL)`_ (optional): image manipulation functionality.
 
 * PyYAML_ (optional): used for YAML parsing of config files.
 

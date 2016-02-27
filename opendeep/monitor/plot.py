@@ -3,8 +3,6 @@ This module sets up plotting for values during training/testing.
 
 It uses bokeh-server to create a local endpoint for serving graphs of data in the browser.
 
-Adapted from Blocks: https://github.com/bartvm/blocks/blob/master/blocks/extensions/plot.py
-
 Attributes
 ----------
 BOKEH_AVAILABLE : bool
@@ -17,8 +15,8 @@ import warnings
 try:
     from bokeh.plotting import (curdoc, cursession, figure, output_server, push, show)
     from bokeh.models.renderers import GlyphRenderer
-    logging.getLogger("bokeh").setLevel(logging.INFO)
-    logging.getLogger("urllib3").setLevel(logging.INFO)
+    logging.getLogger("bokeh").setLevel(logging.INFO)  # only log info and up priority for bokeh
+    logging.getLogger("urllib3").setLevel(logging.INFO)  # only log info and up priority for urllib3
     BOKEH_AVAILABLE = True
 except ImportError:
     BOKEH_AVAILABLE = False
