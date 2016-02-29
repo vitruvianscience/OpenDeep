@@ -16,10 +16,10 @@ log = logging.getLogger(__name__)
 
 
 def main():
-    var = theano.shared(T.zeros(shape=(88, 100), dtype=theano.config.floatX).eval(), name='W')
-    updates = [(var, add_uniform(input=var, noise_level=.02))]
+    w = theano.shared(T.zeros(shape=(88, 100), dtype=theano.config.floatX).eval(), name='W')
+    updates = [(w, add_uniform(input=w, noise_level=.02))]
 
-    stats = get_stats(var)
+    stats = get_stats(w)
     l1 = stats.pop('l1')
     l2 = stats.pop('l2')
     min = stats.pop('min')
@@ -29,13 +29,14 @@ def main():
     mean = stats.pop('mean')
 
     mean_monitor = Monitor('mean', mean, train=True, valid=True)
-    var_monitor = Monitor('var', var)
+    stat_monitor = Monitor('max', max)
 
     w_channel = MonitorsChannel('W', monitors=mean_monitor)
 
-    stat_channel = MonitorsChannel('stats', monitors=[var_monitor])
+    stat_channel = MonitorsChannel('stats', monitors=[stat_monitor])
 
-    monitors = [w_channel, stat_channel]
+    # monitors = [w_channel, stat_channel]
+    monitors = [stat_channel]
 
     train_collapsed = collapse_channels(monitors, train=True)
     train_collapsed = OrderedDict([(name, expression) for name, expression, _ in train_collapsed])
@@ -72,33 +73,4 @@ def main():
 
 if __name__ == '__main__':
     config_root_logger()
-    # main()
-
-    from bokeh.plotting import figure, cursession, show, output_server
-
-    output_server("test doc")
-
-    # plot settings
-    plot = figure(title="Combined Streams")
-    plot.line([],[],color="blue", name='Sample Streaming Data 1')
-    plot.line([],[],color="red", name='Sample Streaming Data 2')
-
-    show(plot)
-
-    ds1 = plot.select(dict(name='Sample Streaming Data 1'))[0].data_source
-    ds2 = plot.select(dict(name='Sample Streaming Data 2'))[0].data_source
-
-    for i in range(100, 200):
-        # update data into ds
-        ds1.data["x"].append(i - 100)
-        ds1.data["y"].append(i)
-
-        cursession().store_objects(ds1)
-
-    for i in range(100,400):
-
-
-        ds2.data["x"].append(i - 100)
-        ds2.data["y"].append(i - 20)
-
-        cursession().store_objects(ds2)
+    main()

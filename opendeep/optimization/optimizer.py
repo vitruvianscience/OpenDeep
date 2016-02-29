@@ -229,7 +229,7 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def train(self, monitor_channels=None, train_outservice=None, plot=None):
+    def train(self, monitor_channels=None, plot=None):
         """
         This method performs the training!!!
         It is an online training method that goes over minibatches from the dataset for a number of epochs,
@@ -242,9 +242,6 @@ class Optimizer(object):
         monitor_channels : list(MonitorsChannel or Monitor), optional
             The list of channels or monitors containing monitor expressions/variables to compile and evaluate
             on the data.
-        train_outservice : OutService, optional
-            The OutService to use for the automatically created train_cost monitor. Default of None just outputs
-            to logs.
         plot : Plot, optional
             The Plot object to use if we want to graph the outputs (uses bokeh server).
         """
@@ -308,8 +305,6 @@ class Optimizer(object):
             self.train_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in train_collapsed])
             self.valid_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in valid_collapsed])
             self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in test_collapsed])
-        # finally deal with an outservice provided to monitor training cost
-        self.train_outservice = train_outservice
 
         #######################################
         # compile train and monitor functions #
@@ -424,7 +419,7 @@ class Optimizer(object):
         for batch in min_normalized_izip(*train_data):
             _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
-            # handle any user defined monitors
+            # handle any user defined monitors (if different from the train cost)
             if len(train_monitors) > 0:
                 current_monitors = zip(self.train_monitors_dict.keys(), _outs[1:])
                 for name, val in current_monitors:
@@ -439,14 +434,11 @@ class Optimizer(object):
         if len(current_mean_monitors) > 0:
             log.info('Train monitors: %s', str(current_mean_monitors))
         # send the values to their outservices
-        if self.train_outservice:
-            self.train_outservice.write(mean_train, "train")
         for name, service in self.train_monitors_outservice_dict.items():
             if name in current_mean_monitors and service:
                 service.write(current_mean_monitors[name], "train")
         # if there is a plot, also send them over!
         if plot:
-            current_mean_monitors.update({TRAIN_COST_KEY: mean_train})
             plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)
 
         # set the noise switches off for valid and test sets! we assume unseen data is noisy anyway :)

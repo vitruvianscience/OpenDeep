@@ -13,7 +13,8 @@ import logging
 import warnings
 # third party libraries
 try:
-    from bokeh.plotting import (curdoc, cursession, figure, output_server, push, show)
+    from bokeh.client import push_session
+    from bokeh.plotting import (curdoc, output_server, figure)
     from bokeh.models.renderers import GlyphRenderer
     logging.getLogger("bokeh").setLevel(logging.INFO)  # only log info and up priority for bokeh
     logging.getLogger("urllib3").setLevel(logging.INFO)  # only log info and up priority for urllib3
@@ -37,17 +38,17 @@ class Plot(object):
 
     .. warning::
 
-      Depending on the number of plots, this can add 0.1 to 2 seconds per epoch
+      Depending on the number of plots, this can add ~0.1 to 2 seconds per epoch
       to your training!
 
     You must start the Bokeh plotting server
     manually, so that your plots are stored permanently.
 
-    To start the server manually, type ``bokeh-server`` in the command line.
+    To start the server manually, type ``bokeh serve`` in the command line.
     This will default to http://localhost:5006.
     If you want to make sure that you can access your plots
     across a network (or the internet), you can listen on all IP addresses
-    using ``bokeh-server --ip 0.0.0.0``.
+    using ``bokeh serve --ip 0.0.0.0``.
     """
     # Tableau 10 colors
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
@@ -73,8 +74,8 @@ class Plot(object):
             Defaults to ``True``. Should probably be set to ``False`` when
             running experiments non-locally (e.g. on a cluster or through SSH).
         server_url : str, optional
-            Url of the bokeh-server. Ex: when starting the bokeh-server with
-            ``bokeh-server --ip 0.0.0.0`` at ``alice``, server_url should be
+            Url of the bokeh server. Ex: when starting the bokeh server with
+            ``bokeh serve --ip 0.0.0.0`` at ``alice``, server_url should be
             ``http://alice:5006``. When not specified the default configured
             to ``http://localhost:5006/``.
         colors : list(str)
@@ -90,7 +91,8 @@ class Plot(object):
             self.colors = colors
             self.bokeh_doc_name = bokeh_doc_name
             self.server_url = server_url
-            output_server(self.bokeh_doc_name, url=self.server_url)
+
+            session = push_session(curdoc(), session_id=self.bokeh_doc_name, url=self.server_url)
 
             # Create figures for each group of channels
             self.plots = {}
@@ -99,14 +101,15 @@ class Plot(object):
             self.figure_color_indices = []
 
             # add a potential plot for train_cost
-            self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, TRAIN_COST_KEY),
-                                       logo=None,
-                                       toolbar_location='right'))
-            self.figure_color_indices.append(0)
-            self.figure_indices[TRAIN_COST_KEY] = 0
+            # self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, TRAIN_COST_KEY),
+            #                            logo=None,
+            #                            toolbar_location='right'))
+            # self.figure_color_indices.append(0)
+            # self.figure_indices[TRAIN_COST_KEY] = 0
 
             for i, channel in enumerate(self.channels):
-                idx = i+1  # offset by 1 because of the train_cost figure
+                # idx = i+1  # offset by 1 because of the train_cost figure
+                idx = i
                 assert isinstance(channel, MonitorsChannel) or isinstance(channel, Monitor), \
                     "Need channels to be type MonitorsChannel or Monitor. Found %s" % str(type(channel))
                 # create the figure
@@ -150,7 +153,7 @@ class Plot(object):
             log.debug("Figure indices for monitors: %s" % str(self.figure_indices))
 
             if open_browser:
-                show(self.figures)
+                session.show()
 
     def update_plots(self, epoch, monitors):
         """
@@ -192,5 +195,3 @@ class Plot(object):
                     else:
                         self.plots[key].data['x'].append(epoch)
                         self.plots[key].data['y'].append(value)
-                        cursession().store_objects(self.plots[key])
-            push()
