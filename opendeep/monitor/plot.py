@@ -193,5 +193,4 @@ class Plot(object):
                         renderer = fig.select(dict(name=name))
                         self.plots[key] = renderer[0].data_source
                     else:
-                        self.plots[key].data['x'].append(epoch)
-                        self.plots[key].data['y'].append(value)
+                        self.plots[key].stream({'x':[epoch], 'y':[value]})

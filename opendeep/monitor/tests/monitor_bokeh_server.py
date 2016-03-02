@@ -2,8 +2,13 @@ import time
 import logging
 from theano.compat.python2x import OrderedDict
 
+import numpy as np
 import theano
 import theano.tensor as T
+from bokeh.client import push_session
+from bokeh.driving import cosine
+from bokeh.plotting import (curdoc, output_server, figure)
+from bokeh.models.renderers import GlyphRenderer
 
 from opendeep.monitor.monitor import Monitor, MonitorsChannel, collapse_channels
 from opendeep.monitor.plot import Plot
@@ -35,8 +40,7 @@ def main():
 
     stat_channel = MonitorsChannel('stats', monitors=[stat_monitor])
 
-    # monitors = [w_channel, stat_channel]
-    monitors = [stat_channel]
+    monitors = [w_channel, stat_channel]
 
     train_collapsed = collapse_channels(monitors, train=True)
     train_collapsed = OrderedDict([(name, expression) for name, expression, _ in train_collapsed])
@@ -58,6 +62,7 @@ def main():
         vals = f()
         m = OrderedDict(zip(train_collapsed.keys(), vals))
         plot.update_plots(epoch, m)
+        time.sleep(0.02)
         log.debug('----- '+make_time_units_string(time.time()-t))
 
     for epoch in range(100):
@@ -66,11 +71,36 @@ def main():
         vals = f2()
         m = OrderedDict(zip(valid_collapsed.keys(), vals))
         plot.update_plots(epoch, m)
+        time.sleep(0.02)
         log.debug('----- ' + make_time_units_string(time.time() - t))
 
     log.debug("TOTAL TIME "+make_time_units_string(time.time()-t1))
+
+def test_server():
+    session = push_session(curdoc())
+    session.show()
+    # create the figure
+    fig = figure(title='testing',
+                 x_axis_label='iterations',
+                 y_axis_label='value',
+                 logo=None,
+                 toolbar_location='right')
+    # create a new line
+    l = fig.line([], [], legend='test_line', name='test_line',
+                line_color='#1f77b4')
+
+    for i in range(100):
+        if i==0:
+            l.data_source.stream({'x':[i],'y':[10]})
+        else:
+            l.data_source.stream({'x':[i],'y':[i]})
+        time.sleep(0.05)
+    print 'done!'
+
+
 
 
 if __name__ == '__main__':
     config_root_logger()
     main()
+    # test_server()
