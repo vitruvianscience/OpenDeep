@@ -9,6 +9,7 @@ from opendeep.models.container import Prototype
 from opendeep.optimization.loss import Neg_LL
 from opendeep.data.standard_datasets.image.mnist import MNIST
 from opendeep.optimization.adadelta import AdaDelta
+from opendeep.monitor import Plot, Monitor, BOKEH_AVAILABLE
 
 
 if __name__ == '__main__':
@@ -33,12 +34,18 @@ if __name__ == '__main__':
     # define the loss function
     loss = Neg_LL(inputs=mlp.get_outputs(), targets=vector("y", dtype="int64"), one_hot=False)
 
+    #plot the loss
+    if BOKEH_AVAILABLE:
+        plot = Plot("mlp_mnist", monitor_channels=Monitor("loss", loss.get_loss()), open_browser=True)
+    else:
+        plot = None
+
     # make an optimizer to train it (AdaDelta is a good default)
     # optimizer = AdaDelta(model=mlp, dataset=mnist, n_epoch=20)
     optimizer = AdaDelta(dataset=mnist, loss=loss, epochs=20)
     # perform training!
     # optimizer.train()
-    mlp.train(optimizer)
+    mlp.train(optimizer, plot=plot)
 
     # test it on some images!
     test_data, test_labels = mnist.test_inputs, mnist.test_targets
