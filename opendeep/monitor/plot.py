@@ -26,7 +26,6 @@ except ImportError:
 from opendeep.monitor.monitor import MonitorsChannel, Monitor
 from opendeep.monitor.monitor import COLLAPSE_SEPARATOR, TRAIN_MARKER, VALID_MARKER, TEST_MARKER
 from opendeep.utils.misc import raise_to_list
-from opendeep.optimization.optimizer import TRAIN_COST_KEY
 
 
 log = logging.getLogger(__name__)
@@ -95,62 +94,54 @@ class Plot(object):
             session = push_session(curdoc(), session_id=self.bokeh_doc_name, url=self.server_url)
 
             # Create figures for each group of channels
-            self.plots = {}
+            self.data_sources = {}
             self.figures = []
             self.figure_indices = {}
-            self.figure_color_indices = []
-
-            # add a potential plot for train_cost
-            # self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, TRAIN_COST_KEY),
-            #                            logo=None,
-            #                            toolbar_location='right'))
-            # self.figure_color_indices.append(0)
-            # self.figure_indices[TRAIN_COST_KEY] = 0
+            self.line_color_idx = 0
 
             for i, channel in enumerate(self.channels):
-                # idx = i+1  # offset by 1 because of the train_cost figure
                 idx = i
                 assert isinstance(channel, MonitorsChannel) or isinstance(channel, Monitor), \
                     "Need channels to be type MonitorsChannel or Monitor. Found %s" % str(type(channel))
-                # create the figure
-                self.figures.append(figure(title='{} #{}'.format(bokeh_doc_name, channel.name),
-                                           x_axis_label='iterations',
-                                           y_axis_label='value',
-                                           logo=None,
-                                           toolbar_location='right'))
-                self.figure_color_indices.append(0)
-                # for each monitor in this channel, assign this figure to the monitor (and train/valid/test variants)
+
+                # create the figure for this channel
+                fig = figure(title='{} #{}'.format(bokeh_doc_name, channel.name),
+                             x_axis_label='epochs',
+                             y_axis_label='value',
+                             logo=None,
+                             toolbar_location='right')
+                # keep track of the line colors so we can rotate them around in the same manner across figures
+                self.line_color_idx = 0
+
+                # for each monitor in this channel, create the line (and train/valid/test variants if applicable)
+                # If this is a MonitorsChannel of multiple Monitors to plot
                 if isinstance(channel, MonitorsChannel):
                     for monitor in channel.monitors:
-                        self.figure_indices[COLLAPSE_SEPARATOR.join([channel.name, monitor.name])] = idx
                         if monitor.train_flag:
-                            self.figure_indices[
-                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
-                            ] = idx
-                        if monitor.valid_flag:
-                            self.figure_indices[
-                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
-                            ] = idx
-                        if monitor.test_flag:
-                            self.figure_indices[
-                                COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
-                            ] = idx
-                else:
-                    self.figure_indices[channel.name] = idx
-                    if channel.train_flag:
-                        self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, TRAIN_MARKER])
-                        ] = idx
-                    if channel.valid_flag:
-                        self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, VALID_MARKER])
-                        ] = idx
-                    if channel.test_flag:
-                        self.figure_indices[
-                            COLLAPSE_SEPARATOR.join([channel.name, TEST_MARKER])
-                        ] = idx
+                            name = COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER])
+                            self._create_line(fig, name)
 
-            log.debug("Figure indices for monitors: %s" % str(self.figure_indices))
+                        if monitor.valid_flag:
+                            name = COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER])
+                            self._create_line(fig, name)
+
+                        if monitor.test_flag:
+                            name = COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER])
+                            self._create_line(fig, name)
+
+                # otherwise it is a single Monitor
+                else:
+                    if channel.train_flag:
+                        name = COLLAPSE_SEPARATOR.join([channel.name, TRAIN_MARKER])
+                        self._create_line(fig, name)
+
+                    if channel.valid_flag:
+                        name = COLLAPSE_SEPARATOR.join([channel.name, VALID_MARKER])
+                        self._create_line(fig, name)
+
+                    if channel.test_flag:
+                        name = COLLAPSE_SEPARATOR.join([channel.name, TEST_MARKER])
+                        self._create_line(fig, name)
 
             if open_browser:
                 session.show()
@@ -172,25 +163,15 @@ class Plot(object):
         """
         if BOKEH_AVAILABLE:
             for key, value in monitors.items():
-                if key in self.figure_indices:
-                    if key not in self.plots:
-                        # grab the correct figure by its index for the key (same with the color)
-                        fig = self.figures[self.figure_indices[key]]
-                        color_idx = self.figure_color_indices[self.figure_indices[key]]
-                        # split the channel from the monitor name
-                        name = key.split(COLLAPSE_SEPARATOR, 1)
-                        if len(name) > 1:
-                            name = name[1]
-                        else:
-                            name = name[0]
-                        # create a new line
-                        fig.line([epoch], [value], legend=name, name=name,
-                                 line_color=self.colors[color_idx % len(self.colors)])
-                        color_idx += 1
-                        # set the color index back in the figure list
-                        self.figure_color_indices[self.figure_indices[key]] = color_idx
-                        # grab the render object and put it in the plots dictionary
-                        renderer = fig.select(dict(name=name))
-                        self.plots[key] = renderer[0].data_source
-                    else:
-                        self.plots[key].stream({'x':[epoch], 'y':[value]})
+                if key in self.data_sources:
+                    self.data_sources[key].stream({'x':[epoch], 'y':[value]})
+                else:
+                    log.warning("Monitor named %s not found in the plot!" % key)
+
+    def _create_line(self, fig, name):
+        # create a new line
+        name_without_fig = name.split(COLLAPSE_SEPARATOR, 1)[1]
+        line = fig.line([], [], legend=name_without_fig, name=name_without_fig,
+                        line_color=self.colors[self.line_color_idx % len(self.colors)])
+        self.line_color_idx += 1
+        self.data_sources[name] = line.data_source
