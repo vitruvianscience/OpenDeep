@@ -301,7 +301,7 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
     list of tuples (collapsed_name, expression, out_service).
 
     Names are collapsed according to the convention:
-    `COLLAPSE_SEPARATOR`.join([channel_name, monitor_name]).append(train/valid/test marker)
+    `COLLAPSE_SEPARATOR`.join([channel_name, monitor_name, train|valid|test marker])
 
     Parameters
     ----------

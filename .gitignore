@@ -4,6 +4,8 @@ opendeep/log/logs
 *.npy
 *.pkl
 
+venv
+
 #################
 ## Eclipse
 #################

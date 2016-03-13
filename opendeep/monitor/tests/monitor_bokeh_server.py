@@ -2,19 +2,16 @@ import time
 import logging
 from theano.compat.python2x import OrderedDict
 
-import numpy as np
 import theano
 import theano.tensor as T
 from bokeh.client import push_session
-from bokeh.driving import cosine
-from bokeh.plotting import (curdoc, output_server, figure)
-from bokeh.models.renderers import GlyphRenderer
+from bokeh.plotting import (curdoc, figure)
 
 from opendeep.monitor.monitor import Monitor, MonitorsChannel, collapse_channels
 from opendeep.monitor.plot import Plot
 from opendeep.utils.noise import add_uniform
 from opendeep.utils.statistics import get_stats
-from opendeep.utils.misc import make_time_units_string, raise_to_list
+from opendeep.utils.misc import make_time_units_string
 from opendeep.log.logger import config_root_logger
 
 log = logging.getLogger(__name__)
