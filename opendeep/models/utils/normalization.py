@@ -4,6 +4,7 @@ This module defines pooling layers (like MaxPooling used in convolutional nets).
 from __future__ import division
 # theano imports
 from theano.tensor import (sqr, alloc, set_subtensor)
+from theano.tensor.nnet.bn import batch_normalization
 # internal references
 from opendeep.models.utils import ModifyLayer
 
@@ -61,6 +62,65 @@ class LRN(ModifyLayer):
             scale += alpha * input_sqr[:, i:i + ch, :, :]
         scale = scale ** beta
         self.output = self.input / scale
+
+    def get_inputs(self):
+        """
+        This should return the input(s) to the layer's computation graph as a list.
+
+        Returns
+        -------
+        Theano variable
+            Theano variables representing the input to the layer's computation.
+        """
+        return self.input
+
+    def get_outputs(self):
+        """
+        This method will return the layer's output variable expression from the computational graph.
+
+        This will be used for creating hooks to link models together,
+        where these outputs can be strung as the inputs or hiddens to another model :)
+
+        Returns
+        -------
+        theano expression
+            Theano expression for the normalized input.
+
+        """
+        return self.output
+
+class BatchNorm(ModifyLayer):
+    """
+    Applies Batch Normalization as defined by:
+    "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift"
+    Sergey Ioffe, Christian Szegedy
+    http://arxiv.org/abs/1502.03167
+    """
+    def __init__(self, inputs=None, gamma=None, beta=None, mean=None, std=None, mode='low_mem'):
+        """
+        Parameters
+        ----------
+        inputs : symbolic tensor
+            Mini-batch of activations
+        gamma : symbolic tensor
+            BN scale parameter, must be of same dimensionality as inputs and broadcastable against it
+        beta : symbolic tensor
+            BN shift parameter, must be of same dimensionality as inputs and broadcastable against it
+        mean : symbolic tensor
+            inputs means, must be of same dimensionality as inputs and broadcastable against it
+        std : symbolic tensor
+            inputs standard deviation, must be of same dimensionality as inputs and broadcastable against it
+        mode : string
+            'low_mem' or 'high_mem' Specify which batch_normalization implementation that will be used.
+            As no intermediate representations are stored for the back-propagation, 'low_mem' implementation lower
+            the memory usage, however, it is 5-10% slower than 'high_mem' implementation. Note that 5-10% computation
+            time difference compare the batch_normalization operation only, time difference between implementation is
+            likely to be less important on the full model fprop/bprop.
+
+        """
+        self.input=None
+        self.output=None
+        raise NotImplementedError("Batch Normalization not yet implemented!")
 
     def get_inputs(self):
         """
