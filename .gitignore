@@ -5,6 +5,7 @@ opendeep/log/logs
 *.pkl
 
 venv
+bin
 
 #################
 ## Eclipse
