@@ -311,8 +311,8 @@ def get_bias(shape, name="b", init_values=None):
         The shape to use for the bias vector/matrix.
     name : str
         The name to give the shared variable.
-    offset : float or array_like
-        Values to add to the zeros, if you want a nonzero bias initially.
+    init_values : float or array_like
+        Values to initialize as bias. If float, it repeats over `shape`. If array_like, initializes as the array.
 
     Returns
     -------
