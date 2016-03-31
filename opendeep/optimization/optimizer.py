@@ -269,6 +269,8 @@ class Optimizer(object):
         # Calculate the optimizer updates each run
         # This is where the magic happens for a lot of sub-implementations of SGD!
         # It tells how to update the params each training epoch
+        print self.params
+        print gradients
         gradient_updates = self.get_updates(gradients)
 
         # Combine the updates from the model also if applicable
