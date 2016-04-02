@@ -23,7 +23,6 @@ TRAIN_COST_KEY : str
 # standard libraries
 import logging
 import time
-import os
 # third party
 import numpy
 import theano.tensor as T
@@ -35,12 +34,11 @@ from opendeep.data.dataset import Dataset
 from opendeep.models.model import Model
 from opendeep.optimization.loss import Loss
 from opendeep.monitor.monitor import collapse_channels
-from opendeep.monitor.out_service import FileService
 from opendeep.utils.decay import get_decay_function
 from opendeep.utils.misc import (raise_to_list, make_time_units_string,
                                  add_kwargs_to_dict, trunc)
 from opendeep.utils.batch import minibatch
-from opendeep.utils.misc import min_normalized_izip
+from opendeep.utils.misc import min_normalized_izip, base_variables
 
 log = logging.getLogger(__name__)
 
@@ -258,10 +256,15 @@ class Optimizer(object):
         self.params = self.model.get_params()
         # Now create the training cost function for the model to use while training - update parameters
         # gradient!
-        gradients = grad(cost=self.loss_expression, wrt=list(self.params.values()))
+        # First find the basic variables that will be updated
+        params = set()
+        for param in self.params.values():
+            params.update(base_variables(param))
+        params = list(params)
+        gradients = grad(cost=self.loss_expression, wrt=params)
         # now create the dictionary mapping the parameter with its gradient
         gradients = OrderedDict(
-            [(param, g) for param, g in zip(list(self.params.values()), gradients)]
+            [(param, g) for param, g in zip(params, gradients)]
         )
         # clip gradients if we want.
         gradients = clip_gradients(gradients, self.grad_clip, self.hard_clip)
@@ -382,8 +385,7 @@ class Optimizer(object):
         # save params
         if self.best_params is not None:
             log.debug("Restoring best model parameters...")
-            for best_param, param_value in self.best_params.items():
-                self.params[best_param].set_value(param_value, borrow=False)
+            self.model.set_param_values(self.best_params, borrow=False)
         log.debug("Saving model parameters...")
         self.model.save_params('trained_epoch_' + str(self.epoch_counter))
 
@@ -469,7 +471,7 @@ class Optimizer(object):
             self.patience = 0
             self.best_cost = cost
             # save the parameters that made it the best
-            self.best_params = {key: param.get_value(borrow=False) for key, param in self.params.items()}
+            self.best_params = self.model.get_param_values(borrow=False)
         elif not numpy.isnan(cost):
             self.patience += 1
 

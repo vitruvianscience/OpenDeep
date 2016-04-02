@@ -103,23 +103,20 @@ class Dense(Model):
         #########################################################
         # parameters - make sure to deal with input dictionary! #
         #########################################################
-        W = self.params.get(
-            "W",
-            get_weights(weights_init=weights_init,
-                        shape=(self.input_size[-1], self.output_size[-1]),
-                        name="W",
-                        rng=mrg,
-                        # if gaussian
-                        mean=weights_mean,
-                        std=weights_std,
-                        # if uniform
-                        interval=weights_interval)
+        W = self.params.get("W") or get_weights(
+            weights_init=weights_init,
+            shape=(self.input_size[-1], self.output_size[-1]),
+            name="W",
+            rng=mrg,
+            # if gaussian
+            mean=weights_mean,
+            std=weights_std,
+            # if uniform
+            interval=weights_interval
         )
 
-        b = self.params.get(
-            "b",
-            get_bias(shape=self.output_size[-1], name="b", init_values=bias_init)
-        )
+        b = self.params.get("b") or get_bias(shape=self.output_size[-1], name="b", init_values=bias_init)
+
 
         # Finally have the two parameters - weights matrix W and bias vector b. That is all!
         self.params = OrderedDict([("W", W), ("b", b)])

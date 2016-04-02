@@ -12,6 +12,7 @@ except ImportError: # will be 3.x series
 import numpy
 import theano
 import theano.tensor as T
+from theano.compile.sharedvalue import SharedVariable
 # internal imports
 from opendeep.utils.constructors import as_floatX
 
@@ -387,3 +388,26 @@ def min_normalized_izip(*iterables):
     for elems in zip(*iterables):
         min_len = min([elem.shape[0] if hasattr(elem, 'shape') else len(raise_to_list(elem)) for elem in elems])
         yield [elem[:min_len] for elem in elems]
+
+def base_variables(expression):
+    """
+    A helper to find the base SharedVariables in a given expression.
+
+    Parameters
+    ----------
+    expression : theano expression
+        The computation graph to find the base SharedVariables
+
+    Returns
+    -------
+    set(SharedVariable)
+        The set of unique shared variables
+    """
+    variables = set()
+    if isinstance(expression, SharedVariable):
+        variables.add(expression)
+        return variables
+    elif expression.owner is not None:
+        for input in expression.owner.inputs:
+            variables.update(base_variables(input))
+    return variables
