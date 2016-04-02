@@ -280,5 +280,6 @@ class Prototype(Model):
                     if param not in list(params.values()):
                         name = model._classname + '_%d_' % model_index + name
                         params[name] = param
+                        param.name = name
                 model_index += 1
         return params

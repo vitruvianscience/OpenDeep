@@ -9,6 +9,8 @@ their ability to connect with other Models.
 import logging
 import os
 import time
+# third party
+from theano.compat.python2x import OrderedDict  # use this compatibility OrderedDict
 # internal references
 import opendeep.models
 from opendeep.utils.decorators import init_optimizer
@@ -498,6 +500,8 @@ class Model(object):
     #######################################
     # Methods to do with model parameters #
     #######################################
+    # TODO: getting and setting param values when they are shared and modified gets tricky....
+    # TODO: think of a good way to do this. Right now, ignoring setting those values.
     def get_params(self):
         """
         This returns the ordered dictionary of {string_name: theano shared variables} that will be trained by
@@ -506,8 +510,8 @@ class Model(object):
         Returns
         -------
         OrderedDict(str: SharedVariable)
-            Ordered dictionary of {string_name: theano shared variables} to be trained with an :class:`Optimizer`.
-            These are the parameters for the model.
+            Ordered dictionary of {string_name: theano shared variables}.
+            These are the parameters for the model defining its forward computation.
 
         Raises
         ------
@@ -516,6 +520,23 @@ class Model(object):
         """
         log.critical("%s does not have a get_params function!", self._classname)
         raise NotImplementedError("Please implement a get_params method for %s" % self._classname)
+
+    def get_param(self, name):
+        """
+        This helper method returns the parameter from `get_params` dictionary with the key of `name`.
+
+        Parameters
+        ----------
+        name : str
+            The key name of the parameter to grab from the `get_params()` dictionary. Returns None if parameter
+            with `name` doesn't exist.
+
+        Returns
+        -------
+        SharedVariable or expression, or None
+            The given parameter.
+        """
+        return self.get_params().get(name, None)
 
     def get_param_values(self, borrow=False):
         """
@@ -542,7 +563,12 @@ class Model(object):
         """
         # try to use theano's get_value() on each parameter returned by get_params()
         try:
-            params = {name: variable.get_value(borrow=borrow) for name, variable in self.get_params().items()}
+            params = {}
+            for name, variable in self.get_params().items():
+                try:
+                    params[name] = variable.get_value(borrow=borrow)
+                except AttributeError:
+                    params[name] = variable.eval()
         except NotImplementedError:
             log.exception("%s cannot get parameters, is missing get_params() method!", self._classname)
             raise
@@ -570,7 +596,7 @@ class Model(object):
         Returns
         -------
         bool
-            Whether or not successfully set parameters.
+            Whether or not successfully set all parameters.
         """
         params = self.get_params()
 
@@ -586,15 +612,16 @@ class Model(object):
                         (str(key), self._classname, str(params_keyset)))
 
         # for each parameter and value, set the value!
-        try:
-            for key in intersection:
+        success = True
+        for key in intersection:
+            try:
                 params[key].set_value(param_values[key], borrow=borrow)
-        except Exception as e:
-            log.exception("%s had Exception %s",
-                          self._classname, str(e))
-            return False
+            except Exception as e:
+                log.exception("%s had Exception %s",
+                              self._classname, str(e))
+                success = False
 
-        return True
+        return success
 
     def save_params(self, param_file, use_hdf5=False):
         """
