@@ -193,8 +193,9 @@ def download_file(url, destination):
     bool
         Whether or not the operation was successful.
     """
+    pbar = None
     def dl_progress(count, blockSize, totalSize):
-        if False:
+        if has_progressbar:
             pbar.update(count*blockSize)
         else:
             percent = int(count*blockSize*100/totalSize)
@@ -213,7 +214,8 @@ def download_file(url, destination):
         if has_progressbar:
             widgets = ['Test: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
                        ' ', ETA(), ' ', FileTransferSpeed()]
-            pbar = ProgressBar(widgets=widgets, max_value=content_length).start()
+            # pbar = ProgressBar(widgets=widgets, max_value=content_length).start()
+            pbar = ProgressBar(max_value=content_length).start()
         urlretrieve(url, destination, reporthook=dl_progress)
         if has_progressbar and pbar is not None:
             pbar.finish()
