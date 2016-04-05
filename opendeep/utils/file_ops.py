@@ -24,6 +24,7 @@ UNKNOWN : int
 """
 # standard imports
 import os
+import sys
 import errno
 from collections import Iterable
 try:
@@ -40,7 +41,7 @@ import gzip
 # third party
 from six import string_types
 try:
-    from progressbar import ProgressBar
+    from progressbar import Percentage, Bar, ETA, RotatingMarker, FileTransferSpeed, ProgressBar
     has_progressbar = True
 except ImportError:
     has_progressbar = False
@@ -193,23 +194,36 @@ def download_file(url, destination):
         Whether or not the operation was successful.
     """
     def dl_progress(count, blockSize, totalSize):
-        if has_progressbar:
-            pass
+        if False:
+            pbar.update(count*blockSize)
+        else:
+            percent = int(count*blockSize*100/totalSize)
+            sys.stdout.write("\rFetching %s ...%d%%" % (url, percent))
+            sys.stdout.flush()
 
     destination = os.path.realpath(destination)
-    log.debug('Downloading data from %s to %s', url, destination)
+    log.debug('Downloading data from %s to %s:', url, destination)
     try:
+        pbar = None
         page = urlopen(url)
-        # content_length = page.info().get('Content')
         if page.getcode() is not 200:
             log.warning('Tried to download data from %s and got http response code %s', url, str(page.getcode()))
             return False
+        content_length = int(page.info().get('Content-Length', 0))
+        if has_progressbar:
+            widgets = ['Test: ', Percentage(), ' ', Bar(marker=RotatingMarker()),
+                       ' ', ETA(), ' ', FileTransferSpeed()]
+            pbar = ProgressBar(widgets=widgets, max_value=content_length).start()
         urlretrieve(url, destination, reporthook=dl_progress)
+        if has_progressbar and pbar is not None:
+            pbar.finish()
         return True
     except:
         log.exception('Error downloading data from %s to %s', url, destination)
         return False
-
+    finally:
+        if has_progressbar and pbar is not None:
+            pbar.finish()
 
 
 def get_file_type(file_path):
