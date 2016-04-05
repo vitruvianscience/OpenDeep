@@ -14,7 +14,8 @@ class TestCifar10(unittest.TestCase):
         # get a logger for this session
         self.log = logging.getLogger(__name__)
         # get the mnist dataset
-        self.cifar = CIFAR10(one_hot=True, path='../../../datasets/cifar-10-batches-py/')
+        # self.cifar = CIFAR10(one_hot=True, path='../../../datasets/cifar-10-batches-py/')
+        self.cifar = CIFAR10(one_hot=True)
 
     def testSizes(self):
         print("lengths:")
@@ -35,6 +36,22 @@ class TestCifar10(unittest.TestCase):
             print(len(self.cifar.test_inputs))
         if self.cifar.test_targets is not None:
             print(len(self.cifar.test_targets))
+
+    def testShapes(self):
+        print("shapes:")
+        print("\ninput")
+        if self.cifar.train_inputs is not None:
+            for i,x in enumerate(self.cifar.train_inputs):
+                if i>0:
+                    break
+                print x.shape
+        print("\ntarget")
+        if self.cifar.train_targets is not None:
+            for i,x in enumerate(self.cifar.train_targets):
+                if i>0:
+                    break
+                print x
+                print x.shape
 
 
     def tearDown(self):

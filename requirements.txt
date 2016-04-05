@@ -24,3 +24,5 @@ PyYAML>=3.11
 bokeh>=0.11.0,<0.11.99
 # NLTK for nlp tasks (like word tokenization)
 nltk>=3.0.1
+# ProgressBar2 for showing a nice progress bar
+progressbar2>=3.6.2

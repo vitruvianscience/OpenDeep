@@ -227,7 +227,7 @@ class Optimizer(object):
             updates[param] = param - scaled_lr * gradient
         return updates
 
-    def train(self, monitor_channels=None, plot=None):
+    def train(self, monitor_channels=None, plot=None, callback=None):
         """
         This method performs the training!!!
         It is an online training method that goes over minibatches from the dataset for a number of epochs,
@@ -242,6 +242,8 @@ class Optimizer(object):
             on the data.
         plot : Plot, optional
             The Plot object to use if we want to graph the outputs (uses bokeh server).
+        callback : function, optional
+            A function that will be run at the end of every epoch.
         """
         if not self.model:
             log.error("No self.model for the Optimizer!")
@@ -297,17 +299,27 @@ class Optimizer(object):
         self.test_monitors_outservice_dict = {}
         if monitor_channels:
             # collapse the appropriate monitors into their (name, expression, out_service) tuples
-            train_collapsed = collapse_channels(monitor_channels, train=True)
-            valid_collapsed = collapse_channels(monitor_channels, valid=True)
-            test_collapsed  = collapse_channels(monitor_channels, test=True)
+            train_collapsed_epoch = collapse_channels(monitor_channels, train=True, level='epoch')
+            train_collapsed_batch = collapse_channels(monitor_channels, train=True, level='batch')
+            valid_collapsed_epoch = collapse_channels(monitor_channels, valid=True, level='epoch')
+            valid_collapsed_batch = collapse_channels(monitor_channels, valid=True, level='batch')
+            test_collapsed_epoch  = collapse_channels(monitor_channels, test=True, level='epoch')
+            test_collapsed_batch  = collapse_channels(monitor_channels, test=True, level='batch')
+            # get name for batch and epoch
+            self.train_monitor_name_batch = [name for name, _, _ in train_collapsed_batch]
+            self.train_monitor_name_epoch = [name for name, _, _ in train_collapsed_epoch]
+            self.valid_monitor_name_batch = [name for name, _, _ in valid_collapsed_batch]
+            self.valid_monitor_name_epoch = [name for name, _, _ in valid_collapsed_epoch]
+            self.test_monitor_name_batch = [name for name, _, _ in test_collapsed_batch]
+            self.test_monitor_name_epoch = [name for name, _, _ in test_collapsed_epoch]
             # get name: expression dictionary
-            self.train_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in train_collapsed])
-            self.valid_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in valid_collapsed])
-            self.test_monitors_dict  = OrderedDict([(name, expression) for name, expression, _ in test_collapsed])
+            self.train_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in (train_collapsed_batch + train_collapsed_epoch)])
+            self.valid_monitors_dict = OrderedDict([(name, expression) for name, expression, _ in (valid_collapsed_batch + valid_collapsed_epoch)])
+            self.test_monitors_dict  = OrderedDict([(name, expression) for name, expression, _ in (test_collapsed_batch + test_collapsed_epoch)])
             # get name: outservice dictionary
-            self.train_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in train_collapsed])
-            self.valid_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in valid_collapsed])
-            self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in test_collapsed])
+            self.train_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in (train_collapsed_batch + train_collapsed_epoch)])
+            self.valid_monitors_outservice_dict = OrderedDict([(name, out) for name, _, out in (valid_collapsed_batch + valid_collapsed_epoch)])
+            self.test_monitors_outservice_dict  = OrderedDict([(name, out) for name, _, out in (test_collapsed_batch + test_collapsed_epoch)])
 
         #######################################
         # compile train and monitor functions #
@@ -378,6 +390,8 @@ class Optimizer(object):
         while not self.STOP:
             try:
                 self.STOP = self._perform_one_epoch(f_learn, plot)
+                if callable(callback):
+                    callback()
             except KeyboardInterrupt:
                 log.info("STOPPING EARLY FROM KEYBOARDINTERRUPT")
                 self.STOP = True
@@ -407,7 +421,7 @@ class Optimizer(object):
         # train #
         #########
         train_costs = []
-        train_monitors = {key: [] for key in self.train_monitors_dict.keys()}
+        train_monitors_epoch = {key: [] for key in self.train_monitors_dict.keys() if key in self.train_monitor_name_epoch}
         train_data = [
             minibatch(input_data, self.batch_size, self.min_batch_size)
             for input_data in raise_to_list(self.dataset.train_inputs)
@@ -422,15 +436,20 @@ class Optimizer(object):
             _outs = raise_to_list(f_learn(*batch))
             train_costs.append(_outs[0])
             # handle any user defined monitors (if different from the train cost)
-            if len(train_monitors) > 0:
-                current_monitors = zip(self.train_monitors_dict.keys(), _outs[1:])
+            if len(self.train_monitors_dict) > 0:
+                monitor_names = self.train_monitors_dict.keys()
+                current_monitors = zip(monitor_names, _outs[1:])
                 for name, val in current_monitors:
                     val = numpy.asarray(val)
-                    train_monitors[name].append(val)
+                    if name in self.train_monitor_name_batch:
+                        out_service = self.train_monitors_outservice_dict[name]
+                        out_service.write(val, "train")
+                    elif name in self.train_monitor_name_epoch:
+                        train_monitors_epoch[name].append(val)
 
         # get the mean values for the batches
         mean_train = numpy.mean(train_costs, 0)
-        current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in train_monitors.items()}
+        current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in train_monitors_epoch.items()}
         # log the mean values!
         log.info('Train cost: %s', trunc(mean_train))
         if len(current_mean_monitors) > 0:
@@ -451,14 +470,16 @@ class Optimizer(object):
         # valid #
         #########
         self._compute_over_subset("valid", self.dataset.valid_inputs, self.dataset.valid_targets,
-                                  self.valid_monitors_dict, self.valid_monitor_function,
+                                  self.valid_monitors_dict, self.valid_monitor_name_batch, self.valid_monitor_name_epoch,
+                                  self.valid_monitor_function,
                                   self.valid_monitors_outservice_dict, plot)
 
         ########
         # test #
         ########
         self._compute_over_subset("test", self.dataset.test_inputs, self.dataset.test_targets,
-                                  self.test_monitors_dict, self.test_monitor_function,
+                                  self.test_monitors_dict, self.test_monitor_name_batch, self.test_monitor_name_epoch,
+                                  self.test_monitor_function,
                                   self.test_monitors_outservice_dict, plot)
 
         ###########
@@ -506,31 +527,38 @@ class Optimizer(object):
         return stop
 
     def _compute_over_subset(self, subset, inputs, targets,
-                             monitors_dict, monitor_function, monitors_outservice_dict,
+                             monitors_dict, monitor_names_batch, monitor_names_epoch,
+                             monitor_function, monitors_outservice_dict,
                              plot):
         inputs = raise_to_list(inputs)
         targets = raise_to_list(targets)
         if inputs is not None and len(monitors_dict) > 0:
-            monitors = {key: [] for key in monitors_dict.keys()}
+            monitors_epoch = {key: [] for key in monitors_dict.keys() if key in monitor_names_epoch}
             data = [minibatch(input, self.batch_size, self.min_batch_size) for input in inputs]
             if targets is not None and not self.unsupervised:
                 data += [minibatch(target, self.batch_size, self.min_batch_size) for target in targets]
 
             for batch in min_normalized_izip(*data):
                 _outs = raise_to_list(monitor_function(*batch))
-                current_monitors = zip(monitors_dict.keys(), _outs)
+                monitor_names = monitors_dict.keys()
+                current_monitors = zip(monitor_names, _outs)
                 for name, val in current_monitors:
                     val = numpy.asarray(val)
-                    monitors[name].append(val)
+                    if name in monitor_names_batch:
+                        out_service = monitors_outservice_dict[name]
+                        out_service.write(val, subset)
+                    elif name in monitor_names_epoch:
+                        monitors_epoch[name].append(val)
 
             # get the mean values for the batches
-            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in monitors.items()}
+            current_mean_monitors = {key: numpy.mean(vals, 0) for key, vals in monitors_epoch.items()}
             # log the mean values!
             log.info('%s monitors: %s', subset, str(current_mean_monitors))
             # send the values to their outservices
-            for name, service in monitors_outservice_dict.items():
-                if name in current_mean_monitors and service:
-                    service.write(current_mean_monitors[name], subset)
+            for name, val in current_mean_monitors.items():
+                if name in monitors_outservice_dict:
+                    out_service = monitors_outservice_dict[name]
+                    out_service.write(val, subset)
             # if there is a plot, also send them over!
             if plot:
                 plot.update_plots(epoch=self.epoch_counter, monitors=current_mean_monitors)

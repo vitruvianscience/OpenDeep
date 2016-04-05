@@ -254,6 +254,10 @@ class Monitor(object):
         Unique name to represent the monitor.
     expression : theano expression/variable.
         The computation for the value of the Monitor.
+    level : str
+        The granularity to evaluate the monitors. Can be 'batch' or 'epoch'. 'batch' evaluates the monitor
+        on every batch given to the network. 'epoch' aggregates the mean of the batch monitors and sends it
+        at each epoch.
     train_flag : bool
         Whether to run this monitor on training data.
     valid_flag : bool
@@ -264,7 +268,7 @@ class Monitor(object):
         The :class:`OutService` to for this monitor - where to route its output
         (i.e. the log, local file, websockets, etc.)
     """
-    def __init__(self, name, expression, out_service=None, train=True, valid=False, test=False):
+    def __init__(self, name, expression, level='epoch', out_service=None, train=True, valid=False, test=False):
         """
         This initializes a :class:`Monitor` representation.
 
@@ -274,6 +278,10 @@ class Monitor(object):
             Unique name to represent the monitor.
         expression : theano expression/variable.
             The computation for the value of the Monitor.
+        level : str
+            The granularity to evaluate the monitors. Can be 'batch' or 'epoch'. 'batch' evaluates the monitor
+            on every batch given to the network. 'epoch' aggregates the mean of the batch monitors and sends it
+            at each epoch.
         out_service : OutService
             The :class:`OutService` to for this monitor - where its output goes.
         train_flag : bool
@@ -291,11 +299,12 @@ class Monitor(object):
         self.valid_flag = valid
         self.test_flag  = test
         self.out_service = out_service
+        self.level = level
 
 ####################
 # Helper functions #
 ####################
-def collapse_channels(monitor_channels, train=None, valid=None, test=None):
+def collapse_channels(monitor_channels, train=None, valid=None, test=None, level=None):
     """
     This function takes a list of :class:`MonitorsChannel` and flattens them into a
     list of tuples (collapsed_name, expression, out_service).
@@ -313,6 +322,8 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
         Whether to collapse the monitors to be used on validation data.
     test : bool, optional
         Whether to collapse the monitors to be used on testing data.
+    level : string, optional
+        The level flag monitor to collapse on. None defaults to all monitors.
 
     Returns
     -------
@@ -338,11 +349,11 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
         if train is None and valid is None and test is None:
             # collapse their names with the channel name
             if is_channel:
-                names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors]
+                names = [COLLAPSE_SEPARATOR.join([channel.name, monitor.name]) for monitor in monitors if (level == monitor.level or level is None)]
             else:
-                names = [monitor.name for monitor in monitors]
-            expressions = [monitor.expression for monitor in monitors]
-            services = [monitor.out_service for monitor in monitors]
+                names = [monitor.name for monitor in monitors if (level == monitor.level or level is None)]
+            expressions = [monitor.expression for monitor in monitors if (level == monitor.level or level is None)]
+            services = [monitor.out_service for monitor in monitors if (level == monitor.level or level is None)]
 
         else:
             # collapse their names with the channel name and the train/valid/test ending
@@ -350,21 +361,21 @@ def collapse_channels(monitor_channels, train=None, valid=None, test=None):
             expressions = []
             services = []
             for monitor in monitors:
-                if monitor.train_flag and train:
+                if monitor.train_flag and train and (level == monitor.level or level is None):
                     if is_channel:
                         names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TRAIN_MARKER]))
                     else:
                         names.append(COLLAPSE_SEPARATOR.join([monitor.name, TRAIN_MARKER]))
                     expressions.append(monitor.expression)
                     services.append(monitor.out_service)
-                if monitor.valid_flag and valid:
+                if monitor.valid_flag and valid and (level == monitor.level or level is None):
                     if is_channel:
                         names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, VALID_MARKER]))
                     else:
                         names.append(COLLAPSE_SEPARATOR.join([monitor.name, VALID_MARKER]))
                     expressions.append(monitor.expression)
                     services.append(monitor.out_service)
-                if monitor.test_flag and test:
+                if monitor.test_flag and test and (level == monitor.level or level is None):
                     if is_channel:
                         names.append(COLLAPSE_SEPARATOR.join([channel.name, monitor.name, TEST_MARKER]))
                     else:
