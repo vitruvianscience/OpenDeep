@@ -19,6 +19,7 @@ Models
 * Deep Q Network
 * RL-NTM http://arxiv.org/abs/1505.00521
 * Highway networks http://arxiv.org/abs/1505.00387
+* Any affine transformation as a modify_layer
 
 Optimization
 ============
