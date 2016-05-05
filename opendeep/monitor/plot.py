@@ -88,10 +88,20 @@ class Plot(object):
 
             self.channels = monitor_channels
             self.colors = colors
-            self.bokeh_doc_name = bokeh_doc_name
+            self.bokeh_doc_name = '_'.join(str(bokeh_doc_name).split())
             self.server_url = server_url
 
-            session = push_session(curdoc(), session_id=self.bokeh_doc_name, url=self.server_url)
+            try:
+                session = push_session(curdoc(), session_id=self.bokeh_doc_name, url=self.server_url)
+            except Exception as e:
+                log.error(str(e))
+                msg = "If bokeh server is already running (from `bokeh serve` command), "+\
+                      "and the server gives the error: "+\
+                      "`Malformed HTTP request line`, most likely one of the names of the Monitor, MonitorChannel, "+\
+                      "or Plot bokeh_doc_name have whitespace or nonstandard characters. Try different names "+\
+                      "to see if that fixes; otherwise, raise a support ticket."
+                log.error(msg)
+                raise type(e)(str(e) + ". " + msg)
 
             # Create figures for each group of channels
             self.data_sources = {}
