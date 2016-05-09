@@ -34,15 +34,13 @@ class MNIST(FileDataset):
     Object for the MNIST handwritten digit dataset. Pickled file provided by Montreal's LISA lab into
     train, valid, and test sets. http://www.iro.umontreal.ca/~lisa/deep/data/mnist/
     """
-    def __init__(self, flatten=False, binary=False, binary_cutoff=0.5, one_hot=False, concat_train_valid=False,
+    def __init__(self, flatten=False, binary_cutoff=False, one_hot=False, concat_train_valid=False,
                  path=mnist_path, source=mnist_source):
         """
         Parameters
         ----------
         flatten : bool, optional
             Flag to flatten the 2D images into 1D vectors.
-        binary : bool, optional
-            Flag to binarize the input images.
         binary_cutoff : float, optional
             If you want to binarize the input images, what threshold value to use.
         one_hot : bool, optional
@@ -55,7 +53,7 @@ class MNIST(FileDataset):
             The `source` parameter to a ``FileDataset``.
         """
         # instantiate the Dataset class to install the dataset from the url
-        log.info('Loading MNIST with binary=%s and one_hot=%s', str(binary), str(one_hot))
+        log.info("Loading MNIST with binary={!s} and one_hot={!s}".format(str(binary_cutoff), str(one_hot)))
 
         super(MNIST, self).__init__(path=path, source=source)
 
@@ -76,13 +74,13 @@ class MNIST(FileDataset):
             )
 
         if concat_train_valid:
-            log.debug('Concatenating train and valid sets together...')
+            log.debug("Concatenating train and valid sets together...")
             self.train_inputs = concatenate((self.train_inputs, self.valid_inputs))
             self.train_targets = concatenate((self.train_targets, self.valid_targets))
 
         # make optional binary
-        if binary:
-            log.debug('Making MNIST X values binary with cutoff %s', str(binary_cutoff))
+        if binary_cutoff:
+            log.debug("Making MNIST input values binary with cutoff {!s}".format(str(binary_cutoff)))
             self.train_inputs = binarize(self.train_inputs, binary_cutoff)
             self.valid_inputs = binarize(self.valid_inputs, binary_cutoff)
             self.test_inputs  = binarize(self.test_inputs, binary_cutoff)
