@@ -147,12 +147,18 @@ class TestConv(unittest.TestCase):
             print("Training LeNet...")
             optimizer.train(monitor_channels=error_monitor)
 
-            def test_subset(filename, expected, conf=0.0001):
+            def test_subset(filename, expected, conf=0.001):
                 with open(filename, 'r') as f:
                     errs = [float(err) for err in f]
-                for err, exp in zip(errs, expected):
-                    self.assertTrue(exp-conf < err < exp+conf,
-                                    "Errors: {!s} and Expected: {!s}".format(errs, expected))
+                for i, (err, exp) in enumerate(zip(errs, expected)):
+                    if i == 0:
+                        c = conf*10
+                    else:
+                        c = conf
+                    self.assertTrue(exp-c < round(err, 4) < exp+c,
+                                    "Errors: {!s} and Expected: {!s} -- Error at {!s} and {!s}".format(
+                                        errs, expected, err, exp)
+                                    )
 
             test_subset('outputs/lenet_error_train.txt',
                         [.0753,
