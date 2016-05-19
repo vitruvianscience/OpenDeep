@@ -10,10 +10,12 @@ This module provides the base convolutional layers.
 from __future__ import division
 # standard libraries
 import logging
+from collections import Iterable
 # third party libraries
 from theano import config
 from theano.compat.python2x import OrderedDict
-from theano.tensor.nnet import conv2d, ConvOp
+from theano.tensor.nnet import conv2d
+from theano.tensor.nnet.abstract_conv import get_conv_output_shape, get_conv_shape_1axis
 import theano.sandbox.rng_mrg as RNG_MRG
 # internal references
 from opendeep.models.model import Model
@@ -50,20 +52,25 @@ if config.optimizer_including != "conv_meta":
                 "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
                 % str(config.optimizer_including))
 
+PADDING_STRINGS = ['valid', 'full', 'half']
+
 def get_conv_shape(input_shape, filter_shape, padding, stride):
     """
     Helper method to calculate the shapes post-convolution operation given input parameters. This isn't used
     for our output_size calculations because Theano provides a function specific to its conv op.
     """
-    shape = tuple(
-        None if w is None or f is None or p is None or s is None
-        else (w - f + 2*p)/s + 1
-        for w, f, p, s in zip(input_shape, filter_shape, padding, stride)
-    )
-    for s in shape:
-        if s is not None and not isinstance(s, int):
-            raise RuntimeWarning("Convolution shape %s has a non-integer (non-None) value." % str(shape))
+    if isinstance(input_shape, Iterable):
+        shape = get_conv_output_shape(input_shape, filter_shape, padding, stride)
+    else:
+        shape = get_conv_shape_1axis(input_shape, filter_shape, padding, stride)
     return shape
+    # batch_size = input_shape[0]
+    # num_filters = filter_shape[0]
+    # return ((batch_size, num_filters) +
+    #         tuple(conv_output_length(input, filter, stride, p)
+    #               for input, filter, stride, p
+    #               in zip(input_shape[2:], self.filter_size,
+    #                      self.stride, pad)))
 
 @inherit_docs
 class Conv1D(Model):
@@ -74,7 +81,7 @@ class Conv1D(Model):
     This means the input is a 3-dimensional tensor of form (batch, channel, input)
     """
     def __init__(self, inputs=None, params=None, outdir='outputs/conv1d',
-                 n_filters=None, filter_size=None, stride=None, border_mode='valid',
+                 n_filters=None, filter_size=None, stride=None, padding='valid',
                  weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='elu',
@@ -98,7 +105,7 @@ class Conv1D(Model):
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
             have two versions of the model that use the same parameters - such as siamese networks or pretraining some
             weights.
-        outdir : str
+        outdir : str or None
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
         n_filters : int
@@ -108,12 +115,13 @@ class Conv1D(Model):
         stride : int
             The distance between the receptive field centers of neighboring units. This is the 'stride' of the
             convolution operation.
-        border_mode : str, one of 'valid', 'full', 'same'
+        padding : str, one of 'valid', 'full', 'same', or int
             A string indicating the convolution border mode.
             If 'valid', the convolution is only computed where the input and the
             filter fully overlap.
             If 'full', the convolution is computed wherever the input and the
             filter overlap by at least one position.
+            An int specifies the amount of padding to add manually.
         weights_init : str
             Determines the method for initializing model weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
@@ -168,13 +176,9 @@ class Conv1D(Model):
         # convolution function!
         convolution_func = get_conv1d_function(convolution)
 
-        outshape = ConvOp.getOutputShape(
-            inshp=(input_shape[-1],),
-            kshp=(filter_size,),
-            stride=(stride,),
-            mode=border_mode
-        )
-        self.output_size = (input_shape[0], n_filters) + outshape
+        outshape = get_conv_shape(input_shape=input_shape[2], filter_shape=filter_size, padding=padding, stride=stride)
+
+        self.output_size = (input_shape[0], n_filters, outshape)
 
         ##########
         # Params #
@@ -203,16 +207,16 @@ class Conv1D(Model):
         ########################
         # Computational Graph! #
         ########################
-        if border_mode in ['valid', 'full']:
+        if padding in PADDING_STRINGS or isinstance(padding, int):
             conved = convolution_func(self.input,
                                       W,
                                       subsample=(stride,),
-                                      image_shape=input_shape,
+                                      input_shape=input_shape,
                                       filter_shape=filter_shape,
-                                      border_mode=border_mode)
+                                      border_mode=padding)
         else:
-            log.error("Invalid border mode: '%s'" % border_mode)
-            raise RuntimeError("Invalid border mode: '%s'" % border_mode)
+            log.error("Invalid padding: '{!s}'. Expected int or one of {!s}".format(padding, PADDING_STRINGS))
+            raise RuntimeError("Invalid padding: '{!s}'. Expected int or one of {!s}".format(padding, PADDING_STRINGS))
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x'))
 
@@ -233,7 +237,7 @@ class Conv2D(Model):
     (https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py)
     """
     def __init__(self, inputs=None, params=None, outdir='outputs/conv2d',
-                 n_filters=None, filter_size=None, stride=(1, 1), border_mode='valid',
+                 n_filters=None, filter_size=None, padding='valid', stride=(1, 1),
                  weights_init='uniform', weights_interval='glorot', weights_mean=0, weights_std=5e-3,
                  bias_init=0,
                  activation='elu',
@@ -250,28 +254,30 @@ class Conv2D(Model):
             to accept inputs from elsewhere. `shape` will be a monad tuple representing known
             sizes for each dimension in the `Theano.TensorType`. Shape of the incoming data:
             (batch_size, num_channels, input_height, input_width).
-            If input_size is None, it can be inferred. However, border_mode can't be 'same'.
+            If input_size is None, it can be inferred. However, padding can't be 'same'.
         params : Dict(string_name: theano SharedVariable), optional
             A dictionary of model parameters (shared theano variables) that you should use when constructing
             this model (instead of initializing your own shared variables). This parameter is useful when you want to
             have two versions of the model that use the same parameters - such as siamese networks or pretraining some
             weights.
-        outdir : str
+        outdir : str or None
             The directory you want outputs (parameters, images, etc.) to save to. If None, nothing will
             be saved.
         n_filters : int
             The number of filters to use (convolution kernels).
         filter_size : tuple(int) or int
             (filter_height, filter_width). If it is an int, size will be duplicated across height and width.
-        stride : tuple(int)
-            The distance between the receptive field centers of neighboring units. This is the 'stride' of the
-            convolution operation.
-        border_mode : str, one of 'valid', 'full'
+        padding : str, one of 'valid', 'full', 'half', or int or tuple(int)
             A string indicating the convolution border mode.
             If 'valid', the convolution is only computed where the input and the
             filter fully overlap.
             If 'full', the convolution is computed wherever the input and the
             filter overlap by at least one position.
+            If int, symmetric padding defined by the integer.
+            If tuple(int), height, width padding defined by each element.
+        stride : tuple(int)
+            The distance between the receptive field centers of neighboring units. This is the 'stride' of the
+            convolution operation.
         weights_init : str
             Determines the method for initializing model weights. See opendeep.utils.nnet for options.
         weights_interval : str or float
@@ -288,17 +294,11 @@ class Conv2D(Model):
             The 2-dimensional convolution implementation to use. The default of 'conv2d' is normally fine because it
             uses theano's tensor.nnet.conv.conv2d, which cherry-picks the best implementation with a meta-optimizer if
             you set the theano configuration flag 'optimizer_including=conv_meta'. Otherwise, you could pass a
-            callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer.
+            callable function, such as cudnn or cuda-convnet if you don't want to use the meta-optimizer, or write your
+            own. Your own function should expect parameters in this order:
         mrg : random
             A random number generator that is used when adding noise.
             I recommend using Theano's sandbox.rng_mrg.MRG_RandomStreams.
-
-        Notes
-        -----
-        Theano's default convolution function (`theano.tensor.nnet.conv.conv2d`)
-        does not support the 'same' border mode by default. This layer emulates
-        it by performing a 'full' convolution and then cropping the result, which
-        may negatively affect performance.
         """
         super(Conv2D, self).__init__(**{arg: val for (arg, val) in locals().items() if arg is not 'self'})
 
@@ -315,6 +315,10 @@ class Conv2D(Model):
 
         if isinstance(filter_size, int):
             filter_size = (filter_size, )*2
+        if isinstance(padding, int):
+            padding = (padding, )*2
+        if isinstance(stride, int):
+            stride = (stride, )*2
 
         # activation function!
         activation_func = get_activation_function(activation)
@@ -328,16 +332,11 @@ class Conv2D(Model):
             convolution_func = convolution
 
         # filter shape should be in the form (num_filters, num_channels, filter_size[0], filter_size[1])
-
-        outshape = ConvOp.getOutputShape(
-            inshp=input_shape[-2:],
-            kshp=filter_size,
-            stride=stride,
-            mode=border_mode
-        )
-        self.output_size = (input_shape[0], n_filters) + outshape
-
         filter_shape = (n_filters, n_channels) + filter_size
+
+        self.output_size = get_conv_shape(
+            input_shape=input_shape, filter_shape=filter_shape, padding=padding, stride=stride
+        )
 
         ##########
         # Params #
@@ -366,15 +365,17 @@ class Conv2D(Model):
         ########################
         # Computational Graph! #
         ########################
-        if border_mode in ['valid', 'full']:
+        if padding in PADDING_STRINGS or isinstance(padding, int) or isinstance(padding, Iterable):
             conved = convolution_func(self.input,
                                       W,
                                       subsample=stride,
-                                      image_shape=input_shape,
+                                      input_shape=input_shape,
                                       filter_shape=filter_shape,
-                                      border_mode=border_mode)
+                                      border_mode=padding)
         else:
-            raise RuntimeError("Invalid border mode: '%s'" % border_mode)
+            log.error("Invalid padding: '{!s}'. Expected int or one of {!s}".format(padding, PADDING_STRINGS))
+            raise RuntimeError("Invalid padding: '{!s}'. Expected int, tuple(int), or one of {!s}".format(
+                padding, PADDING_STRINGS))
 
         self.output = activation_func(conved + b.dimshuffle('x', 0, 'x', 'x'))
 

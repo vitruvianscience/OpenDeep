@@ -8,9 +8,10 @@ https://github.com/benanne/Lasagne/blob/master/lasagne/theano_extensions/conv.py
 import logging
 # third party libraries
 import numpy
-import theano
+from theano import config
 from six import string_types
-import theano.tensor as T
+from theano.tensor import stack, tensordot, zeros, set_subtensor
+from theano.tensor.nnet import conv2d
 
 log = logging.getLogger(__name__)
 
@@ -18,11 +19,11 @@ log = logging.getLogger(__name__)
 # http://benanne.github.io/2014/12/09/theano-metaopt.html
 # make it THEANO_FLAGS=optimizer_including=conv_meta
 # OR you could set the .theanorc file with [global]optimizer_including=conv_meta
-if theano.config.optimizer_including != "conv_meta":
-    log.warning("Theano flag optimizer_including is not conv_meta (found %s)! "
+if config.optimizer_including != "conv_meta":
+    log.warning("Theano flag optimizer_including is not conv_meta (found {!s})! "
                 "To have Theano cherry-pick the best convolution implementation, please set "
-                "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!"
-                % str(theano.config.optimizer_including))
+                "optimizer_including=conv_meta either in THEANO_FLAGS or in the .theanorc file!".format(
+                 config.optimizer_including))
 
 # 1D convolutions
 # These convolutions assume the input is shaped like (B, C, I), which is (Batch, Channel, Input data).
@@ -30,7 +31,8 @@ if theano.config.optimizer_including != "conv_meta":
 # For example, batches of text will be of the form (N, 1, D) where N=examples in minibatch and
 # D=dimensionality (chars, words, etc.)
 
-def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
+
+def conv1d_sc(input, filters, input_shape=None, filter_shape=None,
               border_mode='valid', subsample=(1,)):
     """
     Using conv2d with a single input channel.
@@ -43,6 +45,7 @@ def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
         raise RuntimeError("Unsupported border_mode for conv1d_sc: "
                            "%s" % border_mode)
 
+    image_shape = input_shape
     if image_shape is None:
         image_shape_sc = None
     else:
@@ -59,17 +62,18 @@ def conv1d_sc(input, filters, image_shape=None, filter_shape=None,
     # We need to flip the channels dimension because it will be convolved over.
     filters_sc = filters.dimshuffle(0, 'x', 1, 2)[:, :, ::-1, :]
 
-    conved = T.nnet.conv2d(input_sc, filters_sc, image_shape=image_shape_sc,
-                           filter_shape=filter_shape_sc,
-                           subsample=(1, subsample[0]))
+    conved = conv2d(input_sc, filters_sc, input_shape=image_shape_sc,
+                    filter_shape=filter_shape_sc,
+                    subsample=(1, subsample[0]))
     return conved[:, :, 0, :]  # drop the unused dimension
 
 
-def conv1d_mc0(input, filters, image_shape=None, filter_shape=None,
+def conv1d_mc0(input, filters, input_shape=None, filter_shape=None,
                border_mode='valid', subsample=(1,)):
     """
     Using conv2d with width == 1.
     """
+    image_shape = input_shape
     if image_shape is None:
         image_shape_mc0 = None
     else:
@@ -85,18 +89,19 @@ def conv1d_mc0(input, filters, image_shape=None, filter_shape=None,
     input_mc0 = input.dimshuffle(0, 1, 'x', 2)
     filters_mc0 = filters.dimshuffle(0, 1, 'x', 2)
 
-    conved = T.nnet.conv2d(
-        input_mc0, filters_mc0, image_shape=image_shape_mc0,
+    conved = conv2d(
+        input_mc0, filters_mc0, input_shape=image_shape_mc0,
         filter_shape=filter_shape_mc0, subsample=(1, subsample[0]),
         border_mode=border_mode)
     return conved[:, :, 0, :]  # drop the unused dimension
 
 
-def conv1d_mc1(input, filters, image_shape=None, filter_shape=None,
+def conv1d_mc1(input, filters, input_shape=None, filter_shape=None,
                border_mode='valid', subsample=(1,)):
     """
     Using conv2d with height == 1.
     """
+    image_shape = input_shape
     if image_shape is None:
         image_shape_mc1 = None
     else:
@@ -112,14 +117,14 @@ def conv1d_mc1(input, filters, image_shape=None, filter_shape=None,
     input_mc1 = input.dimshuffle(0, 1, 2, 'x')
     filters_mc1 = filters.dimshuffle(0, 1, 2, 'x')
 
-    conved = T.nnet.conv2d(
-        input_mc1, filters_mc1, image_shape=image_shape_mc1,
+    conved = conv2d(
+        input_mc1, filters_mc1, input_shape=image_shape_mc1,
         filter_shape=filter_shape_mc1, subsample=(subsample[0], 1),
         border_mode=border_mode)
     return conved[:, :, :, 0]  # drop the unused dimension
 
 
-def conv1d_unstrided(input, filters, image_shape, filter_shape,
+def conv1d_unstrided(input, filters, input_shape, filter_shape,
                      border_mode='valid', subsample=(1,),
                      implementation=conv1d_sc):
     """
@@ -130,7 +135,7 @@ def conv1d_unstrided(input, filters, image_shape, filter_shape,
 
     border_mode has to be 'valid' at the moment.
     """
-    batch_size, num_input_channels, input_length = image_shape
+    batch_size, num_input_channels, input_length = input_shape
     num_filters, num_input_channels_, filter_length = filter_shape
     stride = subsample[0]
 
@@ -174,7 +179,7 @@ def conv1d_unstrided(input, filters, image_shape, filter_shape,
                           border_mode, subsample=(1,))
 
 
-def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
+def conv1d_sd(input, filters, input_shape, filter_shape, border_mode='valid',
               subsample=(1,)):
     """
     Using a single dot product.
@@ -187,7 +192,7 @@ def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
         raise RuntimeError("Unsupported border_mode for conv1d_sd: "
                            "%s" % border_mode)
 
-    batch_size, num_input_channels, input_length = image_shape
+    batch_size, num_input_channels, input_length = input_shape
     num_filters, num_input_channels_, filter_length = filter_shape
     stride = subsample[0]
 
@@ -209,9 +214,9 @@ def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
     input_truncated = input[:, :, :truncated_length]
 
     input_padded_shape = (batch_size, num_input_channels, padded_length)
-    input_padded = T.zeros(input_padded_shape)
-    input_padded = T.set_subtensor(input_padded[:, :, :truncated_length],
-                                   input_truncated)
+    input_padded = zeros(input_padded_shape)
+    input_padded = set_subtensor(input_padded[:, :, :truncated_length],
+                                 input_truncated)
 
     inputs = []
     for num in range(num_steps):
@@ -224,11 +229,11 @@ def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
 
         inputs.append(r_input)
 
-    inputs_stacked = T.stack(*inputs)  # shape is (n, b, c, w, f)
+    inputs_stacked = stack(*inputs)  # shape is (n, b, c, w, f)
     filters_flipped = filters[:, :, ::-1]
 
-    r_conved = T.tensordot(inputs_stacked, filters_flipped,
-                           numpy.asarray([[2, 4], [1, 2]], dtype=theano.config.floatX))
+    r_conved = tensordot(inputs_stacked, filters_flipped,
+                         numpy.asarray([[2, 4], [1, 2]], dtype=config.floatX))
     # resulting shape is (n, b, w, n_filters)
     # output needs to be (b, n_filters, w * n)
     r_conved = r_conved.dimshuffle(1, 3, 2, 0)  # (b, n_filters, w, n)
@@ -240,7 +245,7 @@ def conv1d_sd(input, filters, image_shape, filter_shape, border_mode='valid',
     return conved[:, :, :output_length]
 
 
-def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
+def conv1d_md(input, filters, input_shape, filter_shape, border_mode='valid',
               subsample=(1,)):
     """
     Using multiple dot products.
@@ -253,7 +258,7 @@ def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
         raise RuntimeError("Unsupported border_mode for conv1d_md: "
                            "%s" % border_mode)
 
-    batch_size, num_input_channels, input_length = image_shape
+    batch_size, num_input_channels, input_length = input_shape
     num_filters, num_input_channels_, filter_length = filter_shape
     stride = subsample[0]
 
@@ -269,7 +274,7 @@ def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
 
     filters_flipped = filters[:, :, ::-1]
 
-    conved = T.zeros(output_shape)
+    conved = zeros(output_shape)
 
     for num in range(num_steps):
         shift = num * stride
@@ -285,15 +290,13 @@ def conv1d_md(input, filters, image_shape, filter_shape, border_mode='valid',
             :, :, shift:length * filter_length + shift].reshape(r_input_shape)
 
         # shape (b, l, n_filters)
-        r_conved = T.tensordot(r_input, filters_flipped,
-                               numpy.asarray([[1, 3], [1, 2]], dtype=theano.config.floatX))
+        r_conved = tensordot(r_input, filters_flipped,
+                             numpy.asarray([[1, 3], [1, 2]], dtype=config.floatX))
         r_conved = r_conved.dimshuffle(0, 2, 1)  # shape is (b, n_filters, l)
-        conved = T.set_subtensor(conved[:, :, num::num_steps], r_conved)
+        conved = set_subtensor(conved[:, :, num::num_steps], r_conved)
 
     return conved
 
-
-# TODO: conv1d_md_channelslast? (from lasagne)
 
 ############# keep conv1d functions above this line, and add them to the dictionary below #############
 # this is a dictionary containing a string keyword mapping to the conv1d function -
