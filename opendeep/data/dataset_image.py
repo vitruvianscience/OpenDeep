@@ -11,6 +11,7 @@ import opendeep.utils.file_ops as files
 
 log = logging.getLogger(__name__)
 
+
 class ImageDataset(Dataset):
     """
     Default interface for a file-based dataset object. Files should either exist in the ``path`` or have
@@ -46,15 +47,11 @@ class ImageDataset(Dataset):
         test_filter : regex string or compiled regex object, optional
             The regular expression filter to match testing file names against (if applicable).
         inputs_preprocess : function, optional
-            A preprocessing function to apply to input data. This function will be applied to each line
-            from the files in `path`, and if it creates a list of elements, each element will be yielded as the
-            input data separately. For example, the function could be ``lambda line: (line.split(',')[0]).lower()``
-            to grab a string before a comma on each line and lowercase it.
+            A function to apply to the image returned from files found in the path. If a list is returned from
+            the preprocess function, each element will be yielded separately during iteration.
         targets_preprocess : function, optional
-            A preprocessing function to apply to targets data. This function will be applied to each line from
-            the files in `path`, and if it creates a list of elements, each element will be yielded as the target
-            label data separately. For example, the function could be ``lambda line: (line.split(',')[1]).lower()``
-            to grab a label after a comma on each line and lowercase it.
+            A function to apply to the image returned from files found in the path. If a list is returned from
+            the preprocess function, each element will be yielded separately during iteration.
         """
         try:
             self.path = os.path.realpath(path)

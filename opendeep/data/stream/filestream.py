@@ -13,7 +13,8 @@ from opendeep.utils.misc import raise_to_list
 
 _log = logging.getLogger(__name__)
 
-class FileStream:
+
+class FileStream(object):
     """
     Creates an iterable stream of data from a filepath of text-based files.
 
@@ -54,7 +55,8 @@ class FileStream:
             except Exception as err:
                 _log.exception(err.__str__())
 
-class FilepathStream:
+
+class FilepathStream(object):
     """
     Creates an iterable stream from filepath names in a path. This is just for the file names themselves, not the
     contents of the files. If you want the contents, use the :class:`FileStream` object.
@@ -82,9 +84,10 @@ class FilepathStream:
             for name in fnames:
                 yield name
 
-class ImageStream:
+
+class ImageStream(object):
     """
-    Creates an iterable stream of data from a filepath of image files.
+    Creates an iterable stream of image data from a filepath of image files.
 
     Parameters
     ----------
@@ -93,13 +96,13 @@ class ImageStream:
     filter : str or compiled regex, optional
         The regex filter to apply to the `path` when finding files.
     preprocess : function, optional
-        A function to apply to the image returned from files found in the `path`. If a list is returned from
+        A function to apply to the image returned from files found in the `path`.
+        If a list is returned from
         the preprocess function, each element will be yielded separately during iteration.
     """
     def __init__(self, path, filter=None, preprocess=None):
         if not has_pil:
             raise NotImplementedError("You need the PIL (pillow) Python package to use ImageStream.")
-
         self.path = path
         self.filter = filter
         self.preprocess = preprocess
