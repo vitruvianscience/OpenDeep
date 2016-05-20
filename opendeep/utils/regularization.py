@@ -10,6 +10,30 @@ from opendeep.utils.misc import raise_to_list
 
 log = logging.getLogger(__name__)
 
+
+def Lp(parameters, p):
+    """
+    Generic L norm
+
+    Parameters
+    ----------
+    parameters : list of theano variables
+        Parameters to apply the regularization.
+    p : int
+        An integer specifying which norm to use. L1, L2, ...etc.
+
+    Returns
+    -------
+    theano expression
+        L_p regularization applied to the theano variables.
+    """
+    # make parameters into a list if it isn't (so we can do comprehension)
+    parameters = raise_to_list(parameters)
+    if parameters is not None:
+        return T.sum([T.sum(abs(parameter) ** p)/p for parameter in parameters])
+    else:
+        log.warning("None parameters passed to L_p regularizer!")
+
 def L1(parameters):
     """
     L1 loss, also known as square or lasso, is good for giving sparse estimates.
@@ -25,12 +49,13 @@ def L1(parameters):
     theano expression
         L1 regularization applied to the theano variables.
     """
-    # make parameters into a list if it isn't (so we can do comprehension)
-    parameters = raise_to_list(parameters)
-    if parameters is not None:
-        return T.sum([T.sum(abs(parameter)) for parameter in parameters])
-    else:
-        log.warning("None parameters passed to L1 regularizer!")
+    # # make parameters into a list if it isn't (so we can do comprehension)
+    # parameters = raise_to_list(parameters)
+    # if parameters is not None:
+    #     return T.sum([T.sum(abs(parameter)) for parameter in parameters])
+    # else:
+    #     log.warning("None parameters passed to L1 regularizer!")
+    return Lp(parameters, p=1)
 
 def L2(parameters):
     """
@@ -46,12 +71,13 @@ def L2(parameters):
     theano expression
         L2 regularization applied to the theano variables.
     """
-    # make parameters into a list if it isn't (so we can do comprehension)
-    parameters = raise_to_list(parameters)
-    if parameters is not None:
-        return T.sum([T.sum(parameter ** 2) for parameter in parameters])
-    else:
-        log.warning("None parameters passed to L2 regularizer!")
+    # # make parameters into a list if it isn't (so we can do comprehension)
+    # parameters = raise_to_list(parameters)
+    # if parameters is not None:
+    #     return T.sum([T.sum(parameter ** 2) for parameter in parameters])
+    # else:
+    #     log.warning("None parameters passed to L2 regularizer!")
+    return Lp(parameters, p=2)
 
 def elastic(parameters, l1_coefficient, l2_coefficient=None):
     """
