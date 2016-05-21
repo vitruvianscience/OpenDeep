@@ -407,7 +407,7 @@ def base_variables(expression):
     if isinstance(expression, SharedVariable):
         variables.add(expression)
         return variables
-    elif expression.owner is not None:
+    elif hasattr(expression, 'owner') and expression.owner is not None:
         for input in expression.owner.inputs:
             variables.update(base_variables(input))
     return variables

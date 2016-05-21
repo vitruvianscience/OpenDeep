@@ -4,7 +4,7 @@ This module defines expressions for finding the loss or cost function for models
 # standard libraries
 import logging
 # internal references
-from opendeep.utils.misc import raise_to_list
+from opendeep.utils.misc import (raise_to_list, base_variables)
 
 log = logging.getLogger(__name__)
 
@@ -89,3 +89,81 @@ class Loss(object):
             the `targets` parameter when initializing the :class:`Loss` class, raised to a list.
         """
         return self.targets
+
+    def __add__(self, other):
+        """
+        Helper function to override adding behavior. Returns a new Loss trying to add the two get_loss() values,
+        or this get_loss() value with the `other` added. Also modifies the inputs and targets based on `other`.
+        """
+        these_inputs = self.inputs or []
+        if isinstance(other, Loss):
+            def new_loss():
+                return self.get_loss() + other.get_loss()
+
+            def new_targets():
+                return self.get_targets() + other.get_targets()
+
+            those_inputs = other.inputs or []
+            new_inputs = these_inputs + those_inputs
+
+        else:
+            def new_loss():
+                return self.get_loss() + other
+
+            def new_targets():
+                return self.get_targets()
+
+            new_inputs = these_inputs + list(base_variables(other))
+
+        if len(new_inputs) is 0:
+            new_inputs = None
+        try:
+            ret = Loss(inputs=new_inputs, targets=new_targets())
+            ret.get_targets = new_targets
+            ret.get_loss = new_loss
+            return ret
+        except Exception as e:
+            log.exception("Exception when adding to the Loss class. {!s}".format(str(e)))
+            raise
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __mul__(self, other):
+        """
+        Helper function to override multiplication behavior. Returns a new Loss trying to multiply the two get_loss()
+        values, or this get_loss() value with the `other` multiplied. Also modifies the inputs and targets
+        based on `other`.
+        """
+        these_inputs = self.inputs or []
+        if isinstance(other, Loss):
+            def new_loss():
+                return self.get_loss() * other.get_loss()
+
+            def new_targets():
+                return self.get_targets() + other.get_targets()
+
+            those_inputs = other.inputs or []
+            new_inputs = these_inputs + those_inputs
+        else:
+            def new_loss():
+                return self.get_loss() * other
+
+            def new_targets():
+                return self.get_targets()
+
+            new_inputs = these_inputs + list(base_variables(other))
+
+        if len(new_inputs) is 0:
+            new_inputs = None
+        try:
+            ret = Loss(inputs=new_inputs, targets=new_targets())
+            ret.get_targets = new_targets
+            ret.get_loss = new_loss
+            return ret
+        except Exception as e:
+            log.exception("Exception when multiplying to the Loss class. {!s}".format(str(e)))
+            raise
+
+    def __rmul__(self, other):
+        return self.__mul__(other)

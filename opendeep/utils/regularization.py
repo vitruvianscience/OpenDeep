@@ -11,7 +11,7 @@ from opendeep.utils.misc import raise_to_list
 log = logging.getLogger(__name__)
 
 
-def Lp(parameters, p):
+def Lnorm(parameters, p):
     """
     Generic L norm
 
@@ -32,7 +32,7 @@ def Lp(parameters, p):
     if parameters is not None:
         return T.sum([T.sum(abs(parameter) ** p)/p for parameter in parameters])
     else:
-        log.warning("None parameters passed to L_p regularizer!")
+        log.warning("None parameters passed to L_p norm regularizer!")
 
 def L1(parameters):
     """
@@ -55,7 +55,7 @@ def L1(parameters):
     #     return T.sum([T.sum(abs(parameter)) for parameter in parameters])
     # else:
     #     log.warning("None parameters passed to L1 regularizer!")
-    return Lp(parameters, p=1)
+    return Lnorm(parameters, p=1)
 
 def L2(parameters):
     """
@@ -77,7 +77,7 @@ def L2(parameters):
     #     return T.sum([T.sum(parameter ** 2) for parameter in parameters])
     # else:
     #     log.warning("None parameters passed to L2 regularizer!")
-    return Lp(parameters, p=2)
+    return Lnorm(parameters, p=2)
 
 def elastic(parameters, l1_coefficient, l2_coefficient=None):
     """
