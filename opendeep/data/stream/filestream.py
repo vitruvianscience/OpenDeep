@@ -112,10 +112,10 @@ class ImageStream(object):
             try:
                 with Image.open(fname) as im:
                     data = numpy.array(im)
-                    if self.preprocess is not None and callable(self.preprocess):
-                        data = self.preprocess(data)
-                    data = raise_to_list(data)
-                    for d in data:
-                        yield d
+                if self.preprocess is not None and callable(self.preprocess):
+                    data = self.preprocess(data)
+                data = raise_to_list(data)
+                for d in data:
+                    yield d
             except Exception as err:
                 _log.exception(err.__str__())
