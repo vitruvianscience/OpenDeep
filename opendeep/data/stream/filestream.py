@@ -110,8 +110,12 @@ class ImageStream(object):
     def __iter__(self):
         for fname in find_files(self.path, self.filter):
             try:
+                _log.info("opening")
                 with Image.open(fname) as im:
+                    _log.info("grabbing data:")
                     data = numpy.array(im)
+                    _log.info(data.shape)
+                _log.info("closed")
                 if self.preprocess is not None and callable(self.preprocess):
                     data = self.preprocess(data)
                 data = raise_to_list(data)
